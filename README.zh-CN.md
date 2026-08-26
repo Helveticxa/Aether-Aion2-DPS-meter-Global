@@ -10,7 +10,7 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Rust](https://img.shields.io/badge/Rust-Backend-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
-[![License](https://img.shields.io/badge/License-MIT-22C55E)](./LICENSE)
+[![License](https://img.shields.io/badge/License-GPL--3.0--only-22C55E)](./LICENSE)
 
 简体中文 · [English](./README.md)
 
@@ -185,6 +185,14 @@ pnpm release:version
 - [全局快捷键](./docs/GLOBAL_SHORTCUT.zh-CN.md)
 - [国际化](./docs/I18N.zh-CN.md)
 
+## 致谢与参考项目
+
+NOIA2 在开发过程中参考了以下开源项目的思路与实现，感谢这些项目的维护者和贡献者：
+
+- [TK-open-public/Aion2-Dps-Meter](https://github.com/TK-open-public/Aion2-Dps-Meter)
+- [taengu/Aion2-Dps-Meter](https://github.com/taengu/Aion2-Dps-Meter)
+- [p62003/aletheia_AION2_DPS_Meter](https://github.com/p62003/aletheia_AION2_DPS_Meter)
+
 ## License
 
-MIT. See [LICENSE](./LICENSE).
+本项目仅依据 GNU General Public License v3.0（`GPL-3.0-only`）授权。完整条款请参阅 [LICENSE](./LICENSE)。

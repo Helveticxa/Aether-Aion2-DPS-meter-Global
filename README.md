@@ -10,7 +10,7 @@ An elegant desktop companion for AION2 players, built around a lightweight real-
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Rust](https://img.shields.io/badge/Rust-backend-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
-[![License](https://img.shields.io/badge/License-MIT-22C55E)](./LICENSE)
+[![License](https://img.shields.io/badge/License-GPL--3.0--only-22C55E)](./LICENSE)
 
 [简体中文](./README.zh-CN.md) · English
 
@@ -171,6 +171,14 @@ The release script checks repository state, validates version consistency, creat
 - [Global Shortcut](./docs/GLOBAL_SHORTCUT.md)
 - [I18N](./docs/I18N.md)
 
+## Acknowledgements and References
+
+NOIA2 was developed with reference to ideas and implementations from these open-source projects. Thank you to their maintainers and contributors:
+
+- [TK-open-public/Aion2-Dps-Meter](https://github.com/TK-open-public/Aion2-Dps-Meter)
+- [taengu/Aion2-Dps-Meter](https://github.com/taengu/Aion2-Dps-Meter)
+- [p62003/aletheia_AION2_DPS_Meter](https://github.com/p62003/aletheia_AION2_DPS_Meter)
+
 ## License
 
-MIT. See [LICENSE](./LICENSE).
+This project is licensed under the GNU General Public License v3.0 only (`GPL-3.0-only`). See [LICENSE](./LICENSE).
