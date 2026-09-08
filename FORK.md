@@ -74,3 +74,62 @@ git merge upstream/main
 
 Changes here are deliberately kept to small, anchored edits so these merges stay
 cheap.
+
+### Region profiles (Taiwan / Korea / global)
+
+Upstream hardcoded Taiwan's server catalogue inside the player-name parser:
+
+```rust
+fn is_available_server_id(server_id: u32) -> bool {
+    (1001..=1021).contains(&server_id) || (2001..=2021).contains(&server_id)
+}
+```
+
+That value is not cosmetic -- it is used *structurally*, to decide where the
+server field sits inside a player-info packet. On any service whose ids fall
+outside Taiwan's range, `find_server_id` returns `None` and **no player is ever
+named**: a silent, total failure with no error to go on.
+
+`src-tauri/src/dps_meter/region.rs` replaces it with per-region profiles:
+
+| Profile | Server-id rule |
+|---|---|
+| `Auto` (default) | `1001..=1999`, `2001..=2999` |
+| `Taiwan` | `1001..=1021`, `2001..=2021` (the bundled catalogue) |
+| `Korea`, `Global` | same permissive rule as `Auto` |
+
+The permissive rule is structural, not a shrug: server ids are
+`raceId * 1000 + index` (race 1 Elyos, race 2 Asmodian), confirmed by the bundled
+Taiwan list. It keeps the disambiguation the parser depends on -- an arbitrary
+`u16` still fails -- without assuming how many servers a region runs.
+
+**Detection is deliberately conservative.** It only claims a region on evidence.
+Korea is identifiable by its server block (`206.127.156.0/24`, from the MIT
+TK-open-public meter); Taiwan's and global's blocks are unknown, so detection
+returns "no fingerprint matched" rather than guessing from an id range they may
+well share. Settings → Backend shows the observed server IPs and ids so an
+uncatalogued service can be characterised from a real session -- which is exactly
+how the global fingerprint gets filled in after Early Access.
+
+Server names now fall back to `Server <id>` instead of a hardcoded
+`"未知服务器"`, so non-Taiwan players stay distinguishable.
+
+## Upstream quality gates
+
+`pnpm check` (format + lint + build) fails on a clean upstream checkout: 119
+files have Prettier issues and ESLint reports 65 errors. Those are pre-existing.
+Use the gates that are actually meaningful here:
+
+```
+pnpm build                  # tsc + vite -- must pass
+cd src-tauri && cargo test --lib   # must pass
+```
+
+`cargo test` (without `--lib`) fails on the binary target only, because the
+Windows manifest demands elevation and the test runner cannot launch it.
+
+Do not run `pnpm format`: it rewrites 119 upstream files and would make every
+future merge expensive.
+
+Note that `CLAUDE.md` in this repo is upstream's unedited Tauri-template
+boilerplate and describes a different app. Trust this file instead.

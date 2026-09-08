@@ -2,6 +2,8 @@ use std::sync::{Arc, RwLock};
 
 use serde::{Deserialize, Serialize};
 
+use crate::dps_meter::region::RegionId;
+
 pub const DEFAULT_DPS_SNAPSHOT_INTERVAL_MS: u64 = 100;
 pub const DEFAULT_MEMORY_SNAPSHOT_INTERVAL_MS: u64 = 2000;
 pub const DEFAULT_MAX_PACKET_SIZE_THRESHOLD: u64 = 8 * 1024;
@@ -72,6 +74,9 @@ pub struct DpsMeterConfig {
     pub max_player_count: usize,
     #[serde(default)]
     pub capture_backend_priority: CaptureBackendPriority,
+    /// Which regional service to assume. `Auto` parses on every service.
+    #[serde(default)]
+    pub region: RegionId,
 }
 
 impl Default for DpsMeterConfig {
@@ -92,6 +97,7 @@ impl Default for DpsMeterConfig {
             hide_unknown_players: false,
             max_player_count: 10,
             capture_backend_priority: CaptureBackendPriority::default(),
+            region: RegionId::default(),
         }
     }
 }

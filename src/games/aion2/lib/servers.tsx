@@ -33,7 +33,10 @@ const serversByRace = servers.reduce<Record<number, Server[]>>((acc, server) => 
  */
 export const getServerName = (serverId: number): string => {
   const server = serverMap.get(serverId);
-  return server?.serverName || "未知服务器";
+  // Only Taiwan's catalogue is bundled. On any other service every id would
+  // otherwise render as "unknown", so fall back to the id itself -- it still
+  // distinguishes players, and it is language neutral.
+  return server?.serverName || `Server ${serverId}`;
 };
 
 /**
@@ -43,7 +46,7 @@ export const getServerName = (serverId: number): string => {
  */
 export const getServerShortName = (serverId: number): string => {
   const server = serverMap.get(serverId);
-  return server?.serverShortName || "未知";
+  return server?.serverShortName || `#${serverId}`;
 };
 
 export const getServerIdByShortName = (serverShortName: string): number | null => {

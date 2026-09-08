@@ -17,6 +17,7 @@ import { ShortcutInput } from "@/components/shortcut-input";
 import { useAppTranslation } from "@/hooks/use-app-translation";
 import { useSettings } from "@/hooks/use-settings";
 import { SettingsGroup, SettingsRow as BaseSettingsRow } from "@/components/settings-layout";
+import { RegionSetting } from "@/components/region-setting";
 import skillsZhCN from "@/i18n/locales/aion2skills/zh-CN.json";
 
 type RGBA = [number, number, number, number];
@@ -1234,6 +1235,8 @@ export function Aion2Settings() {
       {/* Backend tab */}
       {tab === "backend" && (
         <SettingsGroup title={t("settings.aion2.backend")}>
+          <RegionSetting />
+
           <SettingRow
             title={t("settings.aion2.captureBackendPriority")}
             description={t("settings.aion2.captureBackendPriorityDesc")}

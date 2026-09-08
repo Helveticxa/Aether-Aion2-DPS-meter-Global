@@ -88,6 +88,8 @@ pub fn run() {
             dps_meter::api::commands::get_buff_overlay_context,
             dps_meter::api::commands::get_field_boss_timers,
             dps_meter::api::commands::get_dps_meter_status,
+            dps_meter::api::commands::get_region_status,
+            dps_meter::api::commands::reset_region_observations,
             dps_meter::api::commands::reset_dps_meter,
             dps_meter::api::commands::stop_dps_meter,
             dps_meter::api::commands::check_dps_meter_state,

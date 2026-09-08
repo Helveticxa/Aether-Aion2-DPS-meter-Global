@@ -30,7 +30,7 @@ export const supabase: SupabaseClient | null = isCloudEnabled
 export function requireSupabase(): SupabaseClient {
   if (!supabase) {
     throw new Error(
-      "Cloud features are disabled in this build. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable them.",
+      "Cloud features are disabled in this build. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable them."
     );
   }
   return supabase;

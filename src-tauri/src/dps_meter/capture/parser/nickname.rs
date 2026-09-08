@@ -65,6 +65,7 @@ fn parse_main_fixed(context: &ParserContext<'_>, payload: &[u8]) -> bool {
     if !is_available_server_id(server_id) {
         return false;
     }
+    crate::dps_meter::region::observe_server_id(server_id);
 
     let Ok(name) = std::str::from_utf8(&payload[name_start..name_end]) else {
         return false;
@@ -306,7 +307,9 @@ fn find_server_id(payload: &[u8], server_base: usize) -> Option<u32> {
 }
 
 fn is_available_server_id(server_id: u32) -> bool {
-    (1001..=1021).contains(&server_id) || (2001..=2021).contains(&server_id)
+    // Was Taiwan's catalogue hardcoded here, which silently rejected every
+    // player packet on any other service. See dps_meter::region.
+    crate::dps_meter::region::accepts_server_id(server_id)
 }
 
 fn find_server_id_after_marker(payload: &[u8], search_start: usize) -> Option<u32> {

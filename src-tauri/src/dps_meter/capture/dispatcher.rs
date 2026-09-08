@@ -307,6 +307,12 @@ impl CaptureDispatcher {
                     .windows(MAGIC.len())
                     .any(|window| window == MAGIC);
 
+                if contains_magic {
+                    // Carrying the heartbeat identifies this host as the game
+                    // server, which is what region detection keys off.
+                    crate::dps_meter::region::observe_server_ip(packet.src_ip);
+                }
+
                 if contains_magic && state.logged_magic_packets < 20 {
                     // logger.debug(format!(
                     //     "dispatcher magic packet key={} payload_len={} head={}",

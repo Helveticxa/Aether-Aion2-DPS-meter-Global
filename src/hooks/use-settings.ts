@@ -10,6 +10,8 @@ type Language = "en" | "zh-CN" | "zh-TW" | "ko";
 type RGBA = [number, number, number, number];
 type PvpOverlayPosition = "bottom" | "right" | "free";
 type CaptureBackendPriority = "winDivertFirst" | "npcapFirst";
+/** Regional service. "auto" parses on every service, including uncatalogued ones. */
+export type Region = "auto" | "tw" | "kr" | "global";
 type BuffMonitorIconStyle = "style1" | "style2";
 
 interface AppSettings {
@@ -38,6 +40,7 @@ interface BackendSettings {
   hideUnknownPlayers: boolean;
   maxPlayerCount: number;
   captureBackendPriority: CaptureBackendPriority;
+  region: Region;
 }
 
 interface OverlaySettings {
@@ -120,6 +123,7 @@ const DEFAULTS: AppConfig = {
       hideUnknownPlayers: true,
       maxPlayerCount: 10,
       captureBackendPriority: "npcapFirst",
+      region: "auto",
     },
     overlay: {
       fontFamily: "Consolas",

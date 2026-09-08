@@ -7,6 +7,7 @@ use crate::dps_meter::engine::meter::DpsMeter;
 use crate::dps_meter::history::HistoryRecord;
 use crate::dps_meter::models::combat::{CombatSnapshot, PvpCombatStatsRow, PvpWatchInfoResponse};
 use crate::dps_meter::models::diagnostics::DpsMeterState;
+use crate::dps_meter::region::{self, RegionStatus};
 use crate::dps_meter::storage::data_storage::{BuffOverlayContext, FieldBossTimerSnapshot};
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -84,6 +85,21 @@ pub fn get_field_boss_timers(
     meter: State<'_, DpsMeter>,
 ) -> Result<Vec<FieldBossTimerSnapshot>, String> {
     Ok(meter.get_field_boss_timers())
+}
+
+/// Region profile in force, plus what the capture has actually observed.
+///
+/// The observations are the point: they are how an uncatalogued service (the
+/// global servers, for one) gets characterised from a real session.
+#[tauri::command]
+pub fn get_region_status() -> Result<RegionStatus, String> {
+    Ok(region::status())
+}
+
+#[tauri::command]
+pub fn reset_region_observations() -> Result<(), String> {
+    region::reset_observations();
+    Ok(())
 }
 
 #[tauri::command]
