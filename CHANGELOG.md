@@ -5,6 +5,21 @@ numbering: this fork publishes to its own release channel, and the updater
 compares an installed build against these releases. Upstream's release history
 lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
 
+## [0.1.3]
+
+New application icon, replacing the NOIA2 artwork the fork inherited.
+
+Generated from a 1254×1254 source with transparent corners, so every size Tauri
+ships is derived from one master rather than resized by hand. `icon.ico` carries
+six sizes up to 256×256, which is what Windows needs for the installer, the
+taskbar, and high-DPI displays.
+
+The source image is committed as `app-icon.png`, the name Tauri looks for, so
+regenerating every size is `npx tauri icon` with no arguments.
+
+The AION 2 logo in the title bar is unchanged on purpose: it is the game picker,
+and it identifies which game the meter is reading.
+
 ## [0.1.2]
 
 Fixes the updater itself, on both ends.
