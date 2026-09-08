@@ -18,6 +18,8 @@ import { useAppTranslation } from "@/hooks/use-app-translation";
 import { useSettings } from "@/hooks/use-settings";
 import { SettingsGroup, SettingsRow as BaseSettingsRow } from "@/components/settings-layout";
 import { RegionSetting } from "@/components/region-setting";
+import { PacketRecorderSetting } from "@/components/packet-recorder-setting";
+import { OpcodeCensusSetting } from "@/components/opcode-census-setting";
 import skillsEn from "@/i18n/locales/aion2skills/en.json";
 
 type RGBA = [number, number, number, number];
@@ -1236,6 +1238,10 @@ export function Aion2Settings() {
       {tab === "backend" && (
         <SettingsGroup title={t("settings.aion2.backend")}>
           <RegionSetting />
+
+          <PacketRecorderSetting />
+
+          <OpcodeCensusSetting />
 
           <SettingRow
             title={t("settings.aion2.captureBackendPriority")}

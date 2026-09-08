@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use crate::dps_meter::capture::assembler::StreamAssembler;
 use crate::dps_meter::capture::capturer::CapturedPacket;
 use crate::dps_meter::capture::channel::Channel;
+use crate::dps_meter::capture::recorder::PacketRecorder;
 use crate::dps_meter::capture::ping_tracker::PingTracker;
 use crate::dps_meter::capture::tcp_reassembler::{TcpFlowKey, TcpReassembler};
 use crate::dps_meter::config::SharedDpsMeterConfig;
@@ -182,6 +183,7 @@ impl DispatcherState {
 #[derive(Clone)]
 pub struct CaptureDispatcher {
     channel: Channel<CapturedPacket>,
+    recorder: Arc<PacketRecorder>,
     logger: Arc<AppLogger>,
     ping_tracker: Arc<PingTracker>,
     running: Arc<AtomicBool>,
@@ -193,6 +195,7 @@ pub struct CaptureDispatcher {
 impl CaptureDispatcher {
     pub fn new(
         channel: Channel<CapturedPacket>,
+        recorder: Arc<PacketRecorder>,
         data_storage: Arc<DataStorage>,
         logger: Arc<AppLogger>,
         ping_tracker: Arc<PingTracker>,
@@ -206,6 +209,7 @@ impl CaptureDispatcher {
 
         Self {
             channel,
+            recorder,
             logger,
             ping_tracker,
             running: Arc::new(AtomicBool::new(false)),
@@ -221,6 +225,7 @@ impl CaptureDispatcher {
         }
 
         let channel = self.channel.clone();
+        let recorder = Arc::clone(&self.recorder);
         let logger = Arc::clone(&self.logger);
         let ping_tracker = Arc::clone(&self.ping_tracker);
         let running = Arc::clone(&self.running);
@@ -233,6 +238,10 @@ impl CaptureDispatcher {
                     Some(packet) => packet,
                     None => continue,
                 };
+
+                // Tapped here, before reassembly, so a recording holds exactly
+                // what capture produced -- replay then re-runs the real pipeline.
+                recorder.record(&packet);
 
                 let mut state = state.lock().unwrap();
                 let flow_key = TcpFlowKey {

@@ -216,3 +216,51 @@ replaced, so it costs less to decode per frame despite running longer.
 Playback pauses whenever nobody can see it. Upstream already paused on window
 blur; that now also honours the Page Visibility API, which covers states the
 window API alone does not report.
+
+## Protocol tooling
+
+Two additions exist for one purpose: the global servers launch once, and being
+in game for every parser attempt is the slow part.
+
+### Packet recording and replay
+
+`src-tauri/src/dps_meter/capture/recorder.rs` writes raw packets to
+`%APPDATA%/<app>/recordings/*.aetherpc`, tapped in the dispatcher **before**
+reassembly, so a recording holds exactly what capture produced.
+
+Replay pushes those packets back into the same channel the capturer feeds.
+Reassembly, dispatch, parsing and aggregation then run identically to a live
+session, because it is the same code path with the same input. Capture once,
+iterate offline as many times as it takes.
+
+The format is deliberately plain -- a 12-byte header, then one length-prefixed
+record per packet, little-endian. A recording cut short by the app exiting reads
+up to the cut rather than failing, which is covered by a test.
+
+Recording is off by default and capped at 512 MB. Replay applies backpressure
+when the queue runs deep: `Channel::try_send` drops the packet it is handed when
+full, and a silently lossy replay would be worse than a slow one.
+
+### Opcode census
+
+`src-tauri/src/dps_meter/capture/census.rs` counts every dispatched packet by
+opcode, recording payload size ranges and whether a parser claims it.
+
+This answers the question that decides everything else on day one: are the
+global opcodes the ones we already parse? Korea and Taiwan agree on all of them,
+which is good evidence -- but a mismatch would present as an empty meter with no
+error, so it is worth measuring rather than assuming.
+
+Off by default; it sits on the per-packet path, so disabled costs one relaxed
+atomic load.
+
+### On Early Access day
+
+1. Settings → Backend: switch on **Opcode census**, then **Start recording**.
+2. Play for a few minutes -- ideally including real combat and a party.
+3. Read the census. Familiar opcodes (`04,38` damage, `05,38` DoT, `2A/2B,38`
+   buffs, `33,36` player info, `41,36` summon) at familiar sizes means the
+   parsers should hold. Amber `?` rows are the work list.
+4. Read Settings → Backend → **Observed traffic** for the server IPs and ids.
+   Those fill in the global region fingerprint.
+5. Stop recording. From then on, replay that file instead of playing.

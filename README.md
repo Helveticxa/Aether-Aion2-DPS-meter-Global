@@ -203,3 +203,18 @@ NCSoft will treat any particular tool.
 
 [GPL-3.0-only](./LICENSE), inherited from NOIA2. Any distributed build must ship
 its source under the same terms.
+
+## Protocol tooling
+
+Settings → Backend carries two tools built for the global launch:
+
+- **Packet recording** writes a session's raw packets to disk, and replays them
+  back through the live pipeline. Parsing runs exactly as it would in game, so a
+  session captured once can be iterated against offline.
+- **Opcode census** counts every packet by opcode, with payload size ranges and
+  whether a parser recognises it. On an unfamiliar service this is the quickest
+  way to tell whether the existing parsers apply.
+
+Both are off by default. Recordings stay on your machine; nothing is uploaded.
+
+`FORK.md` describes the day-one procedure.

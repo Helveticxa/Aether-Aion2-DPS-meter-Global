@@ -7,6 +7,8 @@ use crate::dps_meter::engine::meter::DpsMeter;
 use crate::dps_meter::history::HistoryRecord;
 use crate::dps_meter::models::combat::{CombatSnapshot, PvpCombatStatsRow, PvpWatchInfoResponse};
 use crate::dps_meter::models::diagnostics::DpsMeterState;
+use crate::dps_meter::capture::census::{self, CensusSnapshot};
+use crate::dps_meter::capture::recorder::{RecordingFile, RecordingStatus};
 use crate::dps_meter::region::{self, RegionStatus};
 use crate::dps_meter::storage::data_storage::{BuffOverlayContext, FieldBossTimerSnapshot};
 
@@ -85,6 +87,69 @@ pub fn get_field_boss_timers(
     meter: State<'_, DpsMeter>,
 ) -> Result<Vec<FieldBossTimerSnapshot>, String> {
     Ok(meter.get_field_boss_timers())
+}
+
+/// Counts every dispatched opcode, recognised or not.
+///
+/// On an unfamiliar service this answers the only question that matters at
+/// first: do the opcodes match the ones the parsers already handle? Off by
+/// default -- it sits on the per-packet path.
+#[tauri::command]
+pub fn get_opcode_census() -> Result<CensusSnapshot, String> {
+    Ok(census::snapshot())
+}
+
+#[tauri::command]
+pub fn set_opcode_census_enabled(enabled: bool) -> Result<(), String> {
+    census::set_enabled(enabled);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn reset_opcode_census() -> Result<(), String> {
+    census::reset();
+    Ok(())
+}
+
+/// Recording captures a session's raw packets so a parser can be iterated
+/// against them offline -- the difference between needing to be in game for
+/// every attempt and needing to be there once.
+#[tauri::command]
+pub fn start_packet_recording(meter: State<'_, DpsMeter>) -> Result<String, String> {
+    meter.start_packet_recording()
+}
+
+#[tauri::command]
+pub fn stop_packet_recording(meter: State<'_, DpsMeter>) -> Result<Option<RecordingStatus>, String> {
+    meter.stop_packet_recording()
+}
+
+#[tauri::command]
+pub fn get_packet_recording_status(meter: State<'_, DpsMeter>) -> Result<RecordingStatus, String> {
+    Ok(meter.packet_recording_status())
+}
+
+#[tauri::command]
+pub fn list_packet_recordings(meter: State<'_, DpsMeter>) -> Result<Vec<RecordingFile>, String> {
+    Ok(meter.list_packet_recordings())
+}
+
+/// Feed a recording back through the live pipeline. Runs on its own thread and
+/// reports completion through the `packet-replay-finished` event.
+#[tauri::command]
+pub fn replay_packet_recording(meter: State<'_, DpsMeter>, path: String) -> Result<(), String> {
+    meter.replay_packet_recording(path)
+}
+
+#[tauri::command]
+pub fn cancel_packet_replay(meter: State<'_, DpsMeter>) -> Result<(), String> {
+    meter.cancel_packet_replay();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn is_packet_replaying(meter: State<'_, DpsMeter>) -> Result<bool, String> {
+    Ok(meter.is_replaying())
 }
 
 /// Region profile in force, plus what the capture has actually observed.

@@ -7,6 +7,7 @@ use crate::dps_meter::capture::parser::field_boss_timer;
 use crate::dps_meter::capture::parser::nickname;
 use crate::dps_meter::capture::parser::utils::read_varint;
 use crate::dps_meter::config::SharedDpsMeterConfig;
+use crate::dps_meter::capture::census;
 use crate::dps_meter::storage::data_storage::DataStorage;
 use crate::plugins::logger::AppLogger;
 
@@ -376,6 +377,11 @@ impl StreamProcessor {
         if payload.len() < 2 {
             return false;
         }
+
+        // Tallied before dispatch, so unrecognised opcodes are counted too --
+        // those are the ones worth knowing about on an unfamiliar service.
+        let opcode = (payload[0], payload[1]);
+        census::observe(opcode, payload.len(), KNOWN_PACKET_HEADERS.contains(&opcode));
 
         match self.mode {
             ProcessorMode::Full => match (payload[0], payload[1]) {

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex, RwLock,
@@ -13,6 +14,9 @@ use crate::dps_meter::capture::capturer::{check_npcap_available, CapturedPacket,
 use crate::dps_meter::capture::channel::Channel;
 use crate::dps_meter::capture::dispatcher::{CaptureDispatcher, TcpReassemblyStatus};
 use crate::dps_meter::capture::ping_tracker::PingTracker;
+use crate::dps_meter::capture::recorder::{
+    list_recordings, replay_recording, PacketRecorder, RecordingFile, RecordingStatus,
+};
 use crate::dps_meter::capture::windivert_capturer::{check_windivert_status, WinDivertCapturer};
 use crate::dps_meter::config::{CaptureBackendPriority, DpsMeterConfig, SharedDpsMeterConfig};
 use crate::dps_meter::engine::calculator::DpsCalculator;
@@ -23,6 +27,10 @@ use crate::dps_meter::storage::data_storage::{DataStorage, FieldBossTimerSnapsho
 use crate::plugins::logger::AppLogger;
 
 const STALE_ASSEMBLER_IDLE_SECS: u64 = 30;
+/// Replay reads from disk far faster than the dispatcher drains, so it waits
+/// whenever the queue runs this deep. `try_send` drops the packet it is handed
+/// when the channel is full, and a silently lossy replay is worse than a slow one.
+const REPLAY_BACKPRESSURE_LIMIT: usize = 50_000;
 const PACKET_CHANNEL_CAPACITY: isize = 2_000_000;
 
 #[derive(Debug, Clone, Copy)]
@@ -39,6 +47,9 @@ pub struct DpsMeter {
     calculator: Arc<DpsCalculator>,
     ping_tracker: Arc<PingTracker>,
     packet_channel: Channel<CapturedPacket>,
+    recorder: Arc<PacketRecorder>,
+    recordings_dir: PathBuf,
+    replaying: Arc<AtomicBool>,
     windivert_capturer: WinDivertCapturer,
     pcap_capturer: PcapCapturer,
     active_capture_backend: Arc<Mutex<Option<CaptureBackend>>>,
@@ -60,11 +71,18 @@ impl DpsMeter {
         let calculator = Arc::new(DpsCalculator::new(Arc::clone(&data_storage)));
         let ping_tracker = Arc::new(PingTracker::new());
         let packet_channel = Channel::new(PACKET_CHANNEL_CAPACITY);
+        let recorder = Arc::new(PacketRecorder::new());
+        let recordings_dir = app
+            .path()
+            .app_data_dir()
+            .unwrap_or_else(|_| std::env::temp_dir().join("aether"))
+            .join("recordings");
         let windivert_capturer =
             WinDivertCapturer::new(packet_channel.clone(), Arc::clone(&logger));
         let pcap_capturer = PcapCapturer::new(packet_channel.clone(), Arc::clone(&logger));
         let dispatcher = CaptureDispatcher::new(
             packet_channel.clone(),
+            Arc::clone(&recorder),
             Arc::clone(&data_storage),
             Arc::clone(&logger),
             Arc::clone(&ping_tracker),
@@ -103,6 +121,9 @@ impl DpsMeter {
             calculator,
             ping_tracker,
             packet_channel,
+            recorder,
+            recordings_dir,
+            replaying: Arc::new(AtomicBool::new(false)),
             windivert_capturer,
             pcap_capturer,
             active_capture_backend: Arc::new(Mutex::new(None)),
@@ -532,6 +553,99 @@ impl DpsMeter {
         self.ping_tracker.reset();
         *self.last_emitted_total_damage.lock().unwrap() = None;
         *self.last_snapshot.lock().unwrap() = None;
+    }
+
+    // ── Packet recording and replay ──
+    //
+    // Recording captures a session so a parser can be iterated against it
+    // offline. That matters most for a service that launches once: capture the
+    // global servers on day one, then work against those bytes for as long as it
+    // takes, without needing to be in game.
+
+    pub fn start_packet_recording(&self) -> Result<String, String> {
+        let path = self.recorder.start(&self.recordings_dir)?;
+        self.logger
+            .info(format!("packet recording started: {}", path.display()));
+        Ok(path.to_string_lossy().into_owned())
+    }
+
+    pub fn stop_packet_recording(&self) -> Result<Option<RecordingStatus>, String> {
+        let stopped = self.recorder.stop()?;
+        if let Some(status) = &stopped {
+            self.logger.info(format!(
+                "packet recording stopped: {} packets, {} bytes",
+                status.packets, status.bytes
+            ));
+        }
+        Ok(stopped)
+    }
+
+    pub fn packet_recording_status(&self) -> RecordingStatus {
+        self.recorder.status()
+    }
+
+    pub fn list_packet_recordings(&self) -> Vec<RecordingFile> {
+        list_recordings(&self.recordings_dir)
+    }
+
+    pub fn is_replaying(&self) -> bool {
+        self.replaying.load(Ordering::SeqCst)
+    }
+
+    pub fn cancel_packet_replay(&self) {
+        self.replaying.store(false, Ordering::SeqCst);
+    }
+
+    /// Feed a recording back through the live pipeline.
+    ///
+    /// Packets go into the same channel the capturer writes to, so reassembly,
+    /// dispatch, parsing and aggregation all run exactly as they would live.
+    pub fn replay_packet_recording(&self, path: String) -> Result<(), String> {
+        if !self.is_running() {
+            return Err(
+                "Start the meter first -- replay feeds the same pipeline live capture uses."
+                    .to_string(),
+            );
+        }
+        if self.replaying.swap(true, Ordering::SeqCst) {
+            return Err("A replay is already running.".to_string());
+        }
+
+        let channel = self.packet_channel.clone();
+        let replaying = Arc::clone(&self.replaying);
+        let logger = Arc::clone(&self.logger);
+        let app = self.app.clone();
+
+        thread::spawn(move || {
+            let source = PathBuf::from(&path);
+            let outcome = replay_recording(&source, |packet| {
+                while channel.size() > REPLAY_BACKPRESSURE_LIMIT {
+                    if !replaying.load(Ordering::SeqCst) {
+                        return false;
+                    }
+                    thread::sleep(Duration::from_millis(2));
+                }
+                if !channel.try_send(packet) {
+                    return false;
+                }
+                replaying.load(Ordering::SeqCst)
+            });
+
+            match outcome {
+                Ok(count) => {
+                    logger.info(format!("replayed {count} packets from {path}"));
+                    let _ = app.emit("packet-replay-finished", count);
+                }
+                Err(error) => {
+                    logger.info(format!("replay failed for {path}: {error}"));
+                    let _ = app.emit("packet-replay-failed", error);
+                }
+            }
+
+            replaying.store(false, Ordering::SeqCst);
+        });
+
+        Ok(())
     }
 
     fn clear_runtime_state_nopacket(&self) {
