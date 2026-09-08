@@ -95,12 +95,12 @@ impl AppLogger {
 
 fn resolve_log_path<R: Runtime>(app: &AppHandle<R>) -> PathBuf {
     if let Ok(dir) = app.path().app_log_dir() {
-        return dir.join("noia.log");
+        return dir.join("aether.log");
     }
     if let Ok(dir) = app.path().app_data_dir() {
-        return dir.join("logs").join("noia.log");
+        return dir.join("logs").join("aether.log");
     }
-    std::env::temp_dir().join("noia2").join("noia.log")
+    std::env::temp_dir().join("aether").join("aether.log")
 }
 
 #[tauri::command]

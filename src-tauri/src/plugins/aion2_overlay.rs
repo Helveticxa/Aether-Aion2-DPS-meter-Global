@@ -46,7 +46,7 @@ pub async fn create_dps_overlay<R: Runtime>(app: AppHandle<R>) -> Result<(), Str
         DPS_OVERLAY_LABEL,
         WebviewUrl::App("src/games/aion2/overlay/meter/index.html".into()),
     )
-    .title("NoiA | DPS Overlay")
+    .title("Aether | DPS Overlay")
     .decorations(false)
     .transparent(true)
     .always_on_top(true)
@@ -125,7 +125,7 @@ pub async fn create_pvp_overlay<R: Runtime>(app: AppHandle<R>) -> Result<(), Str
         PVP_OVERLAY_LABEL,
         WebviewUrl::App("src/games/aion2/overlay/meter_pvp/index.html".into()),
     )
-    .title("NoiA | PVP Overlay")
+    .title("Aether | PVP Overlay")
     .decorations(false)
     .transparent(true)
     .always_on_top(true)
@@ -161,7 +161,7 @@ pub async fn create_dps_buff<R: Runtime>(app: AppHandle<R>) -> Result<(), String
         BUFF_OVERLAY_LABEL,
         WebviewUrl::App("src/games/aion2/overlay/buff/index.html".into()),
     )
-    .title("NoiA | Buff Overlay")
+    .title("Aether | Buff Overlay")
     .decorations(false)
     .shadow(false)
     .transparent(true)
@@ -338,7 +338,7 @@ fn create_event_timer_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), Strin
         EVENT_TIMER_LABEL,
         WebviewUrl::App("src/games/aion2/overlay/event_timer/index.html".into()),
     )
-    .title("NoiA | Event Timer")
+    .title("Aether | Event Timer")
     .inner_size(EVENT_TIMER_WIDTH, EVENT_TIMER_HEIGHT)
     .resizable(false)
     .maximizable(false)
@@ -381,7 +381,7 @@ pub async fn toggle_event_timer_boss_window<R: Runtime>(app: AppHandle<R>) -> Re
         EVENT_TIMER_BOSS_LABEL,
         WebviewUrl::App("src/games/aion2/overlay/event_timer/boss_detail/index.html".into()),
     )
-    .title("NoiA | Field Boss Timers")
+    .title("Aether | Field Boss Timers")
     .inner_size(EVENT_TIMER_BOSS_WIDTH, EVENT_TIMER_BOSS_HEIGHT)
     .resizable(false)
     .maximizable(false)
@@ -584,7 +584,7 @@ pub async fn create_dps_detail<R: Runtime>(app: AppHandle<R>) -> Result<(), Stri
         DETAIL_LABEL,
         WebviewUrl::App("src/games/aion2/overlay/detail/index.html".into()),
     )
-    .title("NoiA | DPS Detail")
+    .title("Aether | DPS Detail")
     .decorations(false)
     .transparent(true)
     .always_on_top(true)
@@ -696,7 +696,7 @@ pub async fn create_dps_history<R: Runtime>(app: AppHandle<R>) -> Result<(), Str
         HISTORY_LABEL,
         WebviewUrl::App("src/games/aion2/overlay/history/index.html".into()),
     )
-    .title("NoiA | DPS History")
+    .title("Aether | DPS History")
     .decorations(false)
     .transparent(true)
     .always_on_top(true)

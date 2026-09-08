@@ -147,7 +147,7 @@ export function DpsMeterLauncherButton() {
 
         if (autoCloseMain) {
           await invoke("show_system_notification", {
-            title: "NoiA2",
+            title: "Aether",
             body: t("aion2Home.meterRunningNotification"),
           });
           const appWindow = getCurrentWebviewWindow();

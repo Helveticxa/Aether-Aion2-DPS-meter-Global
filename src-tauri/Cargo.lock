@@ -3,7 +3,13 @@
 version = 4
 
 [[package]]
-name = "NoiA"
+name = "adler2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
+
+[[package]]
+name = "aether"
 version = "4.1.0"
 dependencies = [
  "crc32fast",
@@ -28,12 +34,6 @@ dependencies = [
  "windows 0.48.0",
  "windows 0.61.3",
 ]
-
-[[package]]
-name = "adler2"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "aho-corasick"

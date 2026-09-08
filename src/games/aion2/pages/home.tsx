@@ -28,7 +28,9 @@ import {
 
 export default function HomePage() {
   const [showLightDialog, setShowLightDialog] = useState(false);
-  const [showUpgradeNotice, setShowUpgradeNotice] = useState(true);
+  // Upstream's "upgrade to 5.0 from the official site" notice does not apply
+  // to this fork, and it opened on every visit.
+  const [showUpgradeNotice, setShowUpgradeNotice] = useState(false);
   const { t } = useAppTranslation();
   const { config, updateSettings } = useSettings();
   const navigate = useNavigate();

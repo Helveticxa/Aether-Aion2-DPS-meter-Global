@@ -296,7 +296,7 @@ pub async fn repair_windivert_runtime() -> Result<RepairRuntimeResult, String> {
             success: false,
             steps,
             error: Some(format!(
-                "{error}。如果安装在 Program Files，请以管理员身份运行 NoiA 后重试。"
+                "{error}。如果安装在 Program Files，请以管理员身份运行 Aether 后重试。"
             )),
         });
     }

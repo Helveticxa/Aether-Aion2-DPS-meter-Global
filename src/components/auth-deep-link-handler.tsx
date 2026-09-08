@@ -5,7 +5,7 @@ import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { useAppTranslation } from "@/hooks/use-app-translation";
 import { supabase } from "@/lib/supabase";
 
-export const AUTH_DEEP_LINK_SCHEME = "noia2";
+export const AUTH_DEEP_LINK_SCHEME = "aether";
 export const AUTH_DEEP_LINK_CALLBACK_URL = `${AUTH_DEEP_LINK_SCHEME}://auth/callback`;
 export const AUTH_OPEN_RECOVERY_EVENT = "auth:open-recovery";
 

@@ -71,7 +71,7 @@ export function AboutSettings() {
   }, [refreshStorageSummary]);
 
   const handleOpenGithub = useCallback(() => {
-    void openUrl("https://github.com/ZDYoung0519/NOIA2");
+    void openUrl("https://github.com/Helveticxa/Aether-Aion2-DPS-meter-Global");
   }, []);
 
   const handleClearStorage = useCallback(async () => {

@@ -33,7 +33,7 @@ type ExternalAction = {
 };
 
 const EXTERNAL_ACTIONS: ExternalAction[] = [
-  { label: "官网", href: "https://noia2.top/", icon: Globe },
+  { label: "NoiA2 (upstream)", href: "https://noia2.top/", icon: Globe },
 
   // {
   //   label: "Discord",
@@ -53,7 +53,7 @@ const EXTERNAL_ACTIONS: ExternalAction[] = [
   // },
   {
     label: "Github",
-    href: "https://github.com/ZDYoung0519/NoiA2",
+    href: "https://github.com/Helveticxa/Aether-Aion2-DPS-meter-Global",
     icon: FaGithub,
     content: (
       <div className="flex flex-col items-center gap-2 text-center">

@@ -171,7 +171,7 @@ export default function StartupSplashPage() {
       setRepairSteps([
         "修复失败",
         error instanceof Error ? error.message : String(error),
-        "如果安装在 Program Files，请以管理员身份运行 NoiA 后重试。",
+        "如果安装在 Program Files，请以管理员身份运行 Aether 后重试。",
       ]);
       setRepairResult({
         success: false,
@@ -275,7 +275,7 @@ export default function StartupSplashPage() {
             ) : (
               <ShieldCheck className="size-3" />
             )}
-            <span>NoiA</span>
+            <span>Aether</span>
           </div>
           {status != null && (
             <button
@@ -298,7 +298,7 @@ export default function StartupSplashPage() {
         <section className="flex min-w-0 flex-col gap-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h1 className="text-xl font-semibold tracking-normal text-white">NoiA</h1>
+              <h1 className="text-xl font-semibold tracking-normal text-white">Aether</h1>
               <p className="mt-1 text-sm text-zinc-400">{title}</p>
             </div>
             {manualMode && (
@@ -361,7 +361,7 @@ export default function StartupSplashPage() {
           {state === "warning" && (
             <p className="text-xs leading-relaxed text-zinc-500">
               WinDivert 修复会下载 WinDivert64.sys 并写入安装目录；安装 Npcap 时请勾选 WinPcap
-              API-compatible Mode，安装完成后重启 NoiA。
+              API-compatible Mode，安装完成后重启 Aether。
             </p>
           )}
 
@@ -391,7 +391,7 @@ export default function StartupSplashPage() {
             <DialogTitle>手动修复 WinDivert</DialogTitle>
             <DialogDescription>
               将下载 WinDivert64.sys
-              并写入程序安装目录。若安装目录需要管理员权限，请以管理员身份运行 NoiA 后重试。
+              并写入程序安装目录。若安装目录需要管理员权限，请以管理员身份运行 Aether 后重试。
             </DialogDescription>
           </DialogHeader>
 

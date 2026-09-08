@@ -9,7 +9,7 @@ const Aion2Settings = lazy(() =>
 export default function DpsV2Page() {
   return (
     <WindowFrame
-      titleBar={<TitleBar title="NoiA DPS" showMaximize={false} />}
+      titleBar={<TitleBar title="Aether DPS" showMaximize={false} />}
       showSidebar={false}
       contentClassName="overflow-auto p-4"
     >

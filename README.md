@@ -1,184 +1,197 @@
 <div align="center">
 
-<img src="./public/icon.png" alt="NOIA2" width="96" height="96" />
+<img src="./docs/images/icon.png" alt="Aether" width="96" height="96" />
 
-# NOIA2
+# Aether
 
-An elegant desktop companion for AION2 players, built around a lightweight real-time DPS overlay, battle history, rankings, and multi-window combat analysis.
+**A real-time DPS meter for AION 2, built for the global servers.**
 
 [![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8DB?logo=tauri&logoColor=white)](https://tauri.app/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Rust](https://img.shields.io/badge/Rust-backend-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-GPL--3.0--only-22C55E)](./LICENSE)
-
-[简体中文](./README.zh-CN.md) · English
 
 </div>
 
 ---
 
-## What Is NOIA2?
+> [!IMPORTANT]
+> **Pre-release.** AION 2 launches globally on **5 October 2026** (Early Access from
+> 30 September). Every existing AION 2 meter targets the Korean or Taiwanese
+> service; this fork exists to be ready for the global one on day one.
+>
+> The capture pipeline and the region profiles described below are implemented and
+> tested. What is **not** yet confirmed against a real global session: the exact
+> opcodes, the global server-id range, and the server-name catalogue. Those get
+> filled in from the first Early Access capture.
 
-NOIA2 is a Windows desktop toolkit for AION2. It combines a Rust packet-capture backend with a polished Tauri + React interface, giving players a fast floating DPS meter, historical battle review, detail popups, and practical combat diagnostics without a heavy in-game UI.
+## What it is
 
-The project is designed for day-to-day play: open the meter, switch back to the game, and let the overlay follow your combat flow.
+Aether reads AION 2 combat data by **passively sniffing network packets**. It does
+not read or write game memory, inject code, modify packets, or automate any part
+of the game. It is a monitor.
 
-## Highlights
+It shows a floating overlay with live DPS while you play, keeps a searchable
+history of past fights, and breaks each encounter down by skill, buff uptime, and
+damage type.
 
-- **Lightweight floating DPS overlay** with two visual styles: Hunter Compact and Classic Bars.
-- **Real-time latency footer** with ping, CPU, memory, click-through lock, and ping history chart.
-- **Battle history and detail views** for reviewing target damage, skill breakdowns, and player contributions.
-- **Home dashboard** for recent characters, teammates, and battle target trends.
-- **Character scoring tools** for browsing equipment, stats, growth direction, and overall character strength.
-- **Damage rankings** for comparing personal and party performance across recorded encounters.
-- **Class statistics** for understanding class-level DPS distribution and combat trends.
-- **Multi-window workflow** for DPS, detail, settings, logs, guide dialog, and focused overlays.
-- **Rust capture pipeline** for packet capture, parsing, aggregation, diagnostics, and storage.
-- **User-tunable appearance** including opacity, scale, colors, nickname masking, target HP display, and class icon style.
-- **Global shortcuts, tray behavior, updater flow, and localization** built into the desktop app.
+## Credit
 
-## Preview
+Aether is a fork of **[NOIA2](https://github.com/ZDYoung0519/NOIA2)** by
+[zdyoung](https://github.com/ZDYoung0519), which does the heavy lifting: the Rust
+capture pipeline, the packet parsers, the overlay, and the game-data catalogues.
+That project is the reason this one could start from a working meter instead of a
+blank page. If Aether is useful to you, consider
+[supporting upstream](https://ifdian.net/a/zdyoung).
 
-### Home Dashboard
+Both projects are **GPL-3.0-only**. Screenshots below are from the upstream build;
+the interface is shared.
 
-![NOIA2 home dashboard](./docs/images/home.png)
+## Why a fork
 
-### Lightweight DPS Overlay
+The upstream project targets the Taiwanese service, and one detail made it unable
+to work anywhere else.
 
-![NOIA2 DPS overlay](./docs/images/dps.png)
+Its player-name parser validated server ids against Taiwan's exact catalogue:
 
-### DPS Detail View
-
-![NOIA2 DPS detail](./docs/images/dps_detail.png)
-
-### Character Score
-
-![NOIA2 character score](./docs/images/character_score.png)
-
-### DPS Rankings
-
-![NOIA2 DPS rankings](./docs/images/dps_rank.png)
-
-### Class Statistics
-
-![NOIA2 class statistics](./docs/images/class_stats.png)
-
-## Quick Start
-
-### Requirements
-
-- Windows
-- Node.js 18+
-- pnpm 9+
-- Rust toolchain
-- Npcap for packet capture
-
-### Install Dependencies
-
-```bash
-pnpm install
+```rust
+fn is_available_server_id(server_id: u32) -> bool {
+    (1001..=1021).contains(&server_id) || (2001..=2021).contains(&server_id)
+}
 ```
 
-### Run In Development
+That value is not cosmetic. It is used **structurally** — the parser scans candidate
+offsets and uses "is this a valid server id?" to decide where the server field sits
+inside a player-info packet. On a service whose ids fall outside Taiwan's range,
+every candidate is rejected, `find_server_id` returns `None`, and **no player is
+ever named**. Not an error, not a warning: an empty meter.
 
-```bash
+Aether replaces that constant with region profiles.
+
+| Profile | Server-id rule |
+|---|---|
+| **Auto** (default) | `1001..=1999`, `2001..=2999` |
+| **Taiwan** | `1001..=1021`, `2001..=2021` (the bundled catalogue) |
+| **Korea**, **Global** | same permissive rule as Auto |
+
+The permissive rule is structural rather than a shrug: server ids are
+`raceId * 1000 + index` (race 1 Elyos, race 2 Asmodian), confirmed by the bundled
+Taiwan server list. An arbitrary `u16` still fails the check, so the parser keeps
+the disambiguation it depends on — it simply no longer assumes how many servers a
+region runs.
+
+### Detection only claims a region on evidence
+
+Capture itself was already region-agnostic upstream: rather than a hardcoded
+address, it scans every network interface for the heartbeat magic
+`[0x0E, 0x00, 0x36]` and infers the device and port from whichever one answers.
+That should carry to the global servers unchanged.
+
+Region *identification* is a separate problem, and Aether does not guess at it.
+Korea is identifiable by its server block (`206.127.156.0/24`, taken from the MIT
+[TK-open-public](https://github.com/TK-open-public/Aion2-Dps-Meter) meter). Taiwan
+and global have no known block, so detection reports "no fingerprint matched"
+instead of inferring a region from an id range they may well share.
+
+Instead, **Settings → Backend shows the server IPs and server ids actually
+observed**. That readout is how an uncatalogued service gets characterised from a
+real session — and it is how the global fingerprint will be established after
+Early Access.
+
+## Features
+
+Inherited from upstream:
+
+- Floating DPS overlay in two styles, with click-through and opacity control
+- Live ping, CPU, and memory footer
+- Battle history with per-skill and per-player breakdowns
+- Damage-type split, buff timelines, and cast ordering
+- Character scoring, damage rankings, and class statistics
+- Multi-window workflow, global shortcuts, tray integration
+- English, Korean, Traditional Chinese, and Simplified Chinese
+
+Added by this fork:
+
+- Region profiles with an observation readout (above)
+- Runs fully offline — cloud features are optional and off by default
+- Server names fall back to `Server <id>` rather than a hardcoded "unknown server",
+  so players on uncatalogued services stay distinguishable
+
+## Requirements
+
+- Windows 10 or 11
+- [Npcap](https://npcap.com/#download) — **tick "Install Npcap in WinPcap
+  API-compatible Mode"** during installation
+- **Administrator rights.** Packet capture needs them, and the Windows manifest
+  demands elevation; the app cannot start from an unelevated shell (it fails with
+  OS error 740).
+
+## Build from source
+
+```
+pnpm install
+pnpm build
+```
+
+Then, from an **elevated** terminal:
+
+```
 pnpm tauri:dev
 ```
 
-### Build Installer
+To produce an installer:
 
-```bash
+```
 pnpm tauri:build
 ```
 
-## Usage Guide
+Toolchain: Rust (MSVC toolchain), Node 18+, pnpm, and the MSVC build tools.
 
-NOIA2 includes a built-in guide when you open the lightweight DPS meter. The flow is:
+## Development notes
 
-1. Install Npcap and keep the WinPcap-compatible option enabled.
-2. Enter the game and teleport once so NOIA2 can identify your character.
-3. Start fighting in a training or dungeon scenario. DPS data appears automatically.
+`pnpm check` fails on a clean checkout — Prettier flags 119 files and ESLint
+reports 65 errors, all inherited from upstream. Do not run `pnpm format`: it would
+rewrite those files and make every future upstream merge expensive.
 
-<p align="center">
-  <img src="./public/guide1.png" alt="Npcap setup guide" width="30%" />
-  <img src="./public/guide2.png" alt="Character detection guide" width="30%" />
-  <img src="./public/guide3.png" alt="Combat data guide" width="30%" />
-</p>
+The gates that are actually meaningful:
 
-## Feature Tour
-
-| Area             | What It Does                                                                                   |
-| ---------------- | ---------------------------------------------------------------------------------------------- |
-| DPS Overlay      | Shows live damage, DPS, contribution percentage, class icon, server tag, and target timer.     |
-| Ping Footer      | Shows latency, CPU, memory, and a lock button for click-through overlay mode.                  |
-| Detail Window    | Opens skill and player details without interrupting the main overlay.                          |
-| History          | Saves battle snapshots locally and supports later review and upload status tracking.           |
-| Character Score  | Helps inspect character equipment, stats, and progression strength in a dedicated rating page. |
-| Rankings         | Provides damage ranking views, personal DPS comparison, and party performance review.          |
-| Class Statistics | Summarizes class-level combat trends so players can compare DPS distribution by class.         |
-| Settings         | Controls overlay style, scale, opacity, colors, shortcuts, and backend capture behavior.       |
-
-## Architecture
-
-```text
-NOIA2
-├─ src/                     React + TypeScript frontend
-│  ├─ components/           UI, dashboard, DPS panels, guide dialog
-│  ├─ hooks/                settings, translation, updater, user state
-│  ├─ lib/                  window helpers, storage, uploads, AION2 utilities
-│  ├─ pages/                multi-window routes
-│  └─ types/                shared frontend types
-├─ src-tauri/               Tauri v2 desktop shell and Rust backend
-│  ├─ src/dps_meter/        capture, parsing, calculator, models, storage
-│  ├─ src/plugins/          tray, focus tracking, window tracking, HTTP helpers
-│  └─ tauri.conf.json       desktop configuration
-├─ public/                  app images, guide images, class/skill assets
-├─ docs/                    updater, shortcut, and i18n docs
-└─ screenshots/             legacy screenshots
+```
+pnpm build                        # tsc + vite
+cd src-tauri && cargo test --lib  # 17 tests
 ```
 
-## Scripts
+`cargo test` without `--lib` fails on the binary target only, because the manifest
+demands elevation and the test runner cannot launch it.
 
-```bash
-pnpm dev              # Start Vite only
-pnpm tauri:dev        # Start the desktop app in development
-pnpm build            # Type-check and build frontend
-pnpm tauri:build      # Build Windows installer
-pnpm lint             # Run ESLint
-pnpm format           # Format source files
-pnpm check            # Format check, lint, and full build
-```
+Changes against upstream are kept small and anchored so that
+`git fetch upstream && git merge upstream/main` stays cheap. See
+[FORK.md](./FORK.md) for the full record of what diverges and why.
 
-## Release Flow
+Note that `CLAUDE.md` in this repository is upstream's unedited Tauri-template
+boilerplate and describes a different application. Trust `FORK.md` instead.
 
-```bash
-pnpm release:version
-```
+## Screenshots
 
-The release script checks repository state, validates version consistency, creates the release commit, and tags the build. GitHub Actions can then produce installer and updater artifacts from release tags.
+_From the upstream build; the interface is shared._
 
-## Notes
+| Home | DPS overlay |
+|:--:|:--:|
+| ![Home](./docs/images/home.png) | ![Overlay](./docs/images/dps.png) |
 
-- The current capture workflow is tuned for Windows desktop usage.
-- Npcap is required for packet capture.
-- Some data is intentionally displayed transparently, including unknown actors or distant summon-related entries, so users can see what the parser actually observes.
-- Local storage is used for UI settings, recent character history, and DPS history.
+| Combat detail | Rankings |
+|:--:|:--:|
+| ![Detail](./docs/images/dps_detail.png) | ![Rankings](./docs/images/dps_rank.png) |
 
-## Documentation
+## Disclaimer
 
-- [Auto Update](./docs/AUTO_UPDATE.md)
-- [Global Shortcut](./docs/GLOBAL_SHORTCUT.md)
-- [I18N](./docs/I18N.md)
+This tool reads network traffic on your own machine. It does not inject code,
+modify memory, or alter game traffic, and it uploads nothing by default.
 
-## Acknowledgements and References
-
-NOIA2 was developed with reference to ideas and implementations from these open-source projects. Thank you to their maintainers and contributors:
-
-- [TK-open-public/Aion2-Dps-Meter](https://github.com/TK-open-public/Aion2-Dps-Meter)
-- [taengu/Aion2-Dps-Meter](https://github.com/taengu/Aion2-Dps-Meter)
-- [p62003/aletheia_AION2_DPS_Meter](https://github.com/p62003/aletheia_AION2_DPS_Meter)
+That said, it is third-party software. Use it at your own discretion and in
+accordance with the game's terms of service. Nobody here can promise you how
+NCSoft will treat any particular tool.
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0 only (`GPL-3.0-only`). See [LICENSE](./LICENSE).
+[GPL-3.0-only](./LICENSE), inherited from NOIA2. Any distributed build must ship
+its source under the same terms.
