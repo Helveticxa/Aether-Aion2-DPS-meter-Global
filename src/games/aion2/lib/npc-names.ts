@@ -50,31 +50,31 @@ export function getKnownBossMobCodes(): string[] {
 
 export function getDungeonNameByMobCode(
   mobCode: number | string,
-  language = "zh-CN"
+  language = "en"
 ): string | undefined {
   const dungeon = getDungeonByMobCode(mobCode);
   if (!dungeon) {
     return undefined;
   }
 
-  return dungeon.name[language] ?? dungeon.name["zh-CN"] ?? dungeon.name.en;
+  return dungeon.name[language] ?? dungeon.name.en;
 }
 
 export function getDungeonDifficultyByMobCode(
   mobCode: number | string,
-  language = "zh-CN"
+  language = "en"
 ): string | undefined {
   const dungeon = getDungeonByMobCode(mobCode);
   if (!dungeon) {
     return undefined;
   }
 
-  return dungeon.difficulty[language] ?? dungeon.difficulty["zh-CN"] ?? dungeon.difficulty.en;
+  return dungeon.difficulty[language] ?? dungeon.difficulty.en;
 }
 
 export function getDungeonDisplayNameByMobCode(
   mobCode: number | string,
-  language = "zh-CN"
+  language = "en"
 ): string {
-  return getDungeonNameByMobCode(mobCode, language) ?? "未知副本";
+  return getDungeonNameByMobCode(mobCode, language) ?? "Unknown dungeon";
 }

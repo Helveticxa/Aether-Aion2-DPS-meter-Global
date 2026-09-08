@@ -28,20 +28,20 @@ import {
 } from "@/components/ui/dialog";
 
 import dungeonsData from "@/games/aion2/data/dungeons.json";
-import skillNamesZhCN from "@/i18n/locales/aion2skills/zh-CN.json";
+import skillNamesEn from "@/i18n/locales/aion2skills/en.json";
 import type { BuffSummary, HistoryRecord, PlayerOverviewStat } from "@/games/aion2/types/aion2dps";
 
 const ACTOR_CLASS_NAME_MAP: Record<string, string> = {
-  ALL: "全部",
-  GLADIATOR: "剑星",
-  TEMPLAR: "守护星",
-  ASSASSIN: "杀星",
-  RANGER: "弓星",
-  SORCERER: "魔道星",
-  ELEMENTALIST: "精灵星",
-  CLERIC: "治愈星",
-  CHANTER: "护法星",
-  FIGHTER: "拳星",
+  ALL: "All",
+  GLADIATOR: "Gladiator",
+  TEMPLAR: "Templar",
+  ASSASSIN: "Assassin",
+  RANGER: "Ranger",
+  SORCERER: "Sorcerer",
+  ELEMENTALIST: "Elementalist",
+  CLERIC: "Cleric",
+  CHANTER: "Chanter",
+  FIGHTER: "Fighter",
 };
 
 export function getActorClassName(actorClass: string | null | undefined) {
@@ -109,7 +109,7 @@ type PartyDpsPlayer = {
   dps: number;
 };
 
-const SKILL_NAMES = skillNamesZhCN as Record<string, string>;
+const SKILL_NAMES = skillNamesEn as Record<string, string>;
 
 type BossRankState = {
   loading: boolean;
@@ -193,10 +193,10 @@ function Aion2Loading({ label }: { label: string }) {
 }
 
 const DUNGEON_GROUPS: Array<{ key: DungeonGroup; label: string }> = [
-  { key: "expedition", label: "远征" },
-  { key: "transcendence", label: "超越" },
-  { key: "sanctuary", label: "圣域" },
-  { key: "other", label: "其他" },
+  { key: "expedition", label: "Expedition" },
+  { key: "transcendence", label: "Transcendence" },
+  { key: "sanctuary", label: "Sanctuary" },
+  { key: "other", label: "Other" },
 ];
 
 const ACTOR_CLASSES = [
@@ -222,14 +222,14 @@ function getDungeonGroup(dungeonId: string): DungeonGroup {
 }
 
 function localize(text: LocalizedText | undefined) {
-  return text?.["zh-CN"] ?? text?.["zh-TW"] ?? text?.en ?? text?.ko ?? "-";
+  return text?.en ?? text?.ko ?? "-";
 }
 
 function createTrainingDummyDungeon(): DungeonDefinition {
   return {
     dungeon_id: "training-dummy",
-    name: { "zh-CN": "木桩" },
-    difficulty: { "zh-CN": "训练" },
+    name: { en: "Training Dummy" },
+    difficulty: { en: "Practice" },
     boss_ids: EXTRA_ALLOWED_DPS_UPLOAD_MOB_CODES.map(Number),
   };
 }
@@ -272,7 +272,7 @@ function buildDungeonOptions() {
     options.push({
       key: "other:training-dummy",
       group: "other",
-      name: "木桩",
+      name: "Training Dummy",
       rows: [
         {
           dungeon: createTrainingDummyDungeon(),
@@ -357,7 +357,7 @@ function ClassSelect({
             <SelectItem key={classCode} value={classCode}>
               <span className="flex items-center gap-2">
                 <ClassIcon classCode={classCode} />
-                <span>{classCode === "ALL" ? "全部职业" : getActorClassName(classCode)}</span>
+                <span>{classCode === "ALL" ? "All classes" : getActorClassName(classCode)}</span>
               </span>
             </SelectItem>
           ))}
@@ -419,7 +419,7 @@ function formatDate(value: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
 
-  return date.toLocaleString("zh-CN", {
+  return date.toLocaleString("en-GB", {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -428,7 +428,7 @@ function formatDate(value: string | null) {
 }
 
 function formatServer(serverId: string | null) {
-  if (!serverId) return "未知";
+  if (!serverId) return "Unknown";
 
   const numericId = Number(serverId);
   if (Number.isFinite(numericId)) {
@@ -448,7 +448,7 @@ function getErrorMessage(error: unknown) {
   ) {
     return error.message;
   }
-  return "加载失败";
+  return "Failed to load";
 }
 
 function getMainPlayer(record: HistoryRecord): PlayerOverviewStat | null {

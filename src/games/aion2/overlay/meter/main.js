@@ -31,7 +31,7 @@ const DEFAULT_OVERLAY_CONFIG = {
   contentScale: 1,
   detailWindowMode: "follow",
   autoResizeHeight: true,
-  damageFormat: "万/亿",
+  damageFormat: "K/M/B",
 };
 let contentScale = 1;
 let autoHeightReconcileScheduled = false;

@@ -8,7 +8,7 @@ export default function Splash() {
         Aether<span className="text-purple-500">.</span>
       </h1>
       <TrueFocus
-        sentence="永恒 诺亚"
+        sentence="AION2 Meter"
         manualMode={false}
         blurAmount={5}
         borderColor="#5227FF"

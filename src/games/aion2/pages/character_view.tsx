@@ -582,7 +582,7 @@ function formatDateTime(value: string | null) {
     return value;
   }
 
-  return date.toLocaleString("zh-CN", {
+  return date.toLocaleString("en-GB", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

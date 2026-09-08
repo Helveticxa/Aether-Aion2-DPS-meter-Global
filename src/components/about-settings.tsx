@@ -90,11 +90,11 @@ export function AboutSettings() {
   return (
     <div className="flex flex-col gap-8">
       <SettingsSectionHeader
-        title="关于"
-        description="查看应用版本、技术栈、更新状态和本地缓存占用。"
+        title="About"
+        description="Application version, stack, update status, and local cache usage."
       />
 
-      <SettingsGroup title="应用信息">
+      <SettingsGroup title="Application">
         <SettingsRow
           label={t("about.appName")}
           description={t("about.description")}
@@ -135,10 +135,10 @@ export function AboutSettings() {
         />
       </SettingsGroup>
 
-      <SettingsGroup title="本地缓存">
+      <SettingsGroup title="Local cache">
         <SettingsRow
-          label="当前占用"
-          description="应用设置、搜索历史和运行时数据会保存在本机。"
+          label="Current usage"
+          description="Settings, search history, and runtime data are stored on this machine."
           control={
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold">
@@ -146,25 +146,25 @@ export function AboutSettings() {
               </span>
               <Button variant="outline" size="sm" onClick={refreshStorageSummary}>
                 <RefreshCw data-icon="inline-start" />
-                刷新
+                Refresh
               </Button>
             </div>
           }
         />
 
         <SettingsRow
-          label="清理缓存"
-          description="清理本地保存的设置、搜索历史和缓存数据，并重新加载窗口。"
+          label="Clear cache"
+          description="Clear locally stored settings, search history, and cached data, then reload the window."
           control={
             <Button variant="destructive" size="sm" onClick={() => setClearStorageOpen(true)}>
               <Trash2 data-icon="inline-start" />
-              清理并重启
+              Clear and reload
             </Button>
           }
         />
 
         {storageSummary.entries.length === 0 ? (
-          <div className="text-muted-foreground px-5 py-6 text-sm">暂无本地缓存数据。</div>
+          <div className="text-muted-foreground px-5 py-6 text-sm">No local cache data.</div>
         ) : (
           storageSummary.entries.map((entry) => (
             <SettingsRow
@@ -182,14 +182,14 @@ export function AboutSettings() {
       <Dialog open={clearStorageOpen} onOpenChange={setClearStorageOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>清理本地缓存？</DialogTitle>
+            <DialogTitle>Clear local cache?</DialogTitle>
             <DialogDescription>
-              这会清空本机保存的设置、搜索历史和缓存数据，并重新加载应用窗口。
+              This clears the settings, search history, and cached data stored on this machine, then reloads the app window.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setClearStorageOpen(false)}>
-              取消
+              Cancel
             </Button>
             <Button
               variant="destructive"
@@ -197,7 +197,7 @@ export function AboutSettings() {
                 void handleClearStorage();
               }}
             >
-              清理并重启
+              Clear and reload
             </Button>
           </DialogFooter>
         </DialogContent>

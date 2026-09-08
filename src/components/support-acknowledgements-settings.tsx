@@ -1,19 +1,10 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { ExternalLink, HeartHandshake } from "lucide-react";
-import { FaQq } from "react-icons/fa";
+import { ExternalLink } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SettingsGroup, SettingsSectionHeader } from "@/components/settings-layout";
-
-type SupportMethod = {
-  title: string;
-  description: string;
-  imageSrc?: string;
-  imageAlt?: string;
-  groups?: Array<{ name: string; number: string }>;
-};
 
 type CreditItem = {
   name: string;
@@ -24,33 +15,27 @@ type CreditItem = {
   badge: string;
 };
 
-const SUPPORT_METHODS: SupportMethod[] = [
-  {
-    title: "爱发电",
-    description: "适合长期支持项目维护、服务器和分发成本。",
-    imageSrc: "/images/qr/afd.jpg",
-    imageAlt: "爱发电赞助二维码",
-  },
-  {
-    title: "微信赞赏",
-    description: "如果这个工具帮你省下了一点折腾时间，可以请作者喝杯咖啡。",
-    imageSrc: "/images/qr/wxpay.jpg",
-    imageAlt: "微信赞赏二维码",
-  },
-  {
-    title: "QQ 交流群",
-    description: "加入群聊反馈问题、讨论功能，或者参与新功能测试。",
-    groups: [
-      { name: "NoiA 水表千人交流大群", number: "1095050342" },
-      { name: "NoiA 水表意见和测试群", number: "1093399101" },
-    ],
-  },
-];
+/**
+ * Aether is a fork, and this page says so plainly.
+ *
+ * Upstream's own page collected donations and community group numbers; those
+ * belong to that project and its author, not to this fork, so they are not
+ * reproduced here. The credit itself is.
+ */
+const UPSTREAM: CreditItem = {
+  name: "ZDYoung0519/NOIA2",
+  description:
+    "Aether is a fork of NOIA2 by zdyoung: the capture pipeline, the packet parsers, the overlay, and the game-data catalogues all come from that project.",
+  href: "https://github.com/ZDYoung0519/NOIA2",
+  avatarSrc: "https://avatars.githubusercontent.com/u/60741049?s=80&v=4",
+  avatarFallback: "NO",
+  badge: "Upstream",
+};
 
 const TECHNICAL_CREDITS: CreditItem[] = [
   {
     name: "TK-open-public/Aion2-Dps-Meter",
-    description: "Aion2 DPS 解析与实现参考。",
+    description: "Reference for AION2 packet parsing, and the source of the Korean server block.",
     href: "https://github.com/TK-open-public/Aion2-Dps-Meter",
     avatarSrc: "https://avatars.githubusercontent.com/u/253818446?s=80&v=4",
     avatarFallback: "TK",
@@ -58,7 +43,7 @@ const TECHNICAL_CREDITS: CreditItem[] = [
   },
   {
     name: "taengu/Aion2-Dps-Meter",
-    description: "Aion2 DPS Meter 相关开源实现参考。",
+    description: "Another open implementation of an AION2 DPS meter.",
     href: "https://github.com/taengu/Aion2-Dps-Meter",
     avatarSrc: "https://avatars.githubusercontent.com/u/7606218?s=80&v=4",
     avatarFallback: "TG",
@@ -66,7 +51,7 @@ const TECHNICAL_CREDITS: CreditItem[] = [
   },
   {
     name: "p62003/aletheia_AION2_DPS_Meter",
-    description: "AION2 DPS 数据采集与展示思路参考。",
+    description: "Reference for combat-data presentation and analysis.",
     href: "https://github.com/p62003/aletheia_AION2_DPS_Meter",
     avatarSrc: "https://avatars.githubusercontent.com/u/125135560?s=80&v=4",
     avatarFallback: "P6",
@@ -76,36 +61,6 @@ const TECHNICAL_CREDITS: CreditItem[] = [
 
 function openExternalLink(href: string) {
   void openUrl(href);
-}
-
-function SupportMethodCard({ method }: { method: SupportMethod }) {
-  return (
-    <div className="flex items-center gap-4 rounded-md border p-4">
-      {method.imageSrc ? (
-        <div className="bg-muted/30 size-28 shrink-0 overflow-hidden rounded-md border">
-          <img
-            src={method.imageSrc}
-            alt={method.imageAlt}
-            className="aspect-square size-full object-cover"
-          />
-        </div>
-      ) : (
-        <div className="bg-muted/30 flex size-28 shrink-0 items-center justify-center rounded-md border">
-          <FaQq className="text-muted-foreground size-10" />
-        </div>
-      )}
-      <div className="flex min-w-0 flex-col gap-1">
-        <div className="text-sm font-semibold">{method.title}</div>
-        <p className="text-muted-foreground text-xs leading-5">{method.description}</p>
-        {method.groups?.map((group) => (
-          <div key={group.number} className="mt-1 min-w-0">
-            <div className="truncate text-xs font-medium">{group.name}</div>
-            <div className="text-muted-foreground font-mono text-xs">{group.number}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 function CreditRow({ item }: { item: CreditItem }) {
@@ -121,12 +76,12 @@ function CreditRow({ item }: { item: CreditItem }) {
             <span className="truncate text-sm font-medium">{item.name}</span>
             <Badge variant="secondary">{item.badge}</Badge>
           </div>
-          <p className="text-muted-foreground truncate text-xs">{item.description}</p>
+          <p className="text-muted-foreground text-xs leading-5">{item.description}</p>
         </div>
       </div>
       <Button variant="outline" size="sm" onClick={() => openExternalLink(item.href)}>
         <ExternalLink data-icon="inline-start" />
-        打开
+        Open
       </Button>
     </div>
   );
@@ -136,30 +91,19 @@ export function SupportAcknowledgementsSettings() {
   return (
     <div className="flex flex-col gap-8">
       <SettingsSectionHeader
-        title="支持与鸣谢"
-        description="感谢每一位反馈、测试、赞助和开源分享的朋友。这个页面记录项目继续往前走所依赖的善意。"
+        title="Credits"
+        description="Aether stands on other people's work. This page records whose."
       />
 
-      <SettingsGroup title="支持项目">
-        <div className="px-5 py-5">
-          <div className="mb-5 flex items-center gap-2">
-            <HeartHandshake data-icon="inline-start" />
-            <div>
-              <div className="text-sm font-semibold">支持项目</div>
-              <p className="text-muted-foreground mt-1 text-xs leading-5">
-                你的支持会用于维护 Aion2 DPS 工具、排行榜和后续功能。
-              </p>
-            </div>
-          </div>
-          <div className="grid gap-4 xl:grid-cols-3">
-            {SUPPORT_METHODS.map((method) => (
-              <SupportMethodCard key={method.title} method={method} />
-            ))}
-          </div>
+      <SettingsGroup title="Built on">
+        <CreditRow item={UPSTREAM} />
+        <div className="text-muted-foreground px-5 pb-5 text-xs leading-5">
+          Both projects are licensed GPL-3.0-only. If Aether is useful to you, consider supporting
+          upstream directly through the links on the NOIA2 repository.
         </div>
       </SettingsGroup>
 
-      <SettingsGroup title="技术鸣谢">
+      <SettingsGroup title="References">
         {TECHNICAL_CREDITS.map((item) => (
           <CreditRow key={item.href} item={item} />
         ))}

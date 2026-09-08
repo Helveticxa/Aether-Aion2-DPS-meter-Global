@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import skillsZhCN from "@/i18n/locales/aion2skills/zh-CN.json";
+import skillsEn from "@/i18n/locales/aion2skills/en.json";
 
 const DEFAULT_BACKGROUND = [0, 0, 0, 102];
 const APP_CONFIG_STORAGE_KEY = "app-config";
@@ -88,7 +88,7 @@ function resolveSkillId(skillCode) {
   const candidates = [raw, raw.length === 4 ? raw.padEnd(8, "0") : raw.slice(0, 8)];
   if (raw.length > 8) candidates.push(raw.slice(0, 8).replace(/\d$/, "0"));
   if (raw.length > 6) candidates.push(raw.slice(0, 6).padEnd(8, "0"));
-  return [...new Set(candidates)].find((id) => skillsZhCN[id]) || raw.slice(0, 8);
+  return [...new Set(candidates)].find((id) => skillsEn[id]) || raw.slice(0, 8);
 }
 
 function skillShortcode(skillCode) {
@@ -97,7 +97,7 @@ function skillShortcode(skillCode) {
 
 function skillName(skillCode) {
   const resolvedId = resolveSkillId(skillCode);
-  return skillsZhCN[resolvedId] || `技能 ${skillCode}`;
+  return skillsEn[resolvedId] || `Skill ${skillCode}`;
 }
 
 function buffKey(slot) {

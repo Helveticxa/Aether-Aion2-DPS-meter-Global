@@ -79,7 +79,7 @@ function RuntimeRow({
         <div className="flex items-center justify-between gap-3">
           <span className="text-foreground text-sm font-medium">{label}</span>
           <span className={available ? "text-xs text-cyan-300" : "text-muted-foreground text-xs"}>
-            {!checked ? "检测中" : available ? "可用" : "不可用"}
+            {!checked ? "Checking" : available ? "Available" : "Unavailable"}
           </span>
         </div>
         <p
@@ -132,7 +132,7 @@ export default function StartupSplashPage() {
         },
         npcap: {
           available: false,
-          error: "检测失败",
+          error: "Check failed",
         },
       });
       setState("warning");
@@ -158,7 +158,7 @@ export default function StartupSplashPage() {
   async function repairWindivert() {
     setRepairingWindivert(true);
     setRepairResult(null);
-    setRepairSteps(["用户已选择手动修复 WinDivert"]);
+    setRepairSteps(["Manual WinDivert repair selected"]);
     try {
       const result = await invoke<RepairResult>("repair_windivert_runtime");
       setRepairResult(result);
@@ -169,9 +169,9 @@ export default function StartupSplashPage() {
       }
     } catch (error) {
       setRepairSteps([
-        "修复失败",
+        "Repair failed",
         error instanceof Error ? error.message : String(error),
-        "如果安装在 Program Files，请以管理员身份运行 Aether 后重试。",
+        "If it is installed under Program Files, run Aether as Administrator and try again.",
       ]);
       setRepairResult({
         success: false,
@@ -205,7 +205,7 @@ export default function StartupSplashPage() {
           },
           npcap: {
             available: false,
-            error: "检测失败",
+            error: "Check failed",
           },
         });
         setState("warning");
@@ -242,12 +242,12 @@ export default function StartupSplashPage() {
 
   const title =
     state === "checking"
-      ? "正在检查抓包驱动"
+      ? "Checking capture drivers"
       : state === "ready"
         ? manualMode
-          ? "抓包驱动已就绪（任一可用即可）"
-          : "抓包驱动已就绪（任一可用即可），即将进入 App"
-        : "抓包驱动不可用（至少需要一个可用）";
+          ? "Capture driver ready (either one will do)"
+          : "Capture driver ready (either one will do). Starting..."
+        : "No capture driver available (at least one is required)";
 
   return (
     <div
@@ -290,7 +290,7 @@ export default function StartupSplashPage() {
               ) : (
                 <RefreshCw className="size-3" />
               )}
-              重新检测
+              Re-check
             </button>
           )}
         </section>
@@ -307,7 +307,7 @@ export default function StartupSplashPage() {
                 className="flex size-7 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-white/8 hover:text-zinc-100"
                 data-tauri-drag-region="false"
                 onClick={() => void getCurrentWindow().close()}
-                aria-label="关闭检测窗口"
+                aria-label="Close the check window"
               >
                 <X className="size-4" />
               </button>
@@ -317,7 +317,7 @@ export default function StartupSplashPage() {
           <div className="flex flex-col gap-2.5">
             <RuntimeRow
               label="Npcap"
-              description="作为优先封包捕获方案"
+              description="Preferred capture backend"
               status={status?.npcap}
               action={
                 status?.npcap.available === false ? (
@@ -328,14 +328,14 @@ export default function StartupSplashPage() {
                     onClick={() => void openUrl("https://npcap.com/dist/npcap-1.87.exe")}
                   >
                     <Download className="size-3.5" />
-                    下载
+                    Download
                   </button>
                 ) : null
               }
             />
             <RuntimeRow
               label="WinDivert"
-              description="作为备用驱动级封包捕获方案"
+              description="Fallback driver-level capture backend"
               status={status?.windivert}
               action={
                 status?.windivert.available === false ? (
@@ -351,7 +351,7 @@ export default function StartupSplashPage() {
                     }}
                   >
                     <RefreshCw className="size-3.5" />
-                    修复
+                    Repair
                   </button>
                 ) : null
               }
@@ -360,8 +360,8 @@ export default function StartupSplashPage() {
 
           {state === "warning" && (
             <p className="text-xs leading-relaxed text-zinc-500">
-              WinDivert 修复会下载 WinDivert64.sys 并写入安装目录；安装 Npcap 时请勾选 WinPcap
-              API-compatible Mode，安装完成后重启 Aether。
+              Repairing WinDivert downloads WinDivert64.sys into the install directory. When
+              installing Npcap, tick WinPcap API-compatible Mode, then restart Aether.
             </p>
           )}
 
@@ -370,13 +370,13 @@ export default function StartupSplashPage() {
             <span>
               {state === "checking"
                 ? manualMode
-                  ? "正在检测抓包环境"
-                  : "检测完成后将自动进入主界面"
+                  ? "Checking the capture environment"
+                  : "The main window opens once the check finishes"
                 : state === "ready"
                   ? manualMode
-                    ? "当前抓包环境可用"
-                    : "正在运行..."
-                  : "请手动安装 Npcap 或手动修复 WinDivert 后重启"}
+                    ? "Capture environment is ready"
+                    : "Running..."
+                  : "Install Npcap or repair WinDivert manually, then restart"}
             </span>
           </footer>
         </section>
@@ -388,16 +388,17 @@ export default function StartupSplashPage() {
           data-tauri-drag-region="false"
         >
           <DialogHeader>
-            <DialogTitle>手动修复 WinDivert</DialogTitle>
+            <DialogTitle>Repair WinDivert manually</DialogTitle>
             <DialogDescription>
-              将下载 WinDivert64.sys
-              并写入程序安装目录。若安装目录需要管理员权限，请以管理员身份运行 Aether 后重试。
+              This downloads WinDivert64.sys into the install directory. If that directory
+              needs elevation, run Aether as Administrator and try again.
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex flex-col gap-3">
             <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs leading-relaxed text-zinc-400">
-              仅在你点击“开始修复”后才会下载和写入文件。修复完成后会自动重新检测 WinDivert。
+              Nothing is downloaded or written until you click Start repair. WinDivert is
+              re-checked automatically afterwards.
             </div>
 
             {repairSteps.length > 0 && (
@@ -419,8 +420,8 @@ export default function StartupSplashPage() {
                 }
               >
                 {repairResult.success
-                  ? "WinDivert 修复完成。"
-                  : repairResult.error || "WinDivert 修复失败。"}
+                  ? "WinDivert repaired."
+                  : repairResult.error || "WinDivert repair failed."}
               </div>
             )}
           </div>
@@ -433,7 +434,7 @@ export default function StartupSplashPage() {
               disabled={repairingWindivert}
               onClick={() => setWindivertRepairOpen(false)}
             >
-              关闭
+              Close
             </Button>
             <Button
               type="button"
@@ -442,7 +443,7 @@ export default function StartupSplashPage() {
               onClick={() => void repairWindivert()}
             >
               {repairingWindivert && <Loader2 className="animate-spin" data-icon="inline-start" />}
-              开始修复
+              Start repair
             </Button>
           </DialogFooter>
         </DialogContent>

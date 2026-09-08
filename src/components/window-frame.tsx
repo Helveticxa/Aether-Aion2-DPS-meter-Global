@@ -114,7 +114,7 @@ function WindowSidebar({ isHomePage }: { isHomePage: boolean }) {
           <div className="mt-auto flex flex-col gap-1.5">
             <SidebarNavItem
               path="/settings-view"
-              label="设置"
+              label="Settings"
               icon={Settings}
               expanded={expanded}
             />
@@ -126,7 +126,7 @@ function WindowSidebar({ isHomePage }: { isHomePage: boolean }) {
               )}
               onClick={toggleExpanded}
               aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
-              title={expanded ? undefined : "展开"}
+              title={expanded ? undefined : "Expand"}
             >
               <span className="flex size-9 shrink-0 items-center justify-center rounded-xl transition-colors [&_svg]:size-4 [&_svg]:shrink-0">
                 {expanded ? <PanelLeftClose /> : <PanelLeftOpen />}
@@ -137,7 +137,7 @@ function WindowSidebar({ isHomePage }: { isHomePage: boolean }) {
                   expanded ? "w-auto opacity-100" : "w-0 translate-x-1 opacity-0"
                 )}
               >
-                收起
+                Collapse
               </span>
             </button>
           </div>

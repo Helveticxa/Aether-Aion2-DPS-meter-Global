@@ -11,8 +11,6 @@ import {
 
 const LANGUAGES = [
   { code: "en", label: "English" },
-  { code: "zh-CN", label: "简体中文" },
-  { code: "zh-TW", label: "繁體中文" },
   { code: "ko", label: "한국어" },
 ];
 

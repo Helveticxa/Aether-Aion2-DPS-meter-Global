@@ -16,22 +16,6 @@ const translations = {
     dimensionalInvasion: "Dimensional Invasion",
     spaceTimeRift: "Space-Time Rift",
   },
-  "zh-CN": {
-    mapBoss: "地图 Boss",
-    openMap: "请打开地图",
-    ready: "已刷新",
-    shugoFestival: "树古庆典",
-    dimensionalInvasion: "次元入侵",
-    spaceTimeRift: "时空裂缝",
-  },
-  "zh-TW": {
-    mapBoss: "地圖 Boss",
-    openMap: "請開啟地圖",
-    ready: "已刷新",
-    shugoFestival: "樹古慶典",
-    dimensionalInvasion: "次元入侵",
-    spaceTimeRift: "時空裂縫",
-  },
   ko: {
     mapBoss: "필드 보스",
     openMap: "지도를 열어주세요",
@@ -53,7 +37,7 @@ function getConfig() {
 
 function getLanguage() {
   const language = getConfig()?.app?.language;
-  return language in translations ? language : "zh-CN";
+  return language in translations ? language : "en";
 }
 
 function shouldShowBoss() {

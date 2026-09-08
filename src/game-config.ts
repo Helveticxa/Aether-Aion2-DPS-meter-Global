@@ -1,5 +1,7 @@
 import { Home, LineChart, ShieldCheck, type LucideIcon } from "lucide-react";
 
+import { isCloudEnabled } from "@/lib/supabase";
+
 export type NavItem = {
   label: string;
   path: string;
@@ -21,15 +23,22 @@ export const AION2_GAME: GameConfig = {
   name: "AION2",
   rootPath: "/aion2",
   navItems: [
-    { label: "首页", path: "/aion2", icon: Home },
-    {
-      label: "角色查询",
-      path: "/aion2/character/search",
-      icon: ShieldCheck,
-      activePaths: ["/aion2/character/search", "/aion2/character/view"],
-    },
-    { label: "伤害排行", path: "/aion2/dps-rank", icon: LineChart },
-    // { label: "职业统计", path: "/aion2/dps-class-stats", icon: BarChart3 },
+    { label: "Home", path: "/aion2", icon: Home },
+    // Character search and the damage leaderboard both need a community
+    // backend: the first a Taiwan-only character API, the second the Supabase
+    // project behind the leaderboard. Neither can answer in this build, so they
+    // are hidden rather than left to fail in the UI.
+    ...(isCloudEnabled
+      ? [
+          {
+            label: "Character",
+            path: "/aion2/character/search",
+            icon: ShieldCheck,
+            activePaths: ["/aion2/character/search", "/aion2/character/view"],
+          },
+          { label: "Damage Ranking", path: "/aion2/dps-rank", icon: LineChart },
+        ]
+      : []),
   ],
 
   bgVideo: "/aion2/bg.mp4",
@@ -38,13 +47,13 @@ export const AION2_GAME: GameConfig = {
 
 export const POE2_GAME: GameConfig = {
   id: "poe2",
-  name: "流放之路2",
+  name: "Path of Exile 2",
   rootPath: "/poe2",
   navItems: [
-    { label: "首页", path: "/poe2", icon: Home },
-    // { label: "装备查询", path: "/poe2/items", icon: ShieldCheck },
-    // { label: "天赋树", path: "/poe2/tree", icon: LineChart },
-    // { label: "市场", path: "/poe2/market", icon: BarChart3 },
+    { label: "Home", path: "/poe2", icon: Home },
+    // { label: "Items", path: "/poe2/items", icon: ShieldCheck },
+    // { label: "Passive Tree", path: "/poe2/tree", icon: LineChart },
+    // { label: "Market", path: "/poe2/market", icon: BarChart3 },
   ],
   bgVideo: "/poe2/bg.mp4",
   bgImage: "/poe2/wraeclast.webp",

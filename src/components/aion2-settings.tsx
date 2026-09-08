@@ -18,7 +18,7 @@ import { useAppTranslation } from "@/hooks/use-app-translation";
 import { useSettings } from "@/hooks/use-settings";
 import { SettingsGroup, SettingsRow as BaseSettingsRow } from "@/components/settings-layout";
 import { RegionSetting } from "@/components/region-setting";
-import skillsZhCN from "@/i18n/locales/aion2skills/zh-CN.json";
+import skillsEn from "@/i18n/locales/aion2skills/en.json";
 
 type RGBA = [number, number, number, number];
 type Aion2Tab = "shortcuts" | "overlay" | "buff" | "eventReminder" | "backend";
@@ -47,15 +47,15 @@ const ACTOR_CLASSES: ActorClass[] = [
 ];
 
 const ACTOR_CLASS_NAMES: Record<ActorClass, string> = {
-  GLADIATOR: "剑星",
-  TEMPLAR: "守护星",
-  ASSASSIN: "杀星",
-  RANGER: "弓星",
-  SORCERER: "魔道星",
-  ELEMENTALIST: "精灵星",
-  CLERIC: "治愈星",
-  CHANTER: "护法星",
-  FIGHTER: "拳星",
+  GLADIATOR: "Gladiator",
+  TEMPLAR: "Templar",
+  ASSASSIN: "Assassin",
+  RANGER: "Ranger",
+  SORCERER: "Sorcerer",
+  ELEMENTALIST: "Elementalist",
+  CLERIC: "Cleric",
+  CHANTER: "Chanter",
+  FIGHTER: "Fighter",
 };
 
 const BUFF_LAYOUT_STORAGE_KEY = "aion2-buff-monitor-layout:v1";
@@ -222,12 +222,12 @@ function resolveSkillId(skillCode: number | string): string {
   const candidates = [raw, raw.length === 4 ? raw.padEnd(8, "0") : raw.slice(0, 8)];
   if (raw.length > 8) candidates.push(raw.slice(0, 8).replace(/\d$/, "0"));
   if (raw.length > 6) candidates.push(raw.slice(0, 6).padEnd(8, "0"));
-  return [...new Set(candidates)].find((id) => id in skillsZhCN) || raw.slice(0, 8);
+  return [...new Set(candidates)].find((id) => id in skillsEn) || raw.slice(0, 8);
 }
 
 function skillName(skillCode: number | string): string {
   const resolvedId = resolveSkillId(skillCode);
-  return (skillsZhCN as Record<string, string>)[resolvedId] || `技能 ${skillCode}`;
+  return (skillsEn as Record<string, string>)[resolvedId] || `Skill ${skillCode}`;
 }
 
 function skillIconSrc(skillCode: number | string): string {

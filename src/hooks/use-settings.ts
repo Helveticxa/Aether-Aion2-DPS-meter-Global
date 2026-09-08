@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 // =============================================================================
 
 type Theme = "light" | "dark" | "system";
-type Language = "en" | "zh-CN" | "zh-TW" | "ko";
+type Language = "en" | "ko";
 type RGBA = [number, number, number, number];
 type PvpOverlayPosition = "bottom" | "right" | "free";
 type CaptureBackendPriority = "winDivertFirst" | "npcapFirst";
@@ -100,7 +100,7 @@ const DEFAULTS: AppConfig = {
   version: 1,
   app: {
     theme: "system",
-    language: "zh-CN",
+    language: "en",
   },
   aion2: {
     shortcuts: {
@@ -142,7 +142,7 @@ const DEFAULTS: AppConfig = {
       contentScale: 1,
       detailWindowMode: "follow",
       autoResizeHeight: true,
-      damageFormat: "万/亿",
+      damageFormat: "K/M/B",
     },
     buffMonitor: {
       enabled: false,

@@ -16,24 +16,6 @@ const translations = {
     ready: "Ready",
     close: "Close",
   },
-  "zh-CN": {
-    title: "地图 Boss",
-    description: "实时刷新首领倒计时",
-    empty: "尚未获取 Boss 计时",
-    emptyHint: "请在永恒之塔 2 中打开地图以加载计时。",
-    map: "地图",
-    ready: "已刷新",
-    close: "关闭",
-  },
-  "zh-TW": {
-    title: "地圖 Boss",
-    description: "即時更新首領倒數",
-    empty: "尚未取得 Boss 計時",
-    emptyHint: "請在永恆之塔 2 中開啟地圖以載入計時。",
-    map: "地圖",
-    ready: "已刷新",
-    close: "關閉",
-  },
   ko: {
     title: "필드 보스",
     description: "실시간 보스 카운트다운",
@@ -49,10 +31,10 @@ function getLanguage() {
   try {
     const config = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
     const language = config?.app?.language;
-    return language in translations ? language : "zh-CN";
+    return language in translations ? language : "en";
   } catch (error) {
     console.error("[event-timer-boss] failed to read language config:", error);
-    return "zh-CN";
+    return "en";
   }
 }
 

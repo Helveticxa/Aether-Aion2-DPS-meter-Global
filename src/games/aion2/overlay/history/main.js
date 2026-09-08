@@ -170,9 +170,9 @@ $reupload.addEventListener("click", async () => {
 function getDamageFormat() {
   try {
     const raw = localStorage.getItem("app-config");
-    if (raw) return JSON.parse(raw)?.aion2?.overlay?.damageFormat ?? "万/亿";
+    if (raw) return JSON.parse(raw)?.aion2?.overlay?.damageFormat ?? "K/M/B";
   } catch (_) {}
-  return "万/亿";
+  return "K/M/B";
 }
 
 function fmtDamage(n) {

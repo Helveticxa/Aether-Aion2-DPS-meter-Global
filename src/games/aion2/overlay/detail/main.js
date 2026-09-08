@@ -3,12 +3,10 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { t, setLanguage } from "../../i18n.js";
 import skillsEn from "@/i18n/locales/aion2skills/en.json";
-import skillsZhCN from "@/i18n/locales/aion2skills/zh-CN.json";
-import skillsZhTW from "@/i18n/locales/aion2skills/zh-TW.json";
 import skillsKo from "@/i18n/locales/aion2skills/ko.json";
 import serversData from "@/games/aion2/data/servers.json";
 
-const SKILLS = { en: skillsEn, "zh-CN": skillsZhCN, "zh-TW": skillsZhTW, ko: skillsKo };
+const SKILLS = { en: skillsEn, ko: skillsKo };
 let currentSkills = skillsEn;
 
 // ── Server name lookup ──

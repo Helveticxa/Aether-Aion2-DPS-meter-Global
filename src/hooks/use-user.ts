@@ -25,14 +25,14 @@ export function useUser() {
       const { data, error } = await supabase.rpc("get_membership_status");
 
       if (error) {
-        console.error("获取会员状态失败:", error);
+        console.error("Failed to fetch membership status:", error);
         setMembership(null);
         return;
       }
 
       setMembership(data);
     } catch (error) {
-      console.error("获取会员状态异常:", error);
+      console.error("Error while fetching membership status:", error);
       setMembership(null);
     } finally {
       setMembershipLoading(false);
@@ -55,7 +55,7 @@ export function useUser() {
       } = await supabase.auth.getSession();
 
       if (error) {
-        console.error("获取用户失败:", error);
+        console.error("Failed to fetch user:", error);
         setUser(null);
         setMembership(null);
         return;
@@ -65,12 +65,12 @@ export function useUser() {
       setUser(currentUser);
 
       if (currentUser) {
-        fetchMembership(); // 不要 await，避免卡住用户加载
+        fetchMembership(); // deliberately not awaited, so user loading is not blocked
       } else {
         setMembership(null);
       }
     } catch (error) {
-      console.error("获取用户异常:", error);
+      console.error("Error while fetching user:", error);
       setUser(null);
       setMembership(null);
     } finally {

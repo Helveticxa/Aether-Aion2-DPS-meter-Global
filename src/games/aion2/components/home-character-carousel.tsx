@@ -76,7 +76,7 @@ function formatLastSeenAt(timestamp: number, tFn: (k: string) => string) {
     return tFn("aion2Home.unknown");
   }
 
-  return new Date(timestamp).toLocaleString("zh-CN", {
+  return new Date(timestamp).toLocaleString("en-GB", {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -311,7 +311,7 @@ export function HomeCharacterCarousel() {
       : null;
 
   async function deleteActorHistory(actor: HistoryActor) {
-    if (!window.confirm(`确定删除 ${actor.actorName} 的全部战斗历史吗？`)) {
+    if (!window.confirm(`Delete all combat history for ${actor.actorName}?`)) {
       return;
     }
 
@@ -360,7 +360,7 @@ export function HomeCharacterCarousel() {
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" align="center" className="rounded-full px-3 py-1.5">
-                  查看角色详情
+                  View character details
                 </TooltipContent>
               </Tooltip>
             ) : null}
@@ -378,7 +378,7 @@ export function HomeCharacterCarousel() {
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" align="center" className="rounded-full px-3 py-1.5">
-                刷新
+                Refresh
               </TooltipContent>
             </Tooltip>
           </div>
@@ -434,7 +434,7 @@ export function HomeCharacterCarousel() {
                     </div>
                   ) : (
                     <div className="rounded-md border border-dashed border-white/12 bg-white/4 px-4 py-6 text-center text-sm text-white/55">
-                      暂无装备数据
+                      No equipment data
                     </div>
                   )}
                 </div>
@@ -481,7 +481,7 @@ export function HomeCharacterCarousel() {
           </>
         ) : (
           <div className="rounded-md border border-dashed border-white/12 bg-white/4 px-4 py-8 text-center text-sm text-white/55">
-            暂无主角色记录
+            No main character recorded yet
           </div>
         )}
       </section>
@@ -530,7 +530,7 @@ export function HomeCharacterCarousel() {
                           onClick={() => void deleteActorHistory(actor)}
                           disabled={deletingActorId !== null}
                           className="cursor-pointer text-white/45 transition hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-40"
-                          aria-label={`删除 ${actor.actorName} 的历史记录`}
+                          aria-label={`Delete history for ${actor.actorName}`}
                         >
                           {deletingActorId === actor.id ? (
                             <LoaderCircle size={17} className="animate-spin" />
@@ -539,14 +539,14 @@ export function HomeCharacterCarousel() {
                           )}
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent side="left">删除角色历史</TooltipContent>
+                      <TooltipContent side="left">Delete character history</TooltipContent>
                     </Tooltip>
                   </div>
                 </div>
               ))
             ) : (
               <div className="rounded-md border border-dashed border-white/12 bg-white/4 px-4 py-8 text-center text-sm text-white/55">
-                暂无可切换角色
+                No other characters to switch to
               </div>
             )}
           </div>

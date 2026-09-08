@@ -13,7 +13,7 @@ const DEFAULT_OVERLAY_CONFIG = {
   showDamage: true,
   showDps: true,
   pctMode: "share",
-  damageFormat: "万/亿",
+  damageFormat: "K/M/B",
 };
 
 const CLASS_ICON_PATH = "/aion2/class/";

@@ -23,8 +23,8 @@ export default function SettingsPage() {
     { id: "appearance", label: t("settings.appearance.title"), icon: Palette },
     { id: "aion2", label: t("settings.aion2.title"), icon: Gamepad2 },
     { id: "tcpReassembly", label: t("settings.tcpReassembly.title"), icon: Network },
-    { id: "support", label: "支持与鸣谢", icon: HeartHandshake },
-    { id: "about", label: "关于", icon: Info },
+    { id: "support", label: "Credits", icon: HeartHandshake },
+    { id: "about", label: "About", icon: Info },
   ];
 
   return (

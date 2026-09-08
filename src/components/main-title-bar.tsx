@@ -3,10 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { ArrowLeft, Globe, HandHeart, RefreshCcw } from "lucide-react";
-import { FaQq } from "react-icons/fa";
+import { ArrowLeft, HandHeart, RefreshCcw } from "lucide-react";
 import { FaGithub } from "react-icons/fa6";
-import { SiBilibili } from "react-icons/si";
 import { ALL_GAMES } from "@/game-config";
 
 import { TitleBar } from "@/components/title-bar";
@@ -14,7 +12,6 @@ import { LanguageToggle } from "@/components/language-toggle";
 import { AuthModal } from "@/components/auth-modal";
 import { isCloudEnabled } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -33,68 +30,27 @@ type ExternalAction = {
 };
 
 const EXTERNAL_ACTIONS: ExternalAction[] = [
-  { label: "NoiA2 (upstream)", href: "https://noia2.top/", icon: Globe },
-
-  // {
-  //   label: "Discord",
-  //   href: "https://discord.com/",
-  //   icon: FaDiscord,
-  //   content: (
-  //     <div className="flex w-[168px] flex-col items-center gap-2 text-center">
-  //       <div className="text-xs font-medium text-white/80">Discord</div>
-  //       <img
-  //         src="/images/qr/discord.png"
-  //         alt="Discord QR"
-  //         className="h-[136px] w-[136px] rounded-xl border border-white/10 object-cover"
-  //         draggable={false}
-  //       />
-  //     </div>
-  //   ),
-  // },
   {
     label: "Github",
     href: "https://github.com/Helveticxa/Aether-Aion2-DPS-meter-Global",
     icon: FaGithub,
-    content: (
-      <div className="flex flex-col items-center gap-2 text-center">
-        <div className="text-xs font-medium">Github</div>
-      </div>
-    ),
   },
   {
-    label: "QQ",
-    icon: FaQq,
-    content: (
-      <div className="flex w-[250px] flex-col gap-2 p-1">
-        <div className="px-1 text-xs font-semibold">NoiA 水表交流群</div>
-        <div className="border-border/60 bg-muted/25 rounded-lg border px-3 py-2">
-          <div className="text-xs font-medium">NoiA 水表千人交流大群</div>
-          <div className="text-muted-foreground mt-0.5 font-mono text-xs">1095050342</div>
-        </div>
-        <div className="border-border/60 bg-muted/25 rounded-lg border px-3 py-2">
-          <div className="text-xs font-medium">NoiA 水表意见和测试群</div>
-          <div className="text-muted-foreground mt-0.5 font-mono text-xs">1093399101</div>
-        </div>
-      </div>
-    ),
-  },
-  {
-    label: "Bilibili",
-    href: "https://space.bilibili.com/3546381214778483",
-    icon: SiBilibili,
-  },
-  {
-    label: "赞助",
-    href: "https://ifdian.net/a/zdyoung",
+    label: "Credits",
     icon: HandHeart,
-    content: <SponsorTooltipContent />,
+    content: (
+      <div className="flex w-[240px] flex-col gap-1.5 p-1">
+        <div className="text-xs font-semibold">Built on NOIA2</div>
+        <div className="text-muted-foreground text-xs leading-5">
+          Aether is a fork of NOIA2 by zdyoung, which contributed the capture
+          pipeline, the packet parsers, and the game-data catalogues. Licensed
+          GPL-3.0.
+        </div>
+      </div>
+    ),
   },
 ];
 
-const SPONSOR_QR_OPTIONS = [
-  { label: "爱发电", image: "/images/qr/afd.jpg" },
-  { label: "微信", image: "/images/qr/wxpay.jpg" },
-] as const;
 
 const CLOSE_ACTION_STORAGE_KEY = "noia-main-close-action";
 type CloseAction = "quit" | "background";
@@ -133,35 +89,6 @@ function TitleActionButton({
   );
 }
 
-function SponsorTooltipContent() {
-  return (
-    <Tabs defaultValue={SPONSOR_QR_OPTIONS[0].label} className="w-[188px]">
-      <TabsList className="w-full">
-        {SPONSOR_QR_OPTIONS.map((option) => (
-          <TabsTrigger key={option.label} value={option.label}>
-            {option.label}
-          </TabsTrigger>
-        ))}
-      </TabsList>
-
-      {SPONSOR_QR_OPTIONS.map((option) => (
-        <TabsContent key={option.label} value={option.label} className="mt-0">
-          <div className="flex flex-col items-center gap-2">
-            <div className="border-border/60 bg-muted/20 rounded-xl border p-2">
-              <img
-                src={option.image}
-                alt={`${option.label} QR`}
-                className="h-[136px] w-[136px] rounded-lg object-cover"
-                draggable={false}
-              />
-            </div>
-            <div className="text-muted-foreground text-xs">{option.label}，扫码支持我</div>
-          </div>
-        </TabsContent>
-      ))}
-    </Tabs>
-  );
-}
 
 export function MainTitleBar() {
   const navigate = useNavigate();
@@ -265,10 +192,10 @@ export function MainTitleBar() {
             </div>
 
             <div className="flex items-center gap-1 rounded-full p-1">
-              <TitleActionButton label="返回" onClick={() => window.history.back()}>
+              <TitleActionButton label="Back" onClick={() => window.history.back()}>
                 <ArrowLeft size={16} />
               </TitleActionButton>
-              <TitleActionButton label="刷新" onClick={() => window.location.reload()}>
+              <TitleActionButton label="Refresh" onClick={() => window.location.reload()}>
                 <RefreshCcw size={16} />
               </TitleActionButton>
             </div>
@@ -302,9 +229,9 @@ export function MainTitleBar() {
       <Dialog open={showCloseDialog} onOpenChange={setShowCloseDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>关闭主窗口</DialogTitle>
+            <DialogTitle>Close the main window</DialogTitle>
             <DialogDescription>
-              你可以将主窗口收起到后台继续运行，或者直接退出整个程序。
+              You can send the main window to the background and keep running, or quit the app entirely.
             </DialogDescription>
           </DialogHeader>
           <label className="text-muted-foreground flex cursor-pointer items-center gap-2 text-sm">
@@ -314,17 +241,17 @@ export function MainTitleBar() {
               onChange={(event) => setRememberCloseChoice(event.target.checked)}
               className="accent-primary h-4 w-4"
             />
-            记住我的选择
+            Remember my choice
           </label>
           <DialogFooter>
             <Button variant="destructive" onClick={() => void rememberAndRunCloseAction("quit")}>
-              退出程序
+              Quit
             </Button>
             <Button
               variant="secondary"
               onClick={() => void rememberAndRunCloseAction("background")}
             >
-              最小化到后台
+              Minimise to background
             </Button>
           </DialogFooter>
         </DialogContent>

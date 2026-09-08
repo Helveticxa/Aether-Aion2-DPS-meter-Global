@@ -121,6 +121,6 @@ export class GenericLocalHistory<T extends Record<string, any>> {
 
 export const Aion2SearchHistory = new GenericLocalHistory<CharacterSearchResult>(
   "AION2CHARACTERSEARCH", // localStorage key
-  "characterId", // 主键字段
-  50 // 最大条数
+  "characterId", // primary key field
+  50 // maximum entries
 );

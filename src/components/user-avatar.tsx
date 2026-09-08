@@ -71,7 +71,7 @@ export function UserAvatar({
       type="button"
       disabled={!canSelect}
       onClick={canSelect ? onSelect : undefined}
-      aria-label={onSelect ? "更换头像" : `${userName} 的头像`}
+      aria-label={onSelect ? "Change avatar" : `${userName} avatar`}
       className={cn(
         "group relative inline-flex shrink-0 rounded-[2rem] outline-none",
         "transition duration-300 ease-out",
@@ -115,7 +115,7 @@ export function UserAvatar({
               "absolute -top-1.5 -right-1.5 inline-flex items-center justify-center gap-1 rounded-full",
               "border-background bg-primary text-primary-foreground border shadow-sm"
             )}
-            aria-label="高级会员"
+            aria-label="Premium member"
           >
             <Crown className={styles.icon} />
             {size !== "sm" && <span className="text-[10px] leading-none font-semibold">PRO</span>}
@@ -128,7 +128,7 @@ export function UserAvatar({
               "absolute -right-1 -bottom-1 inline-flex items-center justify-center rounded-full",
               "border-background h-5 w-5 border-2 bg-emerald-500 text-white shadow-sm"
             )}
-            aria-label="普通用户"
+            aria-label="Standard user"
           >
             <Check className="h-3 w-3" />
           </span>
@@ -145,12 +145,12 @@ export function UserAvatar({
             {isUploading ? (
               <span className="flex flex-col items-center gap-1 text-xs font-medium">
                 <Loader2 className={cn(styles.actionIcon, "animate-spin")} />
-                上传中
+                Uploading
               </span>
             ) : (
               <span className="flex flex-col items-center gap-1 text-xs font-medium">
                 <Camera className={styles.actionIcon} />
-                更换
+                Change
               </span>
             )}
           </span>

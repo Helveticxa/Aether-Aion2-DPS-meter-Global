@@ -1,15 +1,15 @@
 import { Link } from "react-router-dom";
 
 const ACTOR_CLASS_NAME_MAP: Record<string, string> = {
-  ALL: "全部",
-  GLADIATOR: "剑星",
-  TEMPLAR: "守护星",
-  ASSASSIN: "杀星",
-  RANGER: "弓星",
-  SORCERER: "魔道星",
-  ELEMENTALIST: "精灵星",
-  CLERIC: "治愈星",
-  CHANTER: "护法星",
+  ALL: "All",
+  GLADIATOR: "Gladiator",
+  TEMPLAR: "Templar",
+  ASSASSIN: "Assassin",
+  RANGER: "Ranger",
+  SORCERER: "Sorcerer",
+  ELEMENTALIST: "Elementalist",
+  CLERIC: "Cleric",
+  CHANTER: "Chanter",
 };
 
 export function getActorClassName(actorClass: string | null | undefined) {

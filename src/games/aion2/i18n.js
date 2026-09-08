@@ -1,10 +1,8 @@
 import en from "@/i18n/locales/aion2overlay/en.json";
-import zhCN from "@/i18n/locales/aion2overlay/zh-CN.json";
-import zhTW from "@/i18n/locales/aion2overlay/zh-TW.json";
 import ko from "@/i18n/locales/aion2overlay/ko.json";
 
-const LOCALES = { en, "zh-CN": zhCN, "zh-TW": zhTW, ko };
-let lang = "zh-CN";
+const LOCALES = { en, ko };
+let lang = "en";
 
 export function t(key, params) {
   let val = key.split(".").reduce((o, k) => o?.[k], LOCALES[lang]) ?? key;
@@ -17,7 +15,7 @@ export function t(key, params) {
 }
 
 export function setLanguage(l) {
-  lang = Object.hasOwn(LOCALES, l) ? l : "zh-CN";
+  lang = Object.hasOwn(LOCALES, l) ? l : "en";
 }
 
 export function getLanguage() {

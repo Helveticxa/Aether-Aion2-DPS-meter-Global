@@ -25,7 +25,7 @@ interface ActivateResult {
 function formatDate(value?: string | null) {
   if (!value) return "永久有效";
 
-  return new Date(value).toLocaleDateString("zh-CN", {
+  return new Date(value).toLocaleDateString("en-GB", {
     year: "numeric",
     month: "long",
     day: "numeric",

@@ -14,19 +14,19 @@ import {
 const DPS_GUIDE_STEPS = [
   {
     image: "/guide1.png",
-    alt: "Npcap 安装说明",
+    alt: "Npcap installation",
   },
   {
     image: "/guide2.png",
-    alt: "角色识别说明",
+    alt: "Character detection",
   },
   {
     image: "/guide3.png",
-    alt: "战斗数据显示说明",
+    alt: "Combat data display",
   },
   {
     image: null,
-    alt: "常见问题",
+    alt: "FAQ",
   },
 ] as const;
 
@@ -54,7 +54,7 @@ export function DpsLightGuideDialog({ open, onOpenChange }: DpsLightGuideDialogP
       setNpcapError(status.error);
     } catch {
       setNpcapOk(false);
-      setNpcapError("WinDivert 检测失败");
+      setNpcapError("WinDivert check failed");
     }
   };
 
@@ -74,7 +74,7 @@ export function DpsLightGuideDialog({ open, onOpenChange }: DpsLightGuideDialogP
             Guide
           </div>
           <DialogTitle className="text-2xl font-semibold tracking-wide text-white">
-            DPS 水表使用指南
+            DPS meter guide
           </DialogTitle>
         </DialogHeader>
 
@@ -84,7 +84,7 @@ export function DpsLightGuideDialog({ open, onOpenChange }: DpsLightGuideDialogP
               <div className="flex items-start gap-3">
                 <span className="mt-0.5 text-slate-500">1.</span>
                 <div className="flex-1">
-                  安装{" "}
+                  Install{" "}
                   <a
                     href="https://npcap.com/dist/npcap-1.87.exe"
                     target="_blank"
@@ -99,7 +99,7 @@ export function DpsLightGuideDialog({ open, onOpenChange }: DpsLightGuideDialogP
                   >
                     Npcap
                   </a>
-                  （默认勾选第三个选项）
+                  {" "}(tick the third option during setup)
                   <button
                     type="button"
                     onClick={() => {
@@ -107,7 +107,7 @@ export function DpsLightGuideDialog({ open, onOpenChange }: DpsLightGuideDialogP
                     }}
                     className="ml-2 rounded border border-white/10 px-1.5 py-0.5 text-xs text-white/50 hover:text-white"
                   >
-                    重新检测
+                    Re-check
                   </button>
                 </div>
                 <span
@@ -119,7 +119,7 @@ export function DpsLightGuideDialog({ open, onOpenChange }: DpsLightGuideDialogP
                         : "mt-0.5 shrink-0 text-slate-500"
                   }
                 >
-                  {npcapOk === true ? "可用 ✓" : npcapOk === false ? "不可用 ×" : "检测中..."}
+                  {npcapOk === true ? "Available" : npcapOk === false ? "Unavailable" : "Checking..."}
                 </span>
               </div>
             )}
@@ -132,40 +132,43 @@ export function DpsLightGuideDialog({ open, onOpenChange }: DpsLightGuideDialogP
             {guideStep === 1 && (
               <div className="flex items-start gap-3">
                 <span className="mt-0.5 text-slate-500">2.</span>
-                <span>在游戏中传送一次，以便正确识别自己的角色。</span>
+                <span>Teleport once in game so your own character is identified.</span>
               </div>
             )}
 
             {guideStep === 2 && (
               <div className="flex items-start gap-3">
                 <span className="mt-0.5 text-slate-500">3.</span>
-                <span>进行打桩或副本战斗后，数据会自动显示。</span>
+                <span>Data appears automatically after a dummy or dungeon fight.</span>
               </div>
             )}
 
             {guideStep === 3 && (
               <div className="space-y-3">
                 <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                  <div className="font-medium text-white/90">wifi 图标没有延迟？</div>
+                  <div className="font-medium text-white/90">No latency shown on the wifi icon?</div>
                   <div>
-                    请确保你已经下载了 Npcap，并勾选了第三个选项。如果仍然没有，属于加速器不支持。
+                    Make sure Npcap is installed with the third option ticked. If it still shows
+                    nothing, your accelerator does not support it.
                   </div>
                 </div>
                 <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                  <div className="font-medium text-white/90">为什么打桩没数据？</div>
-                  <div>请确保你已经下载了 Npcap，并且传送识别到了自己的角色。</div>
+                  <div className="font-medium text-white/90">Why is there no data on the training dummy?</div>
+                  <div>Make sure Npcap is installed and that a teleport identified your character.</div>
                 </div>
                 <div className="rounded-md border border-white/10 bg-white/5 p-3">
                   <div className="font-medium text-white/90">
-                    为什么副本中显示未知，或者多个角色？
+                    Why does a dungeon show "unknown", or several characters?
                   </div>
                   <div>
-                    因为你离队友太远，召唤物统计不到，对你自己没有影响。自己是召唤职业也不影响。收费水表默认不统计这些数据，而本软件为了保持严谨都公开显示。
+                    Because you were too far from a teammate for their summon to be attributed.
+                    It does not affect your own numbers, summoner classes included. Paid meters
+                    hide these rows by default; this one shows them so the total stays honest.
                   </div>
                 </div>
                 <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                  <div className="font-medium text-white/90">其它问题</div>
-                  <div>下载最新安装包，重新安装时先卸载，并清空所有数据。</div>
+                  <div className="font-medium text-white/90">Anything else</div>
+                  <div>Download the latest installer, uninstall first, and clear all data before reinstalling.</div>
                 </div>
               </div>
             )}
@@ -190,7 +193,7 @@ export function DpsLightGuideDialog({ open, onOpenChange }: DpsLightGuideDialogP
                 disabled={guideStep === 0}
                 onClick={() => setGuideStep((step) => Math.max(0, step - 1))}
               >
-                上一页
+                Previous
               </Button>
               <Button
                 size="sm"
@@ -199,10 +202,10 @@ export function DpsLightGuideDialog({ open, onOpenChange }: DpsLightGuideDialogP
                   setGuideStep((step) => Math.min(DPS_GUIDE_STEPS.length - 1, step + 1))
                 }
               >
-                下一页
+                Next
               </Button>
               <Button size="sm" onClick={() => onOpenChange(false)}>
-                我已知晓
+                Got it
               </Button>
             </div>
           </DialogFooter>

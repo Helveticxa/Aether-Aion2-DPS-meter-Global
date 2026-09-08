@@ -444,7 +444,7 @@ function AuthDialog({ open, onOpenChange, initialView }: AuthDialogProps) {
 
 export function AuthModal() {
   const { user, loading, signOut, isPremium, membershipLoading, membership } = useUser();
-  const { t, i18n } = useAppTranslation();
+  const { t } = useAppTranslation();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authView, setAuthView] = useState<AuthView>("sign_in");
   const hasResolvedInitialAuthRef = useRef(false);
@@ -495,7 +495,7 @@ export function AuthModal() {
       ? membership?.premium_until
         ? t("auth.membership.expiresAt", {
             date: new Date(membership.premium_until).toLocaleDateString(
-              i18n.language === "zh-CN" ? "zh-CN" : "en-US"
+              "en-US"
             ),
           })
         : t("auth.membership.permanent")

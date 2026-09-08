@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="./docs/images/icon.png" alt="Aether" width="96" height="96" />
-
 # Aether
 
 **A real-time DPS meter for AION 2, built for the global servers.**
@@ -116,6 +114,12 @@ Added by this fork:
 - Runs fully offline — cloud features are optional and off by default
 - Server names fall back to `Server <id>` rather than a hardcoded "unknown server",
   so players on uncatalogued services stay distinguishable
+- **English throughout.** Upstream defaulted to Simplified Chinese and carried a
+  few hundred hardcoded Chinese strings; those are translated, and the Chinese
+  locales are gone. English and Korean remain.
+- Character search and the damage leaderboard are **hidden**, because both need a
+  community backend this build cannot reach — a Taiwan-only character API and the
+  Supabase project behind the leaderboard. Better absent than broken.
 
 ## Requirements
 
@@ -170,9 +174,13 @@ Changes against upstream are kept small and anchored so that
 Note that `CLAUDE.md` in this repository is upstream's unedited Tauri-template
 boilerplate and describes a different application. Trust `FORK.md` instead.
 
+The application icons under `src-tauri/icons/` are still upstream's NOIA2 artwork.
+They need replacing before any public release.
+
 ## Screenshots
 
-_From the upstream build; the interface is shared._
+_From the upstream build, so they still show NOIA2 branding and a Chinese UI. The
+layout is shared; the text in this build is English._
 
 | Home | DPS overlay |
 |:--:|:--:|

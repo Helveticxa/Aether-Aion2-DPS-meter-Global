@@ -40,7 +40,7 @@ function AppWrapper() {
           </WindowFrame>
         }
       >
-        {/* 通用页 */}
+        {/* Shared pages */}
         <Route path="/" element={<Navigate to="/aion2" replace />} />
         <Route path="/user" element={<UserPage />} />
         <Route path="/settings-view" element={<SettingsViewPage />} />
