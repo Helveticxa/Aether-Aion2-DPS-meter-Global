@@ -97,6 +97,8 @@ pub fn run() {
             dps_meter::api::commands::replay_packet_recording,
             dps_meter::api::commands::cancel_packet_replay,
             dps_meter::api::commands::is_packet_replaying,
+            dps_meter::api::commands::get_diagnostics_report,
+            dps_meter::api::commands::save_diagnostics_report,
             dps_meter::api::commands::get_opcode_census,
             dps_meter::api::commands::set_opcode_census_enabled,
             dps_meter::api::commands::reset_opcode_census,

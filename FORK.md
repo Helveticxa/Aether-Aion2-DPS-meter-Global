@@ -264,3 +264,13 @@ atomic load.
 4. Read Settings → Backend → **Observed traffic** for the server IPs and ids.
    Those fill in the global region fingerprint.
 5. Stop recording. From then on, replay that file instead of playing.
+
+### Diagnostics report
+
+Settings → Runtime → **Copy report** turns a session into a plain-text summary:
+version, region profile, the server IPs and ids observed, and the full opcode
+tally. A copy is always written to `recordings/diagnostics-*.txt` as well, since
+the clipboard can fail quietly and launch day happens once.
+
+It exists so a session can be handed over by pasting rather than described screen
+by screen.

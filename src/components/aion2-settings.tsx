@@ -20,6 +20,7 @@ import { SettingsGroup, SettingsRow as BaseSettingsRow } from "@/components/sett
 import { RegionSetting } from "@/components/region-setting";
 import { PacketRecorderSetting } from "@/components/packet-recorder-setting";
 import { OpcodeCensusSetting } from "@/components/opcode-census-setting";
+import { DiagnosticsCopySetting } from "@/components/diagnostics-copy-setting";
 import skillsEn from "@/i18n/locales/aion2skills/en.json";
 
 type RGBA = [number, number, number, number];
@@ -1242,6 +1243,8 @@ export function Aion2Settings() {
           <PacketRecorderSetting />
 
           <OpcodeCensusSetting />
+
+          <DiagnosticsCopySetting />
 
           <SettingRow
             title={t("settings.aion2.captureBackendPriority")}

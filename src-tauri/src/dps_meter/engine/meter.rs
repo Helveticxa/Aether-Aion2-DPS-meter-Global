@@ -31,6 +31,14 @@ const STALE_ASSEMBLER_IDLE_SECS: u64 = 30;
 /// whenever the queue runs this deep. `try_send` drops the packet it is handed
 /// when the channel is full, and a silently lossy replay is worse than a slow one.
 const REPLAY_BACKPRESSURE_LIMIT: usize = 50_000;
+
+/// Seconds since the epoch, for filenames that sort chronologically.
+fn chrono_stamp() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
 const PACKET_CHANNEL_CAPACITY: isize = 2_000_000;
 
 #[derive(Debug, Clone, Copy)]
@@ -586,6 +594,21 @@ impl DpsMeter {
 
     pub fn list_packet_recordings(&self) -> Vec<RecordingFile> {
         list_recordings(&self.recordings_dir)
+    }
+
+    /// Write a diagnostics report next to the recordings.
+    ///
+    /// The clipboard is the convenient path, but this runs regardless: on launch
+    /// day the report is worth having on disk even if the copy silently fails.
+    pub fn save_diagnostics_report(&self, report: &str) -> Result<String, String> {
+        std::fs::create_dir_all(&self.recordings_dir)
+            .map_err(|error| format!("Cannot create {:?}: {error}", self.recordings_dir))?;
+        let path = self
+            .recordings_dir
+            .join(format!("diagnostics-{}.txt", chrono_stamp()));
+        std::fs::write(&path, report)
+            .map_err(|error| format!("Cannot write {path:?}: {error}"))?;
+        Ok(path.to_string_lossy().into_owned())
     }
 
     pub fn is_replaying(&self) -> bool {

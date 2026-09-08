@@ -89,6 +89,99 @@ pub fn get_field_boss_timers(
     Ok(meter.get_field_boss_timers())
 }
 
+/// One pasteable summary of everything worth knowing about a session.
+///
+/// Built for the global launch: rather than describing a screen over chat, copy
+/// this and hand it over. It carries the region profile, what the capture
+/// actually saw, and the opcode tally -- which together answer whether this
+/// build understands the service it is pointed at.
+#[tauri::command]
+pub fn get_diagnostics_report(meter: State<'_, DpsMeter>) -> Result<String, String> {
+    let region = region::status();
+    let counts = census::snapshot();
+    let recording = meter.packet_recording_status();
+
+    let mut out = String::new();
+    out.push_str("=== Aether diagnostics ===\n");
+    out.push_str(&format!("version        {}\n", env!("CARGO_PKG_VERSION")));
+    out.push_str(&format!("meter running  {}\n", meter.is_running()));
+    out.push_str(&format!("replaying      {}\n", meter.is_replaying()));
+    out.push_str(&format!(
+        "recording      {}{}\n",
+        recording.recording,
+        if recording.packets > 0 {
+            format!(" ({} packets, {} bytes)", recording.packets, recording.bytes)
+        } else {
+            String::new()
+        }
+    ));
+
+    out.push_str("\n--- region ---\n");
+    out.push_str(&format!("configured     {:?}\n", region.configured));
+    out.push_str(&format!("detected       {:?}\n", region.detected));
+    out.push_str(&format!("effective      {:?}\n", region.effective));
+    out.push_str(&format!(
+        "server names   {}\n",
+        if region.server_names_available {
+            "resolvable (ids match the bundled Taiwan catalogue)"
+        } else {
+            "not resolvable for these ids"
+        }
+    ));
+    out.push_str(&format!(
+        "server ips     {}\n",
+        if region.observed_server_ips.is_empty() {
+            "none observed".to_string()
+        } else {
+            region.observed_server_ips.join(", ")
+        }
+    ));
+    out.push_str(&format!(
+        "server ids     {}\n",
+        if region.observed_server_ids.is_empty() {
+            "none observed".to_string()
+        } else {
+            region
+                .observed_server_ids
+                .iter()
+                .map(|id| id.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        }
+    ));
+
+    out.push_str("\n--- opcode census ---\n");
+    if !counts.enabled && counts.total_packets == 0 {
+        out.push_str("disabled, nothing counted\n");
+    } else {
+        out.push_str(&format!(
+            "enabled {} | total {} | known {} | unknown {}\n",
+            counts.enabled, counts.total_packets, counts.known_packets, counts.unknown_packets
+        ));
+        out.push_str("opcode  known  count  payload\n");
+        for stat in counts.opcodes.iter().take(40) {
+            out.push_str(&format!(
+                "{:6}  {:5}  {:5}  {}-{} B\n",
+                stat.opcode,
+                if stat.known { "yes" } else { "NO" },
+                stat.count,
+                stat.min_len,
+                stat.max_len
+            ));
+        }
+    }
+
+    Ok(out)
+}
+
+/// Build the report and drop a copy on disk, returning both.
+#[tauri::command]
+pub fn save_diagnostics_report(meter: State<'_, DpsMeter>) -> Result<(String, String), String> {
+    let report = get_diagnostics_report(meter.clone())?;
+    let path = meter.save_diagnostics_report(&report)?;
+    Ok((report, path))
+}
+
 /// Counts every dispatched opcode, recognised or not.
 ///
 /// On an unfamiliar service this answers the only question that matters at
