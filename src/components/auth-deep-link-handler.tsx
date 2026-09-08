@@ -24,6 +24,10 @@ function extractUrlParams(rawUrl: string) {
 }
 
 async function applySessionFromDeepLink(rawUrl: string) {
+  if (!supabase) {
+    return { handled: false, recovery: false };
+  }
+
   const { parsedUrl, params } = extractUrlParams(rawUrl);
   if (parsedUrl.protocol !== `${AUTH_DEEP_LINK_SCHEME}:`) {
     return { handled: false, recovery: false };

@@ -30,7 +30,7 @@ import { CharacterProps } from "@/games/aion2/types/character";
 import { DaevanionGrid } from "@/games/aion2/components/aion2_ui/daevanion-board";
 import { cn } from "@/lib/utils";
 
-import { supabase } from "@/lib/supabase";
+import { requireSupabase } from "@/lib/supabase";
 
 import {
   getDungeonDifficultyByMobCode,
@@ -775,7 +775,7 @@ export default function CharacterViewPage() {
     if (dpsRankFetched || dpsRankLoading) return;
     setDpsRankLoading(true);
     try {
-      const query = supabase
+      const query = requireSupabase()
         .from("dps_leaderboard_v2")
         .select(
           "record_id,battle_ended_at,target_name,target_mob_code,main_actor_name:actor_name,main_actor_server_id:server_id,main_actor_class:actor_class,main_actor_damage:damage,main_actor_battle_duration:duration_ms,main_actor_dps:dps,party_total_damage,team_dps"
@@ -798,7 +798,7 @@ export default function CharacterViewPage() {
             return { ...row, boss_rank: null };
           }
 
-          const { count, error } = await supabase
+          const { count, error } = await requireSupabase()
             .from("dps_leaderboard_v2")
             .select("record_id", { count: "exact", head: true })
             .eq("target_mob_code", row.target_mob_code)

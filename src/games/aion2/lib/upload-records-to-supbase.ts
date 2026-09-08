@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { requireSupabase, supabase } from "@/lib/supabase";
 import { getKnownBossMobCodes } from "@/games/aion2/lib/npc-names";
 import type {
   BuffSummary,
@@ -297,6 +297,7 @@ function buildLeaderboardUploadPayloads(record: BackendHistoryRecord): UploadBui
 }
 
 export async function isUserLoggedIn(): Promise<boolean> {
+  if (!supabase) return false;
   const { data } = await supabase.auth.getSession();
   return !!data?.session;
 }
@@ -306,7 +307,7 @@ export async function uploadDpsDataBatch(
   options: UploadOptions = {}
 ) {
   // Check login before uploading
-  const { data: session } = await supabase.auth.getSession();
+  const { data: session } = await requireSupabase().auth.getSession();
   if (!session?.session) {
     throw new Error("Please log in first before uploading records.");
   }
@@ -339,7 +340,7 @@ export async function uploadDpsDataBatch(
 
     for (const payload of result.payloads) {
       try {
-        const { error } = await supabase.rpc("submit_dps_leaderboard_v2", {
+        const { error } = await requireSupabase().rpc("submit_dps_leaderboard_v2", {
           p_payload: payload,
         });
 

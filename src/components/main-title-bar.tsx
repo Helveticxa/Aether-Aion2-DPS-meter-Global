@@ -12,6 +12,7 @@ import { ALL_GAMES } from "@/game-config";
 import { TitleBar } from "@/components/title-bar";
 import { LanguageToggle } from "@/components/language-toggle";
 import { AuthModal } from "@/components/auth-modal";
+import { isCloudEnabled } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -292,7 +293,7 @@ export function MainTitleBar() {
         }
         rightActions={
           <div className="flex items-center gap-2 pr-1">
-            <AuthModal />
+            {isCloudEnabled && <AuthModal />}
             <LanguageToggle />
           </div>
         }

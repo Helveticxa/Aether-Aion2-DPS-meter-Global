@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { BarChart3, Eye, LoaderCircle, RefreshCcw, Trophy } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-import { supabase } from "@/lib/supabase";
+import { requireSupabase } from "@/lib/supabase";
 
 import { getKnownBossMobCodes, getNpcDisplayName } from "@/games/aion2/lib/npc-names";
 import { getServerShortName } from "@/games/aion2/lib/servers";
@@ -503,7 +503,7 @@ async function loadMyRankForActor(
   actor: MainActorIdentity,
   actorClass: string
 ): Promise<MyRankRow> {
-  let ownQuery = supabase
+  let ownQuery = requireSupabase()
     .from("dps_leaderboard_v2")
     .select(
       [
@@ -546,7 +546,7 @@ async function loadMyRankForActor(
     };
   }
 
-  let countQuery = supabase
+  let countQuery = requireSupabase()
     .from("dps_leaderboard_v2")
     .select("record_id", { count: "exact", head: true })
     .eq("target_mob_code", Number(bossId))
@@ -720,7 +720,7 @@ function SkillDetailsButton({ row }: { row: RankRow }) {
 
     setLoading(true);
     setError(null);
-    const { data, error: queryError } = await supabase
+    const { data, error: queryError } = await requireSupabase()
       .from("dps_leaderboard_v2")
       .select("skill_details,player_buffs,boss_buffs,party_dps")
       .eq("id", row.id)
@@ -1008,7 +1008,7 @@ function BossRankCard({
 
     void (async () => {
       try {
-        let query = supabase
+        let query = requireSupabase()
           .from("dps_leaderboard_v2")
           .select(
             [
@@ -1425,7 +1425,7 @@ function BossClassBoxStatsCard({ bossId, refreshKey }: { bossId: string; refresh
 
     void (async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await requireSupabase()
           .from("aion2_dps_class_box_stats_v2")
           .select(
             [

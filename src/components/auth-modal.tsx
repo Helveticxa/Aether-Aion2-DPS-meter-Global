@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { LogOut, User as UserIcon } from "lucide-react";
 import { useUser } from "@/hooks/use-user";
 import { useAppTranslation } from "@/hooks/use-app-translation";
-import { supabase } from "@/lib/supabase";
+import { requireSupabase } from "@/lib/supabase";
 import {
   Dialog,
   DialogContent,
@@ -183,7 +183,7 @@ function AuthDialog({ open, onOpenChange, initialView }: AuthDialogProps) {
 
     try {
       if (view === "sign_in") {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { error } = await requireSupabase().auth.signInWithPassword({
           email,
           password,
         });
@@ -199,7 +199,7 @@ function AuthDialog({ open, onOpenChange, initialView }: AuthDialogProps) {
       }
 
       if (view === "sign_up") {
-        const { data, error } = await supabase.auth.signUp({
+        const { data, error } = await requireSupabase().auth.signUp({
           email,
           password,
           options: {
@@ -225,7 +225,7 @@ function AuthDialog({ open, onOpenChange, initialView }: AuthDialogProps) {
       }
 
       if (view === "forgot_password") {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        const { error } = await requireSupabase().auth.resetPasswordForEmail(email, {
           redirectTo: AUTH_DEEP_LINK_CALLBACK_URL,
         });
 
@@ -241,7 +241,7 @@ function AuthDialog({ open, onOpenChange, initialView }: AuthDialogProps) {
         return;
       }
 
-      const { error } = await supabase.auth.updateUser({ password });
+      const { error } = await requireSupabase().auth.updateUser({ password });
       if (error) {
         setErrorMessage(mapAuthErrorMessage(error.message, view));
         return;

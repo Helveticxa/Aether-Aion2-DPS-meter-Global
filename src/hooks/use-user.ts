@@ -15,6 +15,10 @@ export function useUser() {
   const [membershipLoading, setMembershipLoading] = useState(false);
 
   const fetchMembership = useCallback(async () => {
+    if (!supabase) {
+      setMembership(null);
+      return;
+    }
     setMembershipLoading(true);
 
     try {
@@ -36,6 +40,12 @@ export function useUser() {
   }, []);
 
   const fetchUser = useCallback(async () => {
+    if (!supabase) {
+      setUser(null);
+      setMembership(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
 
     try {
@@ -71,6 +81,8 @@ export function useUser() {
   useEffect(() => {
     fetchUser();
 
+    if (!supabase) return;
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -100,6 +112,7 @@ export function useUser() {
   }, [fetchMembership]);
 
   const signOut = useCallback(async () => {
+    if (!supabase) return;
     await supabase.auth.signOut();
     setUser(null);
     setMembership(null);

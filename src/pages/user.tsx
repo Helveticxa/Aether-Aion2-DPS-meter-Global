@@ -5,7 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 
-import { supabase } from "@/lib/supabase";
+import { requireSupabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
 import { UserAvatar } from "@/components/user-avatar";
@@ -117,7 +117,7 @@ export default function UserPage() {
 
       const filePath = `${user.id}/${Date.now()}_${fileName}`;
 
-      const { error: uploadError } = await supabase.storage.from("avatars").upload(filePath, file, {
+      const { error: uploadError } = await requireSupabase().storage.from("avatars").upload(filePath, file, {
         cacheControl: "3600",
         upsert: true,
       });
@@ -126,7 +126,7 @@ export default function UserPage() {
 
       const {
         data: { publicUrl },
-      } = supabase.storage.from("avatars").getPublicUrl(filePath);
+      } = requireSupabase().storage.from("avatars").getPublicUrl(filePath);
 
       setAvatarUrl(publicUrl);
       toast.success("头像上传成功");
@@ -144,7 +144,7 @@ export default function UserPage() {
     setIsUpdating(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({
+      const { error } = await requireSupabase().auth.updateUser({
         data: {
           full_name: nickname.trim() || userName,
           avatar_url: avatarUrl,
@@ -175,7 +175,7 @@ export default function UserPage() {
     setActivateResult(null);
 
     try {
-      const { data, error } = await supabase.rpc("activate_membership", {
+      const { data, error } = await requireSupabase().rpc("activate_membership", {
         p_key_code: trimmedKey,
       });
 
