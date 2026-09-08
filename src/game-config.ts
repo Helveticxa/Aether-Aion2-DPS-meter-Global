@@ -42,7 +42,7 @@ export const AION2_GAME: GameConfig = {
   ],
 
   bgVideo: "/aion2/bg.mp4",
-  bgImage: "/aion2/background.png",
+  bgImage: "/aion2/background.webp",
 };
 
 export const POE2_GAME: GameConfig = {

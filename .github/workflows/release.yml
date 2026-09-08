@@ -56,17 +56,13 @@ jobs:
         run: |
           REPO="${{ github.repository }}"
           RAW_MANIFEST_URL="https://github.com/${REPO}/releases/latest/download/latest.json"
-          PROXY_MANIFEST_RAW_URL="https://github.com/${REPO}/releases/latest/download/latest-proxy.json"
-          PROXY_MANIFEST_URL="https://gh-proxy.com/${PROXY_MANIFEST_RAW_URL}"
           PUBKEY="${{ secrets.TAURI_SIGNING_PUBLIC_KEY }}"
 
-          sed -i.bak "s|__TAURI_UPDATER_ENDPOINT_1__|${PROXY_MANIFEST_URL}|g" src-tauri/tauri.conf.json
-          sed -i.bak "s|__TAURI_UPDATER_ENDPOINT_2__|${RAW_MANIFEST_URL}|g" src-tauri/tauri.conf.json
+          sed -i.bak "s|__TAURI_UPDATER_ENDPOINT_1__|${RAW_MANIFEST_URL}|g" src-tauri/tauri.conf.json
           sed -i.bak "s|__TAURI_UPDATER_PUBKEY__|${PUBKEY}|g" src-tauri/tauri.conf.json
 
-          echo "Updater configured with endpoints:"
-          echo "  1. ${PROXY_MANIFEST_URL}"
-          echo "  2. ${RAW_MANIFEST_URL}"
+          echo "Updater configured with endpoint:"
+          echo "  ${RAW_MANIFEST_URL}"
 
           # Verify pubkey was actually replaced
           if grep -q "__TAURI_UPDATER_PUBKEY__" src-tauri/tauri.conf.json; then
@@ -108,29 +104,10 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         with:
           tagName: v__VERSION__
-          releaseName: "App v__VERSION__"
+          releaseName: "Aether v__VERSION__"
           releaseBody: ${{ steps.notes.outputs.notes }}
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
           retryAttempts: 3
 
-      - name: Generate proxy updater manifest
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          mkdir -p updater-manifest
-          gh release download "${GITHUB_REF_NAME}" --pattern "latest.json" --dir updater-manifest
-          node scripts/generate-proxy-updater-manifest.mjs "updater-manifest/latest.json" "https://gh-proxy.com/" | tee proxy-manifest-paths.txt
-
-      - name: Upload proxy updater manifest
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          while IFS= read -r manifest; do
-            if [ -n "$manifest" ]; then
-              gh release upload "${GITHUB_REF_NAME}" "$manifest" --clobber
-            fi
-          done < proxy-manifest-paths.txt

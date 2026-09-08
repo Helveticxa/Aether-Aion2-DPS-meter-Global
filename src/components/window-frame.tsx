@@ -160,27 +160,36 @@ export function WindowFrame({
     location.pathname === "/" || (gameConfig != null && location.pathname === gameConfig.rootPath);
   const bgVideoRef = useRef<HTMLVideoElement>(null);
 
-  // Pause background video when window loses focus to reduce resource usage
+  // Pause the background video whenever nobody can see it. Focus covers
+  // minimising and alt-tabbing; the Page Visibility API additionally covers
+  // states the webview reports but the window API does not.
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
+    const setPlaying = (playing: boolean) => {
+      const video = bgVideoRef.current;
+      if (!video) return;
+      if (playing) {
+        void video.play().catch(() => {});
+      } else {
+        video.pause();
+      }
+    };
 
-    (async () => {
+    const onVisibilityChange = () => setPlaying(!document.hidden);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    let unlisten: (() => void) | undefined;
+    void (async () => {
       try {
         unlisten = await getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-          const video = bgVideoRef.current;
-          if (!video) return;
-          if (focused) {
-            video.play().catch(() => {});
-          } else {
-            video.pause();
-          }
+          setPlaying(focused && !document.hidden);
         });
       } catch (_) {
-        /* ignore */
+        /* window API unavailable; visibility handling still applies */
       }
     })();
 
     return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       unlisten?.();
     };
   }, []);

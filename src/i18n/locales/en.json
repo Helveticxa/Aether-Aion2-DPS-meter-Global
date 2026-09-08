@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "Tauri App Template",
+    "title": "Aether",
     "welcome": "Welcome to Tauri + React",
     "description": "Modern desktop application template with Tauri v2, React 19, and shadcn/ui"
   },
@@ -13,9 +13,9 @@
   "about": {
     "title": "About",
     "button": "About",
-    "appName": "Tauri App Template",
+    "appName": "Aether",
     "version": "Version",
-    "description": "A modern desktop application template built with Tauri v2, React 19, and shadcn/ui.",
+    "description": "A real-time DPS meter for AION 2, built for the global servers. Forked from NOIA2.",
     "features": "Features",
     "feature1": "Tauri v2 - Lightweight desktop app framework",
     "feature2": "React 19 - Latest React version",

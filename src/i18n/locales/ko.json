@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "Tauri App Template",
+    "title": "Aether",
     "welcome": "Welcome to Tauri + React",
     "description": "Modern desktop application template with Tauri v2, React 19, and shadcn/ui"
   },
@@ -13,7 +13,7 @@
   "about": {
     "title": "About",
     "button": "About",
-    "appName": "Tauri App Template",
+    "appName": "Aether",
     "version": "Version",
     "description": "A modern desktop application template built with Tauri v2, React 19, and shadcn/ui.",
     "features": "Features",

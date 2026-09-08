@@ -160,3 +160,59 @@ Four files committed to upstream by accident, none referenced by the build:
   other players' in-game nicknames, so it is not something to republish here.
 - `gh-proxy.sh`, `proxy.sh` — local proxy wrappers for the maintainer's machine.
 - `down_zed_remote.py` — a Zed remote-server installer, unrelated to this app.
+
+## Versioning and releases
+
+The version was reset to **0.1.0**. Upstream sits at 4.1.0, but that number
+belongs to NOIA2's release channel; this fork publishes to its own, and the
+updater compares an installed build against *these* releases. Carrying 4.1.0
+forward would mean the first tag actually shipped here reads as a downgrade and
+never offers itself.
+
+0.1.0 rather than 1.0.0 is deliberate: nothing has been verified against a real
+global session yet. 1.0.0 is worth saving for the build that demonstrably works
+on the global servers.
+
+### The updater points at this repository by construction
+
+`.github/workflows/release.yml` derives the manifest URL from
+`${{ github.repository }}`, so it resolves to whichever repo the workflow runs
+in. Nothing points at upstream.
+
+Upstream routed the primary endpoint through `gh-proxy.com`, a Chinese GitHub
+mirror that exists to work around slow access there. That is an unnecessary third
+party in this project's update path, so it was removed along with the two
+workflow steps and the script that produced its manifest. GitHub is now the only
+endpoint.
+
+### Before the first release
+
+The workflow triggers on a `v*` tag and needs three repository secrets, none of
+which exist yet:
+
+- `TAURI_SIGNING_PUBLIC_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+
+Generate the pair locally with `pnpm tauri signer generate`, then add them under
+Settings → Secrets and variables → Actions. Without them the updater cannot
+verify a download and the release job fails its own guard check.
+
+The `VITE_SUPABASE_*` secrets referenced by the workflow can stay unset; the
+build simply ships with cloud features off.
+
+## Background
+
+The home-screen background is a looping 1080p video (`public/aion2/bg.mp4`) drawn
+over a still (`public/aion2/background.webp`) that the other pages use on its own.
+
+Both were replaced. The still is now a frame of the video, so the pages agree with
+each other, and it was moved from PNG to WebP: 1.8 MB to 143 KB for the same
+image.
+
+The video is re-encoded at CRF 26 -- 1.45 Mbps, below the 1.68 Mbps of the clip it
+replaced, so it costs less to decode per frame despite running longer.
+
+Playback pauses whenever nobody can see it. Upstream already paused on window
+blur; that now also honours the Page Visibility API, which covers states the
+window API alone does not report.
