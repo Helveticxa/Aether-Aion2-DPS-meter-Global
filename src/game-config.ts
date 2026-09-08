@@ -45,20 +45,6 @@ export const AION2_GAME: GameConfig = {
   bgImage: "/aion2/background.webp",
 };
 
-export const POE2_GAME: GameConfig = {
-  id: "poe2",
-  name: "Path of Exile 2",
-  rootPath: "/poe2",
-  navItems: [
-    { label: "Home", path: "/poe2", icon: Home },
-    // { label: "Items", path: "/poe2/items", icon: ShieldCheck },
-    // { label: "Passive Tree", path: "/poe2/tree", icon: LineChart },
-    // { label: "Market", path: "/poe2/market", icon: BarChart3 },
-  ],
-  bgVideo: "/poe2/bg.mp4",
-  bgImage: "/poe2/wraeclast.webp",
-};
-
 export const ALL_GAMES: GameConfig[] = [AION2_GAME];
 
 export function getGameByPath(pathname: string): GameConfig | undefined {

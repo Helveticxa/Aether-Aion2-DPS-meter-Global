@@ -131,8 +131,7 @@ Windows manifest demands elevation and the test runner cannot launch it.
 Do not run `pnpm format`: it rewrites 119 upstream files and would make every
 future merge expensive.
 
-Note that `CLAUDE.md` in this repo is upstream's unedited Tauri-template
-boilerplate and describes a different app. Trust this file instead.
+`CLAUDE.md` carries the short version of these notes for day-to-day work.
 
 ## Gotcha: moving the repository folder
 
@@ -288,3 +287,31 @@ the clipboard can fail quietly and launch day happens once.
 
 It exists so a session can be handed over by pasting rather than described screen
 by screen.
+
+## Repository cleanup
+
+The fork inherited a fair amount of scaffolding and dead weight. Removed:
+
+- **~1.7 MB of unreferenced JSON at the repository root** (`mobs.json`,
+  `npc_names.json`, `npc_data.json`, `abnormal_ids_full.json`). The copies the
+  build actually uses live under `src/games/aion2/data/` and `src-tauri/data/`.
+- **`.agents/skills/`** and `skills-lock.json` — vendored third-party agent
+  documentation for shadcn and Tauri, unrelated to this project.
+- **Path of Exile 2 scaffolding.** `POE2_GAME` was never in `ALL_GAMES`, its
+  routes were unreachable, and the background assets it referenced did not exist.
+- **The Tauri starter's demo page** (`src/pages/home.tsx`, reachable only through
+  the dead POE2 route), its logo assets, and the `greet` command that served it.
+- **Template tutorials** `docs/I18N.md`, `docs/AUTO_UPDATE.md`, and
+  `docs/GLOBAL_SHORTCUT.md`, along with their Chinese translations. They describe
+  the scaffold, not this app; auto-update is documented above instead.
+- **Nested `CLAUDE.md` files and `AGENTS.md`**, which repeated the same
+  inaccurate template description in three more places.
+
+`docs/AION2_PACKET_PROTOCOL_ANALYSIS.zh-CN.md` is kept. It is upstream's protocol
+analysis and real domain knowledge, in Chinese and not yet translated.
+
+Fixed along the way: `index.html` pointed its favicon at `/vite.svg`, a file that
+is not in `public/`.
+
+The application icons under `src-tauri/icons/` remain upstream's NOIA2 artwork.
+That is a deliberate choice, not an oversight.

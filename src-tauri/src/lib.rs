@@ -6,12 +6,6 @@ use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_window_state::StateFlags;
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
 #[tauri::command]
 fn update_tray_menu(
     app: tauri::AppHandle,
@@ -71,7 +65,6 @@ pub fn run() {
         .plugin(plugins::aion2_focus::init())
         .plugin(plugins::window_tracking::init())
         .invoke_handler(tauri::generate_handler![
-            greet,
             update_tray_menu,
             show_system_notification,
             plugins::system_tray::quit_application,

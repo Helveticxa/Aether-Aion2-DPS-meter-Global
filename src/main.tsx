@@ -10,7 +10,6 @@ import { MainTitleBar } from "./components/main-title-bar";
 import { useSettings } from "@/hooks/use-settings";
 import { UpdaterDialog } from "@/components/updater-dialog";
 
-const HomePage = lazy(() => import("./pages/home"));
 const UserPage = lazy(() => import("./pages/user"));
 const StartupSplashPage = lazy(() => import("./pages/startup-splash"));
 const SettingsViewPage = lazy(() => import("./pages/settings"));
@@ -53,13 +52,11 @@ function AppWrapper() {
         <Route path="/aion2/dps-rank" element={<Aion2DpsRankPage />} />
 
         {/* POE2 */}
-        <Route path="/poe2" element={<HomePage />} />
       </Route>
 
       {/* Overlay windows (no main frame) */}
       <Route element={<Outlet />}>
         <Route path="/aion2/overlay_setting" element={<Aion2OverlaySettingPage />} />
-        <Route path="/poe2/item-search/" element=<></> />
       </Route>
     </Routes>
   );

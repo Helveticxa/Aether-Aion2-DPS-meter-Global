@@ -1,250 +1,79 @@
-# Tauri App Template
+# Aether — working notes
 
-## Project Overview
+A real-time DPS meter for AION 2, aimed at the global servers. Fork of
+[NOIA2](https://github.com/ZDYoung0519/NOIA2) (GPL-3.0). Rust + Tauri 2 backend,
+React 19 + TypeScript frontend.
 
-Modern desktop application template built with Tauri v2 + React 19 + TypeScript + shadcn/ui.
+Read [FORK.md](./FORK.md) for what diverges from upstream and why. It is the
+authoritative record; this file is the short version.
 
-## Architecture
+## Commands
 
-- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS v4 + shadcn/ui
-- **Backend**: Tauri v2 (Rust)
-- **Build**: pnpm + Vite + Cargo
+PowerShell 5.1 on the development machine has no `&&` — chain with `;`.
 
-## Module Index
-
-| Module | Path | Tech Stack | Responsibility |
-|--------|------|------------|----------------|
-| Frontend | `src/` | TypeScript/React | UI, components, styles, i18n |
-| Backend | `src-tauri/` | Rust | System calls, native features |
-| Documentation | `docs/` | Markdown | Project guides and references |
-
-## Development
-
-### Prerequisites
-
-- Node.js >= 18
-- pnpm >= 9
-- Rust >= 1.70
-
-### Commands
-
-```bash
-pnpm install        # Install dependencies
-pnpm tauri dev      # Start dev server
-pnpm tauri build    # Build for production
-pnpm format         # Format code
+```
+pnpm install
+pnpm build                        # tsc + vite, ~6s
+cd src-tauri; cargo test --lib    # 24 tests
+pnpm tauri:dev                    # must be an ELEVATED terminal
+pnpm tauri:build                  # NSIS installer + updater bundle
 ```
 
-## Coding Standards
+`pnpm tauri:dev` fails with OS error 740 outside an Administrator terminal:
+packet capture needs elevation, and the Windows manifest demands it.
 
-### TypeScript/React
+## Quality gates
 
-- TypeScript strict mode
-- Function components with Hooks
-- Path alias: `@/` maps to `src/`
-- Format with Prettier
-- **Comments and logs MUST be in English only**
-- Keep code clean and minimal
+**`pnpm check` fails on a clean checkout** — Prettier flags 119 files, ESLint
+reports 65 errors, all inherited from upstream. **Never run `pnpm format`**: it
+rewrites those files and makes every future upstream merge expensive.
 
-### Rust
+The gates that mean something:
 
-- Follow Rust naming conventions
-- Use `#[tauri::command]` macro for Tauri commands
-- **Comments and logs MUST be in English only**
-
-### Styling
-
-- Tailwind CSS v4
-- shadcn/ui component system
-- CSS variables for theming (light/dark mode)
-
-### Code Quality Rules
-
-1. **Language**: All comments, console logs, and error messages MUST be in English
-2. **Cleanliness**: Remove unnecessary code, avoid redundant implementations
-3. **Simplicity**: Follow KISS principle - keep implementations straightforward
-
-## Key Conventions
-
-1. **Add Components**: `pnpm dlx shadcn@latest add <component>`
-2. **Path Alias**: Use `@/` prefix, e.g., `import { Button } from "@/components/ui/button"`
-3. **Tauri Commands**: Define in `src-tauri/src/lib.rs`, call with `invoke()`
-
-### Example: Tauri Command
-
-```typescript
-// Frontend
-import { invoke } from "@tauri-apps/api/core";
-const result = await invoke("command_name", { arg1: value });
+```
+pnpm build
+cd src-tauri; cargo test --lib
 ```
 
-```rust
-// Backend (src-tauri/src/lib.rs)
-#[tauri::command]
-fn command_name(arg1: &str) -> String {
-    format!("Result: {}", arg1)
-}
-```
+`cargo test` without `--lib` fails on the binary target only, because the test
+runner cannot launch an executable that demands elevation.
 
----
+## Conventions
 
-## Frontend Module (src)
+- **Comments and logs in English**, everywhere.
+- Keep diffs against upstream **small and anchored**. Upstream is still active,
+  and `git fetch upstream && git merge upstream/main` should stay cheap.
+- Files use **CRLF** with `core.autocrlf=true`. Scripts that rewrite files must
+  preserve CRLF, or the diff becomes a whole-file rewrite.
+- Moving the project directory requires `cargo clean` — Cargo and Tauri bake
+  absolute paths into `src-tauri/target`.
+- Path alias `@/` maps to `src/`.
 
-### Responsibilities
+## Layout
 
-UI rendering, interaction, and styling.
+| Path | What lives there |
+|---|---|
+| `src-tauri/src/dps_meter/capture/` | Capture, TCP reassembly, dispatch, opcode parsing |
+| `src-tauri/src/dps_meter/capture/recorder.rs` | Packet recording and replay |
+| `src-tauri/src/dps_meter/capture/census.rs` | Opcode census |
+| `src-tauri/src/dps_meter/region.rs` | Region profiles and traffic observations |
+| `src-tauri/src/dps_meter/engine/` | DPS calculation, meter lifecycle |
+| `src-tauri/src/plugins/` | Overlay windows, tray, logger, shortcuts |
+| `src/games/aion2/` | Game UI, five overlay windows, bundled game data |
+| `src/components/` | Shared UI, including the Runtime tools panel |
+| `src/i18n/locales/` | English and Korean only |
+| `docs/` | `AION2_PACKET_PROTOCOL_ANALYSIS.zh-CN.md` — upstream's protocol notes, in Chinese. Useful reference; not yet translated. |
 
-### Entry Points
+## Things that will bite you
 
-- **Entry**: `src/main.tsx`
-- **Page Selector**: `src/main.tsx` lazily selects a page component based on `window.location.pathname`
-- **Pages**: `src/pages/home.tsx`, `src/pages/about.tsx`, `src/pages/settings.tsx`
-- **Build Tool**: Vite (`vite.config.ts`)
-
-### Key Dependencies
-
-- react@19.1.0, react-dom@19.1.0
-- @tauri-apps/api@2, @tauri-apps/plugin-opener@2
-- tailwindcss@4.2.1, shadcn/ui components
-- lucide-react@0.577.0 (icons)
-- i18next, react-i18next (internationalization)
-
-### Configuration
-
-- `tsconfig.json` - TypeScript config (strict mode)
-- `vite.config.ts` - Vite build config
-- `components.json` - shadcn/ui config
-- `src/i18n/index.ts` - i18n configuration
-
-### Internationalization
-
-The project uses i18next for multi-language support:
-
-```typescript
-// Usage in components
-import { useTranslation } from "react-i18next";
-
-function MyComponent() {
-  const { t, i18n } = useTranslation();
-
-  return (
-    <div>
-      <h1>{t("app.title")}</h1>
-      <button onClick={() => i18n.changeLanguage("zh")}>
-        Switch Language
-      </button>
-    </div>
-  );
-}
-```
-
-**Supported Languages**: English (en), Chinese (zh)
-
-**Translation Files**: `src/i18n/locales/{en,zh}.json`
-
-See [I18N Documentation](./docs/I18N.md) for detailed usage.
-
-### Toast Notifications
-
-The project uses sonner (via shadcn/ui) for toast notifications:
-
-```typescript
-// Import toast function
-import { toast } from "sonner";
-
-// Show success toast
-toast.success("Operation completed!");
-
-// Show error toast
-toast.error("Something went wrong!");
-
-// Show info toast
-toast.info("Information message");
-
-// Show warning toast
-toast.warning("Warning message");
-
-// With i18n support
-import { useTranslation } from "react-i18next";
-const { t } = useTranslation();
-toast.success(t("settings.shortcut.setSuccess", { shortcut: "Ctrl+Shift+A" }));
-```
-
-**Setup Requirements**:
-1. Add `<Toaster />` component to your page/app root
-2. Import from `@/components/ui/sonner`
-
-**Example**:
-```typescript
-import { Toaster } from "@/components/ui/sonner";
-
-export default function Settings() {
-  return (
-    <ThemeProvider>
-      <Toaster />
-      <SettingsContent />
-    </ThemeProvider>
-  );
-}
-```
-
-**Features**:
-- Auto-adapts to light/dark theme
-- Supports i18n with variable interpolation
-- Auto-dismisses after duration (default: 4s)
-- Customizable icons and styling
-
----
-
-## Backend Module (src-tauri)
-
-### Responsibilities
-
-System-level calls, native features, cross-platform desktop app wrapper.
-
-### Entry Points
-
-- **Entry**: `src-tauri/src/main.rs`
-- **App Logic**: `src-tauri/src/lib.rs`
-- **Build Config**: `Cargo.toml`
-
-### Commands
-
-| Command | Parameters | Returns | Description |
-|---------|------------|---------|-------------|
-| `greet` | `name: &str` | `String` | Example greeting command |
-
-### Key Dependencies
-
-- tauri@2 - Tauri framework
-- tauri-plugin-opener@2 - Open external links
-- serde@1, serde_json@1 - Serialization
-
-### Configuration
-
-- `tauri.conf.json` - Tauri app config
-- `capabilities/default.json` - Permissions config
-
-**Key Settings**:
-- Product: `tauri-app-template`
-- Identifier: `com.template.tauri-app`
-- Window: 800x600
-- Dev Port: 1420
-
----
-
-## Documentation (docs)
-
-### Available Guides
-
-- **AUTO_UPDATE.md** - Tauri auto-update configuration and GitHub Actions setup
-- **I18N.md** - Internationalization guide (English)
-- **I18N.zh-CN.md** - 国际化指南（中文）
-
-### Adding Documentation
-
-When adding new features, create corresponding documentation:
-
-1. Create English version: `docs/FEATURE.md`
-2. Create Chinese version: `docs/FEATURE.zh-CN.md`
-3. Update README.md and README.zh-CN.md if needed
+- **Cloud is optional and off.** Upstream reads Supabase credentials from a
+  gitignored `.env`; without them `createClient` throws at module load. Anything
+  touching it must go through `isCloudEnabled` or `requireSupabase()`.
+- **Region profiles are load-bearing.** A server id is used *structurally* to
+  locate fields inside player-info packets. Upstream hardcoded Taiwan's catalogue,
+  which silently named no players anywhere else.
+- **Overlays carry their own defaults.** They are separate HTML+JS entry points
+  with their own config fallbacks and their own tiny i18n module. Changing an
+  app-level default does not reach them.
+- **Overlays are `.js`**, so `tsc` does not check them. Always run the full
+  `pnpm build`, not just `tsc --noEmit`.
