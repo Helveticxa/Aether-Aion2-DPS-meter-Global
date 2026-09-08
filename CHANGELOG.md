@@ -5,6 +5,33 @@ numbering: this fork publishes to its own release channel, and the updater
 compares an installed build against these releases. Upstream's release history
 lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
 
+## [0.1.1]
+
+The overlay still said "NoiA METER" on screen. Renaming it in the HTML was not
+enough: `overlay/meter/main.js` writes the title again at runtime, so the markup
+change never survived. Fixed at the source.
+
+That miss exposed a wider gap. The overlays are plain `.js`, and the earlier
+translation passes only scanned `.ts`, `.tsx`, `.html` and `.json` — so all five
+overlay scripts were still partly Chinese.
+
+- The copied battle report was written in Chinese and formatted damage on the
+  万/亿 scale regardless of the chosen setting. It is English now, on K/M/B, and
+  credits Aether rather than upstream's Bilibili channel.
+- Buff overlay: class names, slot labels, and every button tooltip.
+- PVP overlay: watch-list tooltips and the unknown-server fallback.
+- The WinDivert repair dialog reported all sixteen of its progress steps in
+  Chinese. Those are the messages shown when capture is broken — exactly when
+  being unable to read them hurts most.
+
+Also fixed two corrupted locale entries: a stale `language.zh` option left over
+from dropping Chinese, and a `PvEAddDamage` stat whose value had a duplicated key
+name and stray Chinese glued onto it.
+
+Known gap: 59 of 7,105 skill names in the English catalogue are still Chinese,
+almost all Fighter skills. They come from upstream's data and need a global
+client to replace properly.
+
 ## [0.1.0]
 
 First release of the fork. Everything below is relative to NOIA2 at the point it

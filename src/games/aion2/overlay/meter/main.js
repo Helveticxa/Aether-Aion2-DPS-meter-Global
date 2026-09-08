@@ -343,31 +343,46 @@ function buildBattleReport(snap) {
   const teamDps = dur > 0 ? allDmg / dur : 0;
 
   const fmtDmg = (n) =>
-    n >= 1e8 ? (n / 1e8).toFixed(2) + "e" : n >= 1e4 ? (n / 1e4).toFixed(1) + "w" : String(n);
+    n >= 1e9
+      ? (n / 1e9).toFixed(2) + "B"
+      : n >= 1e6
+        ? (n / 1e6).toFixed(2) + "M"
+        : n >= 1e3
+          ? (n / 1e3).toFixed(1) + "K"
+          : String(n);
   const fmtTime = (s) => {
     const m = Math.floor(s / 60),
       sec = Math.floor(s % 60);
     return m + "m" + String(sec).padStart(2, "0") + "s";
   };
 
-  let report = `战斗时长：${fmtTime(dur)}，总计伤害：${fmtDmg(allDmg)}，秒伤：${Math.round(teamDps).toLocaleString("en-US")}\n`;
-  const classes = ["剑星", "守护星", "杀星", "弓星", "魔道星", "精灵星", "治愈星", "护法星"];
+  let report = `Duration ${fmtTime(dur)} · Total damage ${fmtDmg(allDmg)} · Party DPS ${Math.round(teamDps).toLocaleString("en-US")}\n`;
+  const classes = [
+    "Gladiator",
+    "Templar",
+    "Assassin",
+    "Ranger",
+    "Sorcerer",
+    "Elementalist",
+    "Cleric",
+    "Chanter",
+  ];
   const classMap = {
-    GLADIATOR: "剑星",
-    TEMPLAR: "守护星",
-    ASSASSIN: "杀星",
-    RANGER: "弓星",
-    SORCERER: "魔道星",
-    ELEMENTALIST: "精灵星",
-    CLERIC: "治愈星",
-    CHANTER: "护法星",
+    GLADIATOR: "Gladiator",
+    TEMPLAR: "Templar",
+    ASSASSIN: "Assassin",
+    RANGER: "Ranger",
+    SORCERER: "Sorcerer",
+    ELEMENTALIST: "Elementalist",
+    CLERIC: "Cleric",
+    CHANTER: "Chanter",
   };
   for (const cls of classes) {
     const p = players.find((p) => classMap[p.actorClass] === cls);
     if (!p) continue;
-    report += `${cls}：${p.actorName || "ID:" + p.actorId}，总计伤害：${fmtDmg(p.totalDamage)}，秒伤：${Math.round(p.dps).toLocaleString("en-US")}\n`;
+    report += `${cls} — ${p.actorName || "ID:" + p.actorId} · ${fmtDmg(p.totalDamage)} · ${Math.round(p.dps).toLocaleString("en-US")}/s\n`;
   }
-  report += `\n数据来源 NoiA2，Bilibili搜索作者【燃烧的浅蓝】`;
+  report += `\nRecorded with Aether — github.com/Helveticxa/Aether-Aion2-DPS-meter-Global`;
   return report;
 }
 
@@ -377,8 +392,8 @@ document.getElementById("copy-report-btn").addEventListener("click", async () =>
   try {
     await navigator.clipboard.writeText(report);
     invoke("show_system_notification", {
-      title: "NoiA2",
-      body: "战斗数据已经复制到粘贴板",
+      title: "Aether",
+      body: "Battle report copied to clipboard",
     }).catch(() => {});
   } catch (_) {
     /* ignore */
@@ -533,7 +548,7 @@ function updateBossRow(targetInfo) {
   const showBossBar = hasTarget && overlayConfig?.showBossHp !== false;
 
   if (!hasTarget) {
-    $titleLabel.textContent = "NoiA METER";
+    $titleLabel.textContent = "AETHER METER";
     $bossRow.style.display = "none";
     return;
   }

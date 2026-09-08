@@ -75,5 +75,9 @@ runner cannot launch an executable that demands elevation.
 - **Overlays carry their own defaults.** They are separate HTML+JS entry points
   with their own config fallbacks and their own tiny i18n module. Changing an
   app-level default does not reach them.
-- **Overlays are `.js`**, so `tsc` does not check them. Always run the full
-  `pnpm build`, not just `tsc --noEmit`.
+- **Overlays are `.js`.** Two consequences, both of which have already caused
+  bugs. `tsc` does not check them, so always run the full `pnpm build` rather
+  than `tsc --noEmit`. And any repo-wide scan — renaming, translating, auditing —
+  must include `*.js`, or the overlays are silently skipped. That is how
+  "NoiA METER" survived a rename: `overlay/meter/main.js` sets the title at
+  runtime, overwriting the HTML.

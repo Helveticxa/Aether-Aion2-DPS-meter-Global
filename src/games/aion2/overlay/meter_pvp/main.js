@@ -246,7 +246,7 @@ function createWatchRow(info) {
   name.className = "player-hp-row__name";
   name.textContent = maskName(info.actorName || info.queryName);
   if (isAuto) {
-    name.title = "最后攻击";
+    name.title = "Last attacker";
   }
 
   const server = document.createElement("div");
@@ -267,7 +267,7 @@ function createWatchRow(info) {
   if (isAuto) {
     remove.textContent = "";
     remove.disabled = true;
-    remove.title = "最后攻击";
+    remove.title = "Last attacker";
   } else {
     remove.textContent = "×";
     remove.addEventListener("click", (event) => {
@@ -373,7 +373,7 @@ function renderCombatStats(stats) {
 
       const server = document.createElement("span");
       server.className = "pvp-combat-stats__server";
-      server.textContent = getServerName(stats.serverId) || "未知";
+      server.textContent = getServerName(stats.serverId) || "Unknown";
       name.appendChild(server);
 
       for (const [key, value] of [
@@ -493,7 +493,7 @@ function createPlayerRow(player, maxDamage, fullBar = false) {
   addWatch.className = "player-row__watch-add";
   addWatch.type = "button";
   addWatch.textContent = "+";
-  addWatch.title = "添加监控";
+  addWatch.title = "Add to watch list";
   addWatch.addEventListener("click", (event) => {
     event.stopPropagation();
     if (player.actorName) {

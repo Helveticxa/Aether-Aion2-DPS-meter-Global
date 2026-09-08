@@ -19,15 +19,15 @@ const CLASS_ORDER = [
   "FIGHTER",
 ];
 const CLASS_NAMES = {
-  GLADIATOR: "剑星",
-  TEMPLAR: "守护星",
-  ASSASSIN: "杀星",
-  RANGER: "弓星",
-  SORCERER: "魔道星",
-  ELEMENTALIST: "精灵星",
-  CLERIC: "治愈星",
-  CHANTER: "护法星",
-  FIGHTER: "拳星",
+  GLADIATOR: "Gladiator",
+  TEMPLAR: "Templar",
+  ASSASSIN: "Assassin",
+  RANGER: "Ranger",
+  SORCERER: "Sorcerer",
+  ELEMENTALIST: "Elementalist",
+  CLERIC: "Cleric",
+  CHANTER: "Chanter",
+  FIGHTER: "Fighter",
 };
 
 const activeBuffs = new Map();
@@ -205,8 +205,8 @@ function renderSlot(slot, row) {
     .join(" ");
   element.title =
     slot.type === "empty"
-      ? "空位"
-      : `${slot.type === "bossDebuff" ? "Boss Debuff" : "自身 Buff"} · ${skillName(slot.skillCode)}`;
+      ? "Empty slot"
+      : `${slot.type === "bossDebuff" ? "Boss debuff" : "Self buff"} · ${skillName(slot.skillCode)}`;
   element.dataset.tauriDragRegion = "";
 
   const duration = document.createElement("span");
@@ -228,7 +228,7 @@ function renderAddButton(row) {
   const button = document.createElement("button");
   button.className = "buff-row__add";
   button.type = "button";
-  button.title = "添加 Buff";
+  button.title = "Add buff";
   button.textContent = "+";
   button.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -241,7 +241,7 @@ function renderRemoveRowButton(row) {
   const button = document.createElement("button");
   button.className = "buff-row__remove";
   button.type = "button";
-  button.title = "删除这一行";
+  button.title = "Remove this row";
   button.textContent = "×";
   button.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -324,7 +324,7 @@ function renderCandidateButton(slot) {
   button.type = "button";
   button.title =
     slot.type === "empty"
-      ? "空位"
+      ? "Empty slot"
       : `${skillName(slot.skillCode)} (${skillShortcode(slot.skillCode)})`;
   button.dataset.type = slot.type;
   button.addEventListener("click", () => applyPickerSlot(slot));
@@ -332,8 +332,8 @@ function renderCandidateButton(slot) {
   if (slot.type === "empty") {
     const mark = document.createElement("span");
     mark.className = "buff-picker__empty-icon";
-    mark.textContent = "空";
-    button.append(mark, document.createTextNode("空位"));
+    mark.textContent = "+";
+    button.append(mark, document.createTextNode("Empty slot"));
     return button;
   }
 
@@ -373,7 +373,7 @@ function renderCandidateList(candidates, type) {
   if (candidates.length === 0) {
     const empty = document.createElement("div");
     empty.className = "buff-picker__empty";
-    empty.textContent = "暂无候选 Buff";
+    empty.textContent = "No buffs available";
     fragment.append(empty);
     return fragment;
   }
@@ -396,7 +396,7 @@ function renderPickerTypeButton(type, activeType, onSelect) {
   const button = document.createElement("button");
   button.className = "buff-picker__type";
   button.type = "button";
-  button.textContent = type === "bossDebuff" ? "添加为 Boss Debuff" : "添加为自身 Buff";
+  button.textContent = type === "bossDebuff" ? "Add as boss debuff" : "Add as self buff";
   button.dataset.type = type;
   button.dataset.active = String(type === activeType);
   button.addEventListener("click", () => onSelect(type));
@@ -441,7 +441,7 @@ function openPicker(rowId, anchor, slotId = null) {
   const close = document.createElement("button");
   close.className = "buff-picker__close";
   close.type = "button";
-  close.title = "关闭";
+  close.title = "Close";
   close.textContent = "×";
   close.addEventListener("click", closePicker);
 

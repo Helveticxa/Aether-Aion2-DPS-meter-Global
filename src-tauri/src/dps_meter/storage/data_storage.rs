@@ -24,22 +24,27 @@ const BUFF_INTERVALS_PER_SKILL_CAPACITY: usize = 1_024;
 const BUFF_INTERVAL_MERGE_TOLERANCE_MS: u64 = 100;
 
 const ACTOR_CLASS_SKILL_IGNORE_LIST: [&str; 2] = ["1134", "1740"];
+/// Fighter rage variants mapped to the skill they belong to, as
+/// `(rage_id, base_id)`. Both are counted as one skill in the meter.
+///
+/// Listed by id: the English skill catalogue has no names for these yet, so a
+/// name here would have to be Chinese and would go stale the moment it does.
 const FIGHTER_SKILLID_MAP: &[(u32, u32)] = &[
-    (19_080_000, 19_070_000), // 疾风击[暴走] -> 疾风击
-    (19_100_000, 19_090_000), // 地面强击[暴走] -> 地面强击
-    (19_120_000, 19_110_000), // 不知道叫啥的技能[暴走] -> 不知道叫啥的技能
-    (19_150_000, 19_160_000), // 升天拳[暴走] -> 升天拳
-    (19_180_000, 19_170_000), // 回旋脚[暴走] -> 回旋脚
-    (19_190_000, 19_200_000), // 爆裂拳[暴走] -> 爆裂拳
-    (19_260_000, 19_250_000), // 台风连击[暴走] -> 台风连击
-    (19_430_000, 19_420_000), // 连环拳[暴走] -> 连环拳
-    (19_470_000, 19_460_000), // 瞬步[暴走] -> 瞬步
-    (19_510_000, 19_010_000), // 连攻[暴走] -> 连攻
-    (19_520_000, 19_020_000), // 重击[暴走] -> 重击
-    (19_530_000, 19_030_000), // 重锤[暴走] -> 重锤
-    (19_540_000, 19_040_000), // 飞脚[暴走] -> 飞脚
-    (19_550_000, 19_050_000), // 升降拳[暴走] -> 升降拳
-    (19_560_000, 19_060_000), // 冲拳[暴走] -> 冲拳
+    (19_080_000, 19_070_000),
+    (19_100_000, 19_090_000),
+    (19_120_000, 19_110_000),
+    (19_150_000, 19_160_000),
+    (19_180_000, 19_170_000),
+    (19_190_000, 19_200_000),
+    (19_260_000, 19_250_000),
+    (19_430_000, 19_420_000),
+    (19_470_000, 19_460_000),
+    (19_510_000, 19_010_000),
+    (19_520_000, 19_020_000),
+    (19_530_000, 19_030_000),
+    (19_540_000, 19_040_000),
+    (19_550_000, 19_050_000),
+    (19_560_000, 19_060_000),
 ];
 
 #[derive(Debug, Clone)]
@@ -427,7 +432,7 @@ impl DataStorage {
         }
 
         // let actor_id = packet.actor_id;
-        // 如果是召唤物，把召唤物的伤害分配给他的owner
+        // A summon's damage is attributed to whoever summoned it.
         let mut actor_id = packet.actor_id;
         if let Some(owner_id) = inner.summon_owner_map.get(&actor_id) {
             actor_id = *owner_id;
@@ -518,21 +523,22 @@ impl DataStorage {
 
         let total_damage = packet.damage;
 
-        // 如果是 8 位的技能id，那么是常规技能，使用normalize后的code
-        // 如果>8位的技能id (通常是10位，代表dot类型技能)，那么使用原始code，和8位区分开
+        // An 8-digit skill id is a regular skill, so use the normalised code.
+        // Longer ids -- usually 10 digits -- are DoT skills, and keep their
+        // original code so the two stay distinguishable.
         let mut stats_skill_code = if (10_000_000..=99_999_999).contains(&packet.ori_skill_code) {
             packet.skill_code
         } else {
             packet.ori_skill_code
         };
-        // FIGHTER的暴走技能归类到普通技能上
+        // Fighter's rage variants are folded back onto the base skill.
         if let Some((_, mapped_skill_code)) = FIGHTER_SKILLID_MAP
             .iter()
             .find(|(from_skill_code, _)| *from_skill_code == stats_skill_code)
         {
             stats_skill_code = *mapped_skill_code;
         }
-        // 精灵星召唤物的普通攻击映射
+        // Elementalist summon basic attacks collapse onto one code.
         if (100_010..=100_059).contains(&stats_skill_code)
             && (10001..=10005).contains(&(stats_skill_code / 10))
         {

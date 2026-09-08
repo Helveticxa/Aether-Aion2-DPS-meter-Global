@@ -29,8 +29,7 @@
   },
   "language": {
     "toggle": "Switch language",
-    "en": "English",
-    "zh": "中文"
+    "en": "English"
   },
   "tray": {
     "show": "Show Window",
