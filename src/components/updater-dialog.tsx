@@ -1,5 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+
 import { useUpdater } from "@/hooks/use-updater";
+import type { UpdateCheckResult } from "@/lib/updater";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,114 +13,116 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
 
 interface UpdaterDialogProps {
+  /** Skip the check on mount. The parent drives it with `checkNonce` instead. */
   manualCheck?: boolean;
-  onCheckComplete?: () => void;
+  /**
+   * Bump this to run a check. Only meaningful with `manualCheck`, and ignored
+   * while one is already running.
+   */
+  checkNonce?: number;
+  onResult?: (status: UpdateCheckResult["status"]) => void;
 }
 
-export function UpdaterDialog({ manualCheck = false, onCheckComplete }: UpdaterDialogProps) {
-  const { update, checking, downloading, progress, checkUpdate, installUpdate } = useUpdater();
+/** Release notes arrive with their version heading, which the dialog already shows. */
+function stripVersionHeading(body: string): string {
+  return body.replace(/^\s*##\s*\[?[\d.]+\]?\s*\n+/, "").trim();
+}
+
+export function UpdaterDialog({
+  manualCheck = false,
+  checkNonce = 0,
+  onResult,
+}: UpdaterDialogProps) {
+  const { update, checking, downloading, progress, installError, checkUpdate, installUpdate } =
+    useUpdater();
   const [open, setOpen] = useState(false);
   const { t } = useTranslation();
 
+  // Keep the callback in a ref so a parent re-render cannot retrigger a check.
+  const onResultRef = useRef(onResult);
+  onResultRef.current = onResult;
+
+  const run = async () => {
+    const result = await checkUpdate();
+    onResultRef.current?.(result.status);
+    if (result.status === "available") setOpen(true);
+  };
+
+  // Automatic check on mount, unless the parent drives it.
   useEffect(() => {
-    if (!manualCheck) {
-      void checkUpdate();
-    }
+    if (!manualCheck) void run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manualCheck]);
 
+  // Parent-driven check. Nonce starts at 0, which means "not yet asked".
   useEffect(() => {
-    if (update) {
-      setOpen(true);
-      onCheckComplete?.();
-    } else if (manualCheck && !checking) {
-      onCheckComplete?.();
-    }
-  }, [update, checking, manualCheck, onCheckComplete]);
+    if (manualCheck && checkNonce > 0) void run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkNonce]);
 
-  const handleInstall = () => {
-    void installUpdate();
-  };
-
-  const handleCancel = () => {
-    setOpen(false);
-  };
-
-  const getProgressPercentage = () => {
+  const percentage = (() => {
     if (!progress || progress.event === "Started") return 0;
-    const { downloaded, contentLength } = progress.data || {};
-    if (!contentLength) return 0;
     if (progress.event === "Finished") return 100;
-    return Math.round(((downloaded ?? 0) / contentLength) * 100);
-  };
+    const { downloaded = 0, contentLength = 0 } = progress.data ?? {};
+    return contentLength ? Math.round((downloaded / contentLength) * 100) : 0;
+  })();
+
+  const notes = update?.body ? stripVersionHeading(update.body) : "";
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent>
-        <DialogHeader>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // Closing mid-download would hide progress with no way back to it.
+        if (downloading) return;
+        setOpen(next);
+      }}
+    >
+      <DialogContent className="flex max-h-[85vh] flex-col gap-4 sm:max-w-lg">
+        <DialogHeader className="shrink-0">
           <DialogTitle>
             {downloading ? t("updater.downloading") : t("updater.updateAvailable")}
           </DialogTitle>
           <DialogDescription>
-            {downloading ? (
-              <div className="space-y-2">
-                <p>{t("updater.installingVersion", { version: update?.version })}</p>
-                <Progress value={getProgressPercentage()} />
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p>{t("updater.versionAvailable", { version: update?.version })}</p>
-                {update?.body && (
-                  <div className="bg-muted mt-2 rounded-md p-3 text-sm">
-                    <p className="font-semibold">{t("updater.releaseNotes")}</p>
-                    <p className="mt-1 whitespace-pre-wrap">{update.body}</p>
-                  </div>
-                )}
-              </div>
-            )}
+            {downloading
+              ? t("updater.installingVersion", { version: update?.version })
+              : t("updater.versionAvailable", { version: update?.version })}
           </DialogDescription>
         </DialogHeader>
+
+        {downloading ? (
+          <div className="shrink-0 space-y-2">
+            <Progress value={percentage} />
+            <p className="text-muted-foreground text-right text-xs tabular-nums">{percentage}%</p>
+          </div>
+        ) : notes ? (
+          <div className="flex min-h-0 flex-col gap-2">
+            <p className="text-muted-foreground shrink-0 text-xs font-semibold tracking-wide uppercase">
+              {t("updater.releaseNotes")}
+            </p>
+            <div className="bg-muted/40 min-h-0 flex-1 overflow-y-auto rounded-md border p-3">
+              <p className="text-sm leading-6 whitespace-pre-wrap">{notes}</p>
+            </div>
+          </div>
+        ) : null}
+
+        {installError ? (
+          <p className="text-destructive shrink-0 text-sm break-words">{installError}</p>
+        ) : null}
+
         {!downloading && (
-          <DialogFooter>
-            <Button variant="outline" onClick={handleCancel}>
+          <DialogFooter className="shrink-0">
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={checking}>
               {t("updater.later")}
             </Button>
-            <Button onClick={handleInstall}>{t("updater.installNow")}</Button>
+            <Button onClick={() => void installUpdate()} disabled={!update}>
+              {t("updater.installNow")}
+            </Button>
           </DialogFooter>
         )}
       </DialogContent>
     </Dialog>
   );
-}
-
-export function useManualUpdateCheck() {
-  const { checkUpdate, checking, update } = useUpdater();
-  const [showNoUpdate, setShowNoUpdate] = useState(false);
-  const { t } = useTranslation();
-
-  const handleCheckUpdate = async () => {
-    setShowNoUpdate(false);
-    const result = await checkUpdate();
-
-    if (result.status === "up-to-date") {
-      setShowNoUpdate(true);
-      return;
-    }
-
-    if (result.status === "error") {
-      toast.error(t("updater.checkFailed"));
-    }
-  };
-
-  return {
-    checkUpdate: handleCheckUpdate,
-    checking,
-    hasUpdate: !!update,
-    showNoUpdate,
-    dismissNoUpdate: () => setShowNoUpdate(false),
-  };
 }

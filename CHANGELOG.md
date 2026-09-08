@@ -5,6 +5,30 @@ numbering: this fork publishes to its own release channel, and the updater
 compares an installed build against these releases. Upstream's release history
 lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
 
+## [0.1.2]
+
+Fixes the updater itself, on both ends.
+
+**"Check for Updates" did nothing.** The button ran its check in one hook
+instance while the dialog that displays a result lived in another. It found the
+update, stored it somewhere nothing rendered, and stopped — a spinner, then
+silence. The dialog now owns that state and the button drives it.
+
+**The update dialog overflowed the window.** It had no height limit, and its body
+was placed inside `DialogDescription`, which renders a paragraph — so block
+content sat inside a `<p>`. Release notes now scroll inside a bounded panel, the
+dialog caps at 85% of window height, and the markup is valid.
+
+Two smaller things found on the way:
+
+- Installing re-ran the update check instead of using the release the user had
+  just been shown. A wasted round trip, and it could have fetched a different
+  release than the one they agreed to.
+- The settings route sat inside the layout that mounts the automatic startup
+  check, so opening About could stack two update dialogs.
+
+Also removed `src/pages/about.tsx`, template scaffolding with no route to it.
+
 ## [0.1.1]
 
 The overlay still said "NoiA METER" on screen. Renaming it in the HTML was not

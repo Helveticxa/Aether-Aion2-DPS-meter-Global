@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { Github, RefreshCw, Trash2 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { toast } from "sonner";
 
 import packageJson from "../../package.json";
 
-import { useManualUpdateCheck } from "@/components/updater-dialog";
+import { UpdaterDialog } from "@/components/updater-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,7 +46,27 @@ export function AboutSettings() {
   const [clearStorageOpen, setClearStorageOpen] = useState(false);
   const [storageSummary, setStorageSummary] = useState(() => getLocalStorageSummary());
   const { t } = useAppTranslation();
-  const { checkUpdate, checking, showNoUpdate } = useManualUpdateCheck();
+  // The dialog owns the updater state, driven from here by nonce. Previously
+  // this page ran its own check in a separate hook instance, found the update,
+  // and had nothing to display it with -- the button just span and went quiet.
+  const [checkNonce, setCheckNonce] = useState(0);
+  const [checking, setChecking] = useState(false);
+  const [showNoUpdate, setShowNoUpdate] = useState(false);
+
+  const handleCheckResult = useCallback(
+    (status: "available" | "up-to-date" | "error") => {
+      setChecking(false);
+      setShowNoUpdate(status === "up-to-date");
+      if (status === "error") toast.error(t("updater.checkFailed"));
+    },
+    [t]
+  );
+
+  const checkUpdate = useCallback(() => {
+    setShowNoUpdate(false);
+    setChecking(true);
+    setCheckNonce((n) => n + 1);
+  }, []);
 
   const refreshStorageSummary = useCallback(() => {
     setStorageSummary(getLocalStorageSummary());
@@ -89,6 +110,8 @@ export function AboutSettings() {
 
   return (
     <div className="flex flex-col gap-8">
+      <UpdaterDialog manualCheck checkNonce={checkNonce} onResult={handleCheckResult} />
+
       <SettingsSectionHeader
         title="About"
         description="Application version, stack, update status, and local cache usage."
@@ -184,7 +207,8 @@ export function AboutSettings() {
           <DialogHeader>
             <DialogTitle>Clear local cache?</DialogTitle>
             <DialogDescription>
-              This clears the settings, search history, and cached data stored on this machine, then reloads the app window.
+              This clears the settings, search history, and cached data stored on this machine, then
+              reloads the app window.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -19,52 +19,45 @@ export type UpdateCheckResult =
 export async function checkForUpdates(): Promise<UpdateCheckResult> {
   try {
     const update = await check();
-    if (update) {
-      return { status: "available", update };
-    }
-
-    return { status: "up-to-date" };
+    return update ? { status: "available", update } : { status: "up-to-date" };
   } catch (error) {
-    console.error("Failed to check for updates:", error);
+    console.error("[updater] check failed:", error);
     return { status: "error", error };
   }
 }
 
-export async function downloadAndInstall(onProgress?: (progress: UpdateProgress) => void) {
-  const update = await check();
-
-  if (!update) {
-    return false;
-  }
-
-  console.log(`Found update ${update.version} from ${update.date} with notes: ${update.body}`);
-
+/**
+ * Download and install an update that has already been found.
+ *
+ * Takes the `Update` from the check rather than calling `check()` again: a
+ * second call is a wasted round trip, and it can return a different release than
+ * the one the user was shown and agreed to.
+ */
+export async function downloadAndInstall(
+  update: Update,
+  onProgress?: (progress: UpdateProgress) => void
+) {
   let downloaded = 0;
   let contentLength = 0;
 
   await update.downloadAndInstall((event) => {
     switch (event.event) {
       case "Started":
-        contentLength = event.data.contentLength!;
-        console.log(`Started downloading ${event.data.contentLength} bytes`);
-        onProgress?.({ event: "Started", data: { ...event.data, downloaded: 0 } });
+        contentLength = event.data.contentLength ?? 0;
+        onProgress?.({ event: "Started", data: { contentLength, downloaded: 0 } });
         break;
       case "Progress":
         downloaded += event.data.chunkLength;
-        console.log(`Downloaded ${downloaded} from ${contentLength}`);
-        onProgress?.({
-          event: "Progress",
-          data: { ...event.data, contentLength, downloaded },
-        });
+        onProgress?.({ event: "Progress", data: { contentLength, downloaded } });
         break;
       case "Finished":
-        console.log("Download finished");
         onProgress?.({ event: "Finished", data: { contentLength, downloaded } });
         break;
     }
   });
 
-  console.log("Update installed");
+  // On Windows the NSIS installer takes over here, so this often does not
+  // return. It matters on the paths where it does.
   await relaunch();
   return true;
 }

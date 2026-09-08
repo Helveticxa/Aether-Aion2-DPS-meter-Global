@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
+
 import {
   checkForUpdates,
   downloadAndInstall,
@@ -12,8 +13,9 @@ export function useUpdater() {
   const [checking, setChecking] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
+  const [installError, setInstallError] = useState<string | null>(null);
 
-  const checkUpdate = async (): Promise<UpdateCheckResult> => {
+  const checkUpdate = useCallback(async (): Promise<UpdateCheckResult> => {
     setChecking(true);
     try {
       const result = await checkForUpdates();
@@ -22,25 +24,29 @@ export function useUpdater() {
     } finally {
       setChecking(false);
     }
-  };
+  }, []);
 
-  const installUpdate = async () => {
+  const installUpdate = useCallback(async () => {
+    if (!update) return;
+    setInstallError(null);
     setDownloading(true);
     try {
-      await downloadAndInstall((progressEvent) => {
-        setProgress(progressEvent);
-      });
+      await downloadAndInstall(update, setProgress);
     } catch (error) {
-      console.error("Failed to install update:", error);
+      // The installer usually takes over before this resolves, so reaching here
+      // means something actually went wrong and the user needs to see it.
+      console.error("[updater] install failed:", error);
+      setInstallError(String(error));
       setDownloading(false);
     }
-  };
+  }, [update]);
 
   return {
     update,
     checking,
     downloading,
     progress,
+    installError,
     checkUpdate,
     installUpdate,
   };
