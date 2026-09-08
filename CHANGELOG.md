@@ -5,6 +5,30 @@ numbering: this fork publishes to its own release channel, and the updater
 compares an installed build against these releases. Upstream's release history
 lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
 
+## [0.1.4]
+
+**Window controls are readable now.** Minimise, maximise and close had no
+backdrop of their own and used a muted foreground colour, so they washed out
+against the background image. They now carry the same translucent round backing
+the left-hand actions use — the treatment that already reads well over that
+image — with a slightly larger glyph and a clearer hover.
+
+**Removed the language toggle from the title bar.** It occupied permanent space
+for something changed once, if ever. It still lives in Settings → Appearance,
+so Korean remains reachable.
+
+**The installer no longer offers Simplified Chinese.** That option was inherited
+from upstream and had no place in an English build.
+
+Also removed `main-title-bar-old.tsx`, a superseded copy nothing imported.
+
+### On the taskbar icon
+
+If the taskbar or Start Menu still shows the old mark after updating, the
+executable is fine — Windows caches icons per path and does not re-read them
+when a file is replaced in place, which is exactly what an update does. Clearing
+the icon cache, or signing out and back in, refreshes it.
+
 ## [0.1.3]
 
 New application icon, replacing the NOIA2 artwork the fork inherited.

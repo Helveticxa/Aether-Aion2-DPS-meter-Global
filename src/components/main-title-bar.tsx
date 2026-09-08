@@ -8,7 +8,6 @@ import { FaGithub } from "react-icons/fa6";
 import { ALL_GAMES } from "@/game-config";
 
 import { TitleBar } from "@/components/title-bar";
-import { LanguageToggle } from "@/components/language-toggle";
 import { AuthModal } from "@/components/auth-modal";
 import { isCloudEnabled } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -221,7 +220,6 @@ export function MainTitleBar() {
         rightActions={
           <div className="flex items-center gap-2 pr-1">
             {isCloudEnabled && <AuthModal />}
-            <LanguageToggle />
           </div>
         }
       />

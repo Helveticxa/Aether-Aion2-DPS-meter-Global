@@ -101,7 +101,7 @@
   }
 
   .title-bar-control {
-    @apply text-muted-foreground hover:bg-background/55 hover:text-foreground flex h-10 w-11 cursor-pointer items-center justify-center transition-colors outline-none;
+    @apply bg-background/20 mx-0.5 flex size-9 cursor-pointer items-center justify-center rounded-full text-white/85 backdrop-blur-sm transition outline-none hover:bg-white/16 hover:text-white;
     -webkit-app-region: no-drag;
   }
 
@@ -114,7 +114,7 @@
   }
 
   .title-bar-control svg {
-    @apply size-4;
+    @apply size-[18px];
   }
 
   .scrollbar-none {
