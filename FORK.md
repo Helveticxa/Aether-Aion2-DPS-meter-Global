@@ -185,21 +185,35 @@ party in this project's update path, so it was removed along with the two
 workflow steps and the script that produced its manifest. GitHub is now the only
 endpoint.
 
-### Before the first release
+### Signing keys
 
-The workflow triggers on a `v*` tag and needs three repository secrets, none of
-which exist yet:
+A keypair was generated on 2026-09-08. The **public** key and the endpoint are
+committed in `src-tauri/tauri.conf.json`, because both are public values and
+baking them in means a local build behaves exactly like a CI build -- and it
+drops one secret the workflow would otherwise need.
 
-- `TAURI_SIGNING_PUBLIC_KEY`
+The private key and its password live outside this repository, at
+`C:/Users/kapte/.aether-release/`, with a README explaining what goes where.
+They are deliberately not in the project vault either: a signing key is the only
+thing proving an update genuinely came from this project, and a vault that gains
+a Git remote later would carry it in history.
+
+The workflow needs two repository secrets, under Settings → Secrets and variables
+→ Actions:
+
 - `TAURI_SIGNING_PRIVATE_KEY`
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 
-Generate the pair locally with `pnpm tauri signer generate`, then add them under
-Settings → Secrets and variables → Actions. Without them the updater cannot
-verify a download and the release job fails its own guard check.
-
-The `VITE_SUPABASE_*` secrets referenced by the workflow can stay unset; the
+`GITHUB_TOKEN` is automatic. The `VITE_SUPABASE_*` secrets can stay unset; the
 build simply ships with cloud features off.
+
+### A broken build script, fixed
+
+Upstream's `tauri:build` pointed at `src-tauri/tauri.bundle.conf.json` -- a file
+that has never existed in the repository, verified with `git log --all`. Local
+release builds could not run at all. It now matches what CI does:
+`tauri build --bundles nsis,updater`, so a local build produces the same
+artifacts the updater expects.
 
 ## Background
 

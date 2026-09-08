@@ -19,9 +19,9 @@
       }
     },
     "updater": {
-      "pubkey": "__TAURI_UPDATER_PUBKEY__",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFBNjI3NzQxMDdFRjIwRUUKUldUdUlPOEhRWGRpcW9hNzlHZ0tNM05lMWtteTZDRCtOL05yVm1Eem1aY0V1Rzd3SFlray8vWm4K",
       "endpoints": [
-        "__TAURI_UPDATER_ENDPOINT_1__"
+        "https://github.com/Helveticxa/Aether-Aion2-DPS-meter-Global/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

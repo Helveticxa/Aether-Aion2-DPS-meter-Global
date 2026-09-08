@@ -51,30 +51,18 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Configure updater
+      - name: Verify updater configuration
         shell: bash
         run: |
-          REPO="${{ github.repository }}"
-          RAW_MANIFEST_URL="https://github.com/${REPO}/releases/latest/download/latest.json"
-          PUBKEY="${{ secrets.TAURI_SIGNING_PUBLIC_KEY }}"
-
-          sed -i.bak "s|__TAURI_UPDATER_ENDPOINT_1__|${RAW_MANIFEST_URL}|g" src-tauri/tauri.conf.json
-          sed -i.bak "s|__TAURI_UPDATER_PUBKEY__|${PUBKEY}|g" src-tauri/tauri.conf.json
-
-          echo "Updater configured with endpoint:"
-          echo "  ${RAW_MANIFEST_URL}"
-
-          # Verify pubkey was actually replaced
-          if grep -q "__TAURI_UPDATER_PUBKEY__" src-tauri/tauri.conf.json; then
-            echo "::error::PUBKEY PLACEHOLDER STILL PRESENT — secret TAURI_SIGNING_PUBLIC_KEY is empty or not set!"
+          # The public key and endpoint are committed, so nothing is substituted
+          # here any more. This only guards against them going missing.
+          if grep -q "__TAURI_UPDATER" src-tauri/tauri.conf.json; then
+            echo "::error::Updater placeholder still present in tauri.conf.json"
             exit 1
           fi
-          if grep -q "__TAURI_UPDATER_ENDPOINT" src-tauri/tauri.conf.json; then
-            echo "::error::ENDPOINT PLACEHOLDER STILL PRESENT — sed replacement failed!"
-            exit 1
-          fi
-          echo "✓ Pubkey and endpoints verified — no placeholders remaining"
-          echo "Pubkey starts with: $(grep -o '"pubkey": "[^"]*"' src-tauri/tauri.conf.json | cut -c1-60)..."
+          echo "Updater endpoint:"
+          grep -A2 '"endpoints"' src-tauri/tauri.conf.json
+
 
       - name: Get release notes
         id: notes
