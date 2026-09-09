@@ -5,6 +5,42 @@ numbering: this fork publishes to its own release channel, and the updater
 compares an installed build against these releases. Upstream's release history
 lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
 
+## [0.1.9]
+
+**Minimising no longer throws the map view away.** Restoring the window brought
+the map back at 1× as though it had reloaded, and the refit was expensive enough
+to feel like a freeze. The fit ran from an effect that depended on the viewport
+size, so *every* resize refit the map — and minimising and restoring is two of
+them. The map now fits once per zone; a resize keeps the view and only stops it
+drifting off screen.
+
+**The map draws even when the window is not painting.** First paint depended
+entirely on a `ResizeObserver` callback, and observer delivery is tied to the
+rendering lifecycle — an occluded or minimised window may not get one for a long
+time, leaving the map blank until it does. The viewport is now measured directly
+as well.
+
+**Markers outside the view are dropped once you zoom in.** Past 1.5× most of a
+zone is off screen, and keeping those elements mounted meant the browser laid
+out, painted and composited content nobody could see — felt as sluggishness
+across the whole window, not just the map. At 12× that is 522 markers instead of
+825, and 2,281 DOM nodes instead of 3,326. The cull keeps a full viewport of
+margin on each side so an ordinary pan moves through markers that are already
+mounted.
+
+**Switching tabs is instant.** The map is a route, so navigating away and back
+remounted it, and every visit re-ran the dataset load — a Tauri call plus four
+dynamic imports — before anything could render. It is resolved once per session
+now.
+
+**Zooming keeps up with the wheel.** Each wheel event read the view from the
+render it was created in, so events arriving faster than React re-renders
+collapsed into a single step. Sixteen events moved the map 1.4× instead of 12×.
+
+Also: the base image is no longer rendered underneath the tile layer once tiles
+cover the zone, and the map's floating labels dropped their backdrop blur, which
+repaints whatever is behind it on every frame that touches the window.
+
 ## [0.1.8]
 
 **The map was blurry and slow for the same reason, and it was my optimisation

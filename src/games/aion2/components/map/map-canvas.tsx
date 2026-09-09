@@ -71,9 +71,27 @@ export function MapCanvas({
   useLayoutEffect(() => {
     const host = hostRef.current;
     if (!host) return;
+
+    // Measure once, directly. ResizeObserver delivery is tied to the rendering
+    // lifecycle, so a window that is occluded, minimised or otherwise not
+    // painting may not get a callback for a long time -- and if first paint
+    // depends only on the observer, the map is simply blank until it does.
+    const rect = host.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      setSize({ width: rect.width, height: rect.height });
+    }
+
     const observer = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
-      setSize({ width, height });
+      setSize((current) => {
+        // Minimising reports 0x0. Keeping the last good viewport is what lets
+        // the view survive it -- but only once there *is* one: the observer's
+        // first callback can also be 0x0, before layout, and discarding that
+        // outright leaves the map with no size and nothing ever rendered.
+        if (width <= 0 || height <= 0) return current;
+        if (current.width === width && current.height === height) return current;
+        return { width, height };
+      });
     });
     observer.observe(host);
     return () => observer.disconnect();
@@ -87,9 +105,27 @@ export function MapCanvas({
     }
   }, [padding, size.height, size.width]);
 
+  /**
+   * Fit once per zone, and never again.
+   *
+   * This used to depend on `reset`, which depends on the viewport size -- so
+   * every resize refit the map. Minimising and restoring the window is two
+   * resizes, which is why a zoomed-in map came back at 1x as though it had
+   * reloaded.
+   */
+  const fittedZone = useRef<string | null>(null);
   useEffect(() => {
-    if (!dragRef.current) reset();
-  }, [reset, zone.id]);
+    if (size.width <= 0 || size.height <= 0) return;
+    if (fittedZone.current === zone.id) return;
+    fittedZone.current = zone.id;
+    setView(fitView(size.width, size.height, padding));
+  }, [padding, size.height, size.width, zone.id]);
+
+  /** A resize keeps the view; it only stops it drifting off screen. */
+  useEffect(() => {
+    if (size.width <= 0 || size.height <= 0) return;
+    setView((current) => (current ? constrainView(current, size.width, size.height) : current));
+  }, [size.height, size.width]);
 
   const fitted = size.width > 0 ? fitView(size.width, size.height, padding).scale : 1;
 
@@ -101,12 +137,20 @@ export function MapCanvas({
   const limits = { min: fitted * 0.9, max: fitted * maxZoom };
 
   const handleWheel = (event: React.WheelEvent) => {
-    if (!view) return;
     const rect = hostRef.current?.getBoundingClientRect();
     if (!rect) return;
     const factor = event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
-    const next = zoomAt(view, event.clientX - rect.left, event.clientY - rect.top, factor, limits);
-    setView(constrainView(next, size.width, size.height));
+    const anchorX = event.clientX - rect.left;
+    const anchorY = event.clientY - rect.top;
+
+    // Built from the latest view rather than the one this render closed over.
+    // Wheel events can arrive faster than React re-renders, and reading the
+    // stale value made a burst of them collapse into a single step.
+    setView((current) => {
+      if (!current) return current;
+      const next = zoomAt(current, anchorX, anchorY, factor, limits);
+      return constrainView(next, size.width, size.height);
+    });
   };
 
   const handlePointerDown = (event: React.PointerEvent) => {
@@ -147,7 +191,7 @@ export function MapCanvas({
     () =>
       markers.map((marker) => {
         const { u, v } = normalise(zone.bounds, marker.x, marker.y);
-        return { marker, left: `${u * 100}%`, top: `${v * 100}%` };
+        return { marker, u, v, left: `${u * 100}%`, top: `${v * 100}%` };
       }),
     [markers, zone.bounds]
   );
@@ -181,6 +225,32 @@ export function MapCanvas({
 
   /** Once tiles cover the zone, the 4096px base underneath is dead weight. */
   const tilesCover = Boolean(tileUrl) && zoomRatio >= TILE_FADE_IN_AT;
+
+  /**
+   * Markers outside the viewport, dropped once zoomed in.
+   *
+   * At fit everything is on screen and culling would only cost work, so this
+   * starts at 1.5x. Past that most of a zone is off screen, and keeping those
+   * elements mounted means the browser lays out, paints and composites content
+   * nobody can see -- which is felt as sluggishness in everything sharing the
+   * window, not just the map.
+   *
+   * The margin is a full viewport on each side, so an ordinary pan moves
+   * through already-mounted markers instead of reconciling the list every
+   * frame.
+   */
+  const visible = useMemo(() => {
+    if (!view || zoomRatio < 1.5) return placed;
+
+    const marginX = size.width;
+    const marginY = size.height;
+    const u0 = (-marginX - view.x) / view.scale;
+    const v0 = (-marginY - view.y) / view.scale;
+    const u1 = (size.width + marginX - view.x) / view.scale;
+    const v1 = (size.height + marginY - view.y) / view.scale;
+
+    return placed.filter((p) => p.u >= u0 && p.u <= u1 && p.v >= v0 && p.v <= v1);
+  }, [placed, size.height, size.width, view, zoomRatio]);
 
   /** Border strokes are in viewBox units, so they undo the viewBox scale. */
   const borderStroke = view ? (PLANE / view.scale) * 1.1 : 1;
@@ -234,15 +304,14 @@ export function MapCanvas({
             transform: `translate(${view.x}px, ${view.y}px)`,
           }}
         >
-          {zone.image ? (
+          {zone.image && !tilesCover ? (
             <img
               src={zone.image}
               alt={zone.name}
               className="pointer-events-none absolute inset-0 h-full w-full object-fill select-none"
               draggable={false}
-              style={{ visibility: tilesCover ? "hidden" : "visible" }}
             />
-          ) : (
+          ) : tilesCover ? null : (
             <div className="absolute inset-0 bg-[#0e1526]" />
           )}
 
@@ -286,7 +355,7 @@ export function MapCanvas({
             </svg>
           )}
 
-          {placed.map(({ marker, left, top }) => {
+          {visible.map(({ marker, left, top }) => {
             const category = categories.get(marker.category);
             const isCollected = collected.has(marker.id);
             // Found markers go neutral rather than merely fading: the map
@@ -332,7 +401,7 @@ export function MapCanvas({
 
       {!compact && (
         <>
-          <div className="pointer-events-none absolute top-3 left-3 max-w-[70%] truncate rounded-lg bg-black/60 px-2.5 py-1.5 text-xs text-white/70 backdrop-blur-sm">
+          <div className="pointer-events-none absolute top-3 left-3 max-w-[70%] truncate rounded-lg bg-black/75 px-2.5 py-1.5 text-xs text-white/70">
             {hovered ? (
               <span>
                 <span className="text-white">{hovered.name}</span>
@@ -347,12 +416,12 @@ export function MapCanvas({
           </div>
 
           <div className="absolute right-3 bottom-3 flex items-center gap-1.5">
-            <span className="rounded-lg bg-black/60 px-2 py-1 text-[11px] text-white/45 backdrop-blur-sm">
+            <span className="rounded-lg bg-black/75 px-2 py-1 text-[11px] text-white/45">
               {markers.length.toLocaleString()} shown · {view ? (view.scale / fitted).toFixed(1) : "1.0"}×
             </span>
             <button
               type="button"
-              className="rounded-lg bg-black/60 px-2.5 py-1 text-[11px] text-white/70 backdrop-blur-sm transition hover:bg-black/80 hover:text-white"
+              className="rounded-lg bg-black/75 px-2.5 py-1 text-[11px] text-white/70 transition hover:bg-black/90 hover:text-white"
               onClick={reset}
             >
               Reset view

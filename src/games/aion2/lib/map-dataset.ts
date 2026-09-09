@@ -27,7 +27,21 @@ type ExternalDataset = {
  * extended without rebuilding and reinstalling -- which matters because
  * refining it is an iterative job.
  */
-export async function loadMapDataset(): Promise<MapDataset> {
+/**
+ * Resolved once per session.
+ *
+ * The map page is a route, so navigating away and back remounts it. Without
+ * this, every visit re-ran the Tauri call and re-resolved four dynamic imports
+ * before anything could render -- which is what made switching tabs feel slow.
+ */
+let cached: Promise<MapDataset> | null = null;
+
+export function loadMapDataset(): Promise<MapDataset> {
+  cached ??= readMapDataset();
+  return cached;
+}
+
+async function readMapDataset(): Promise<MapDataset> {
   const [zones, categories, markers, borders] = await Promise.all([
     import("@/games/aion2/data/maps/zones.json").then((m) => m.default as MapZone[]),
     import("@/games/aion2/data/maps/categories.json").then((m) => m.default as MarkerCategory[]),
