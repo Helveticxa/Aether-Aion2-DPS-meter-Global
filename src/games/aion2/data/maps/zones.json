@@ -1,6 +1,7 @@
 [
   {
     "id": "world-l-a",
+    "code": "World_L_A",
     "name": "Verteron",
     "world": "elyos",
     "bounds": {
@@ -9,10 +10,12 @@
       "maxX": 8192,
       "maxY": 8192
     },
-    "image": "/aion2/maps/World_L_A.jpg"
+    "image": "/aion2/maps/World_L_A.jpg",
+    "tileGrid": 8
   },
   {
     "id": "world-l-b",
+    "code": "World_L_B",
     "name": "Eltnen",
     "world": "elyos",
     "bounds": {
@@ -21,10 +24,12 @@
       "maxX": 8192,
       "maxY": 8192
     },
-    "image": "/aion2/maps/World_L_B.jpg"
+    "image": "/aion2/maps/World_L_B.jpg",
+    "tileGrid": 8
   },
   {
     "id": "world-l-starter",
+    "code": "World_L_Starter",
     "name": "Poeta",
     "world": "elyos",
     "bounds": {
@@ -33,10 +38,12 @@
       "maxX": 4096,
       "maxY": 4096
     },
-    "image": "/aion2/maps/World_L_Starter.jpg"
+    "image": "/aion2/maps/World_L_Starter.jpg",
+    "tileGrid": 4
   },
   {
     "id": "world-d-a",
+    "code": "World_D_A",
     "name": "Altgard",
     "world": "asmodian",
     "bounds": {
@@ -45,10 +52,12 @@
       "maxX": 8192,
       "maxY": 8192
     },
-    "image": "/aion2/maps/World_D_A.jpg"
+    "image": "/aion2/maps/World_D_A.jpg",
+    "tileGrid": 8
   },
   {
     "id": "world-d-b",
+    "code": "World_D_B",
     "name": "Morheim",
     "world": "asmodian",
     "bounds": {
@@ -57,10 +66,12 @@
       "maxX": 8192,
       "maxY": 8192
     },
-    "image": "/aion2/maps/World_D_B.jpg"
+    "image": "/aion2/maps/World_D_B.jpg",
+    "tileGrid": 8
   },
   {
     "id": "world-d-starter",
+    "code": "World_D_Starter",
     "name": "Ishalgen",
     "world": "asmodian",
     "bounds": {
@@ -69,10 +80,12 @@
       "maxX": 5120,
       "maxY": 5120
     },
-    "image": "/aion2/maps/World_D_Starter.jpg"
+    "image": "/aion2/maps/World_D_Starter.jpg",
+    "tileGrid": 5
   },
   {
     "id": "abyss-reshanta-a",
+    "code": "Abyss_Reshanta_A",
     "name": "Lower Reshanta",
     "world": "abyss",
     "bounds": {
@@ -81,10 +94,12 @@
       "maxX": 4096,
       "maxY": 4096
     },
-    "image": "/aion2/maps/Abyss_Reshanta_A.jpg"
+    "image": "/aion2/maps/Abyss_Reshanta_A.jpg",
+    "tileGrid": 4
   },
   {
     "id": "abyss-reshanta-b",
+    "code": "Abyss_Reshanta_B",
     "name": "Middle Reshanta",
     "world": "abyss",
     "bounds": {
@@ -93,6 +108,7 @@
       "maxX": 2048,
       "maxY": 2048
     },
-    "image": "/aion2/maps/Abyss_Reshanta_B.jpg"
+    "image": "/aion2/maps/Abyss_Reshanta_B.jpg",
+    "tileGrid": 2
   }
 ]

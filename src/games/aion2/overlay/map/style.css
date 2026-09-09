@@ -143,6 +143,13 @@ body {
   pointer-events: none;
 }
 
+.map-tile {
+  position: absolute;
+  pointer-events: none;
+  /* Sits over the base image, so a slow tile shows the base rather than a hole. */
+  z-index: 1;
+}
+
 .map-grid {
   position: absolute;
   inset: 0;
@@ -155,17 +162,13 @@ body {
 
 .map-dot {
   position: absolute;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
   transform: translate(-50%, -50%);
-  border: 1.5px solid;
-  background: rgba(8, 12, 22, 0.82);
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+  /* No disc: a dark outline follows the glyph instead of boxing it in. */
+  filter: drop-shadow(0 0 1.2px rgba(0, 0, 0, 0.95)) drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.7));
 }
 
 .map-dot svg {
@@ -173,8 +176,7 @@ body {
 }
 
 .map-dot.is-found {
-  opacity: 0.5;
-  box-shadow: none;
+  opacity: 0.45;
 }
 
 /* A class that sets display outranks the UA rule for [hidden]. */
@@ -227,11 +229,6 @@ body {
 }
 
 .map-legend__swatch {
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  border: 1.5px solid;
-  background: rgba(8, 12, 22, 0.65);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -239,13 +236,12 @@ body {
 }
 
 .map-legend__swatch svg {
-  width: 9px;
-  height: 9px;
+  width: 13px;
+  height: 13px;
 }
 
 .map-legend__item.is-hidden .map-legend__swatch {
-  color: #5b6472 !important;
-  border-color: #3a4250 !important;
+  color: #4d5563 !important;
 }
 
 .map-footer {

@@ -9,6 +9,11 @@ import {
   zoomAt,
   type View,
 } from "@/games/aion2/lib/map-projection";
+import {
+  BASE_SHARP_UNTIL,
+  TILED_SHARP_UNTIL,
+  TILE_FADE_IN_AT,
+} from "@/games/aion2/lib/map-tiles";
 
 /**
  * The plane's intrinsic size. Any value works; it exists only so markers can be
@@ -17,15 +22,11 @@ import {
 const PLANE = 1000;
 
 const ZOOM_STEP = 1.18;
-/**
- * Past this the map image is being upscaled and turns to mush -- the sources are
- * 4096px, half the resolution of the largest zones. Markers stay crisp, being
- * vector, so the ceiling is set by the image rather than by the maths.
- */
-const MAX_ZOOM = 12;
 
 export type MapCanvasProps = {
   zone: MapZone;
+  /** Renders the high-resolution tile layer when the set is complete. */
+  tileUrl?: ((col: number, row: number) => string) | null;
   markers: MapMarker[];
   borders: MapBorder[];
   categories: Map<string, MarkerCategory>;
@@ -59,6 +60,7 @@ export function MapCanvas({
   onToggleCollected,
   showBorders = true,
   compact = false,
+  tileUrl = null,
 }: MapCanvasProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -90,7 +92,13 @@ export function MapCanvas({
   }, [reset, zone.id]);
 
   const fitted = size.width > 0 ? fitView(size.width, size.height, padding).scale : 1;
-  const limits = { min: fitted * 0.9, max: fitted * MAX_ZOOM };
+
+  // The zoom ceiling tracks the sharpness actually available rather than a
+  // fixed number: letting someone zoom to 32x on a 4096px image only shows
+  // them mush, and capping at 12x with tiles installed throws away detail
+  // they have already downloaded.
+  const maxZoom = tileUrl ? TILED_SHARP_UNTIL * 2 : BASE_SHARP_UNTIL * 1.5;
+  const limits = { min: fitted * 0.9, max: fitted * maxZoom };
 
   const handleWheel = (event: React.WheelEvent) => {
     if (!view) return;
@@ -159,7 +167,7 @@ export function MapCanvas({
   );
 
   const dotSize = compact ? 15 : 21;
-  const glyphSize = compact ? 9 : 12;
+  const glyphSize = compact ? 14 : 20;
 
   // Markers shrink as the map zooms out. Holding them at a constant screen size
   // turns a zone with two thousand of them into a single blob of overlapping
@@ -168,6 +176,36 @@ export function MapCanvas({
   const zoomRatio = view ? view.scale / fitted : 1;
   const markerSize = Math.min(dotSize, Math.max(dotSize * 0.5, dotSize * 0.5 * zoomRatio));
   const inverse = view ? ((markerSize / dotSize) * PLANE) / view.scale : 1;
+
+  /**
+   * Which tiles intersect the viewport.
+   *
+   * A zone is up to 64 tiles; rendering all of them would have the browser
+   * decode sixty-odd megabytes of image for a view that shows four. Padding by
+   * one tile means a pan reveals a loaded neighbour rather than an empty
+   * square.
+   */
+  const visibleTiles = useMemo(() => {
+    const grid = zone.tileGrid;
+    if (!tileUrl || !view || !grid || zoomRatio < TILE_FADE_IN_AT) return [];
+
+    const pad = 1 / grid;
+    const u0 = (0 - view.x) / view.scale - pad;
+    const v0 = (0 - view.y) / view.scale - pad;
+    const u1 = (size.width - view.x) / view.scale + pad;
+    const v1 = (size.height - view.y) / view.scale + pad;
+
+    const out: Array<{ col: number; row: number }> = [];
+    for (let row = 0; row < grid; row += 1) {
+      for (let col = 0; col < grid; col += 1) {
+        const left = col / grid;
+        const top = row / grid;
+        if (left + pad < u0 || left > u1 || top + pad < v0 || top > v1) continue;
+        out.push({ col, row });
+      }
+    }
+    return out;
+  }, [size.height, size.width, tileUrl, view, zone.tileGrid, zoomRatio]);
 
   return (
     <div
@@ -202,6 +240,27 @@ export function MapCanvas({
             <div className="absolute inset-0 bg-[#0e1526]" />
           )}
 
+          {/* High-resolution layer, drawn over the base rather than replacing
+              it: if a tile is slow or missing, the base still shows through
+              instead of leaving a hole. */}
+          {tileUrl &&
+            visibleTiles.map(({ col, row }) => (
+              <img
+                key={`${col}-${row}`}
+                src={tileUrl(col, row)}
+                alt=""
+                loading="lazy"
+                draggable={false}
+                className="pointer-events-none absolute select-none"
+                style={{
+                  left: `${(col / zone.tileGrid) * 100}%`,
+                  top: `${(row / zone.tileGrid) * 100}%`,
+                  width: `${100 / zone.tileGrid}%`,
+                  height: `${100 / zone.tileGrid}%`,
+                }}
+              />
+            ))}
+
           {showBorders && borderPaths.length > 0 && (
             <svg
               viewBox={`0 0 ${PLANE} ${PLANE}`}
@@ -233,7 +292,7 @@ export function MapCanvas({
               <button
                 key={marker.id}
                 type="button"
-                className="absolute flex items-center justify-center rounded-full border-[1.5px] hover:z-10"
+                className="absolute flex items-center justify-center hover:z-10"
                 style={{
                   left,
                   top,
@@ -243,9 +302,11 @@ export function MapCanvas({
                   marginTop: -dotSize / 2,
                   transform: "scale(var(--inv))",
                   color: tint,
-                  borderColor: tint,
-                  background: "rgba(8,12,22,0.85)",
-                  opacity: isCollected ? 0.5 : 1,
+                  // No disc behind the glyph. The disc was carrying legibility
+                  // over a busy map, so a dark outline takes that job instead --
+                  // it follows the glyph rather than boxing it in.
+                  filter: "drop-shadow(0 0 1.2px rgba(0,0,0,0.95)) drop-shadow(0 1px 1.5px rgba(0,0,0,0.7))",
+                  opacity: isCollected ? 0.45 : 1,
                 }}
                 title={marker.name}
                 onPointerEnter={() => setHovered(marker)}
@@ -310,7 +371,7 @@ export function MarkerGlyph({ shape, size = 12 }: { shape?: string; size?: numbe
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={2}
+      strokeWidth={2.2}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden

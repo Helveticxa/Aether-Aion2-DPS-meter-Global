@@ -1,5 +1,6 @@
 pub mod aion2_focus;
 pub mod aion2_map;
+pub mod aion2_map_tiles;
 pub mod aion2_overlay;
 pub mod http;
 pub mod logger;

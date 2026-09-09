@@ -184,10 +184,15 @@ export function toDataset(library) {
     const zoneId = slug(map.code);
     zones.push({
       id: zoneId,
+      // The source map code, which is also the tile directory and file prefix.
+      code: map.code,
       name: en(map.label),
       world: FACTION_TO_WORLD[map.faction.toLowerCase()] ?? "elyos",
       bounds: { minX: 0, minY: 0, maxX: map.size, maxY: map.size },
       image: `/aion2/maps/${map.code}.jpg`,
+      // Tiles are 1024px each, so a zone of N px is an (N/1024) square grid.
+      // At full grid a zone is its native 8192px -- twice the bundled JPEG.
+      tileGrid: Math.max(1, Math.round(map.size / 1024)),
     });
 
     for (const subtype of map.subtypes) {

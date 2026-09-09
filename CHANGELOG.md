@@ -5,6 +5,38 @@ numbering: this fork publishes to its own release channel, and the updater
 compares an installed build against these releases. Upstream's release history
 lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
 
+## [0.1.7]
+
+**Updates no longer fail on the WinDivert driver.** Installing 0.1.6 over 0.1.5
+stopped with *"Error opening file for writing: WinDivert64.sys"*, and clicking
+Ignore left a new executable beside an old driver.
+
+Windows locks the image of a loaded kernel driver, and Aether's own startup
+check is what loads it: probing WinDivert means calling `WinDivertOpen`, which
+starts the service, and closing the handle afterwards does not unload it. So on
+any machine that had run Aether once, the file was locked by the time the next
+update arrived. The installer now stops and deregisters the driver before
+touching files — and does the same on uninstall, which previously left the
+service registered against a path that no longer existed.
+
+**Full-resolution maps.** The bundled images are 4096px and soften past about
+8×. The source's own tiles are 1024px each on grids up to 8×8, which
+reconstructs a zone at its native 8192px — twice the linear resolution, and the
+most detail that exists. All eight zones would be roughly 52 MB, so tiles are
+optional and per zone: the map panel offers to download the zone you are looking
+at, and the viewer layers them over the base once you zoom in far enough to tell
+the difference. The zoom ceiling follows what is actually installed — 12× on the
+base image, 32× with tiles — rather than a fixed number, so it never invites you
+into mush or holds you back from detail you already have.
+
+The minimap overlay does the same, and picks up whatever the map page has
+downloaded.
+
+**Markers are pure glyphs.** The dark disc and coloured ring are gone. The disc
+was carrying legibility over a busy map, so a dark outline that follows the
+glyph does that job instead — the shape stays readable without being boxed in.
+The legend matches.
+
 ## [0.1.6]
 
 **An interactive map.** A new tab beside Home, with an always-on-top minimap

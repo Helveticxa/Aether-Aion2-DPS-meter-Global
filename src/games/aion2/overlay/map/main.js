@@ -15,6 +15,14 @@ import {
 } from "@/games/aion2/lib/map-dataset";
 import { shapeIconSvg } from "@/games/aion2/lib/map-icons";
 import {
+  BASE_SHARP_UNTIL,
+  TILED_SHARP_UNTIL,
+  TILE_FADE_IN_AT,
+  fetchTiles,
+  tileUrlBuilder,
+  tilesComplete,
+} from "@/games/aion2/lib/map-tiles";
+import {
   constrainView,
   fitView,
   normalise,
@@ -50,6 +58,8 @@ let view = null;
 let dots = [];
 let drag = null;
 let alwaysOnTop = true;
+let tileUrl = null;
+let tileEls = new Map();
 
 function stageSize() {
   return { width: $stage.clientWidth, height: $stage.clientHeight };
@@ -90,6 +100,8 @@ function render() {
   const fitted = fitView(width, height, 4).scale;
   const dotSize = Math.min(15, Math.max(7, (7 * view.scale) / fitted));
   const glyph = Math.round(dotSize * 0.62);
+
+  renderTiles(view.scale / fitted);
 
   // Reuse the dot elements rather than rebuilding the list every frame: this
   // runs on every pointermove, and churning hundreds of nodes there is what
@@ -139,6 +151,62 @@ function render() {
   $empty.hidden = markers.length > 0;
 }
 
+/**
+ * The high-resolution layer, drawn inside the plane over the base image.
+ *
+ * Only tiles that intersect the viewport are kept in the DOM: a zone is up to
+ * 64 of them and this runs on every pan. Elements are cached by key so a pan
+ * reuses what is already decoded instead of reloading it.
+ */
+function renderTiles(zoomRatio) {
+  if (!tileUrl || !zone?.tileGrid || zoomRatio < TILE_FADE_IN_AT) {
+    if (tileEls.size > 0) {
+      for (const el of tileEls.values()) el.remove();
+      tileEls.clear();
+    }
+    return;
+  }
+
+  const grid = zone.tileGrid;
+  const { width, height } = stageSize();
+  const pad = 1 / grid;
+  const u0 = (0 - view.x) / view.scale - pad;
+  const v0 = (0 - view.y) / view.scale - pad;
+  const u1 = (width - view.x) / view.scale + pad;
+  const v1 = (height - view.y) / view.scale + pad;
+
+  const wanted = new Set();
+  for (let row = 0; row < grid; row += 1) {
+    for (let col = 0; col < grid; col += 1) {
+      const left = col / grid;
+      const top = row / grid;
+      if (left + pad < u0 || left > u1 || top + pad < v0 || top > v1) continue;
+
+      const key = `${col}-${row}`;
+      wanted.add(key);
+      if (tileEls.has(key)) continue;
+
+      const img = document.createElement("img");
+      img.className = "map-tile";
+      img.src = tileUrl(col, row);
+      img.draggable = false;
+      img.style.left = `${left * 100}%`;
+      img.style.top = `${top * 100}%`;
+      img.style.width = `${100 / grid}%`;
+      img.style.height = `${100 / grid}%`;
+      $plane.appendChild(img);
+      tileEls.set(key, img);
+    }
+  }
+
+  for (const [key, el] of tileEls) {
+    if (!wanted.has(key)) {
+      el.remove();
+      tileEls.delete(key);
+    }
+  }
+}
+
 function renderZones() {
   $zoneRow.replaceChildren();
   for (const z of dataset.zones) {
@@ -148,9 +216,13 @@ function renderZones() {
     button.addEventListener("click", () => {
       zone = z;
       $zoneName.textContent = z.name;
+      for (const el of tileEls.values()) el.remove();
+      tileEls.clear();
+      tileUrl = null;
       renderZones();
       renderLegend();
       resetView();
+      void loadTilesForZone();
     });
     $zoneRow.appendChild(button);
   }
@@ -198,9 +270,10 @@ $stage.addEventListener("wheel", (event) => {
   const rect = $stage.getBoundingClientRect();
   const factor = event.deltaY < 0 ? 1.18 : 1 / 1.18;
   const { width, height } = stageSize();
-  // Same ceiling as the main viewer: past this the 4096px map is upscaled mush.
   const fitted = fitView(width, height, 4).scale;
-  const limits = { min: fitted * 0.9, max: fitted * 12 };
+  // Follows the sharpness actually installed, same rule as the main viewer.
+  const maxZoom = tileUrl ? TILED_SHARP_UNTIL * 2 : BASE_SHARP_UNTIL * 1.5;
+  const limits = { min: fitted * 0.9, max: fitted * maxZoom };
   view = constrainView(
     zoomAt(view, event.clientX - rect.left, event.clientY - rect.top, factor, limits),
     width,
@@ -291,6 +364,16 @@ async function start() {
   renderZones();
   renderLegend();
   resetView();
+  void loadTilesForZone();
+}
+
+/** Picks up tiles the map page downloaded; the overlay never fetches them. */
+async function loadTilesForZone() {
+  if (!zone?.code || !zone.tileGrid) return;
+  const result = await fetchTiles(zone.code, zone.tileGrid);
+  tileUrl =
+    result && tilesComplete(result.status) ? tileUrlBuilder(result.dir, zone.code) : null;
+  render();
 }
 
 void start();

@@ -25,9 +25,19 @@ export type WorldBounds = {
 
 export type MapZone = {
   id: string;
+  /**
+   * The source map code, e.g. `World_L_A`. Also the tile directory and the
+   * tile filename prefix.
+   */
+  code: string;
   name: string;
   world: World;
   bounds: WorldBounds;
+  /**
+   * Side of the high-resolution tile grid. Tiles are 1024px each, so a grid of
+   * 8 reconstructs the zone at its native 8192px -- twice the bundled image.
+   */
+  tileGrid: number;
   /**
    * Path to the zone image, served from `public/`. Absent until a map has been
    * added -- the viewer draws a calibration grid instead, so a zone with

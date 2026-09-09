@@ -1,6 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Eye, EyeOff, Loader2, Map as MapIcon, PictureInPicture2, Search } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  HardDriveDownload,
+  Loader2,
+  Map as MapIcon,
+  PictureInPicture2,
+  Search,
+  Sparkles,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -18,6 +27,7 @@ import {
   saveCollected,
   saveHidden,
 } from "@/games/aion2/lib/map-dataset";
+import { formatBytes, useMapTiles } from "@/games/aion2/lib/map-tiles";
 import { cn } from "@/lib/utils";
 
 const WORLD_LABELS: Record<string, string> = {
@@ -63,6 +73,7 @@ export default function InteractiveMapPage() {
   }, []);
 
   const zone = dataset?.zones.find((z) => z.id === zoneId) ?? dataset?.zones[0] ?? null;
+  const tiles = useMapTiles(zone);
 
   const categoryIndex = useMemo(() => {
     const index = new Map<string, MarkerCategory>();
@@ -271,14 +282,10 @@ export default function InteractiveMapPage() {
                         )}
                       >
                         <span
-                          className="flex size-5 shrink-0 items-center justify-center rounded-full border-[1.5px]"
-                          style={{
-                            color: isHidden ? "#5b6472" : category.color,
-                            borderColor: isHidden ? "#3a4250" : category.color,
-                            background: "rgba(8,12,22,0.65)",
-                          }}
+                          className="flex size-5 shrink-0 items-center justify-center"
+                          style={{ color: isHidden ? "#4d5563" : category.color }}
                         >
-                          <MarkerGlyph shape={category.shape} size={11} />
+                          <MarkerGlyph shape={category.shape} size={17} />
                         </span>
                         <span className="min-w-0 flex-1 truncate text-left">{category.label}</span>
                         <span className="text-white/35">{counts.get(category.id)}</span>
@@ -294,6 +301,61 @@ export default function InteractiveMapPage() {
               </div>
             );
           })}
+        </section>
+
+        {/* High-resolution tiles are optional and per zone: all eight would be
+            about 52 MB against a 30 MB installer, so they are fetched for the
+            zones someone actually uses. */}
+        <section className="shrink-0 rounded-lg border border-white/8 bg-white/[0.03] px-2.5 py-2">
+          {tiles.ready ? (
+            <div className="flex items-center justify-between gap-2 text-[11px]">
+              <span className="flex items-center gap-1.5 text-cyan-200/80">
+                <Sparkles className="size-3" />
+                Full resolution ({formatBytes(tiles.status?.bytes ?? 0)})
+              </span>
+              <button
+                type="button"
+                className="text-white/35 underline decoration-white/15 underline-offset-2 transition hover:text-white/70"
+                onClick={() => void tiles.remove()}
+              >
+                remove
+              </button>
+            </div>
+          ) : tiles.downloading ? (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between text-[11px] text-white/60">
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="size-3 animate-spin" />
+                  Downloading tiles
+                </span>
+                <span className="text-white/35">
+                  {tiles.progress?.done ?? 0} / {tiles.progress?.total ?? 0}
+                </span>
+              </div>
+              <div className="h-1 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-cyan-300/80 transition-[width]"
+                  style={{
+                    width: `${Math.round(((tiles.progress?.done ?? 0) / Math.max(1, tiles.progress?.total ?? 1)) * 100)}%`,
+                  }}
+                />
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 text-left text-[11px] text-white/60 transition hover:text-white"
+              onClick={() => void tiles.download()}
+            >
+              <HardDriveDownload className="size-3.5 shrink-0 text-cyan-300/70" />
+              <span className="min-w-0 flex-1">
+                <span className="block">Download full-resolution map</span>
+                <span className="block text-[10px] text-white/30">
+                  {zone.tileGrid * zone.tileGrid} tiles · sharp to {Math.round(16)}× instead of 8×
+                </span>
+              </span>
+            </button>
+          )}
         </section>
 
         {/* The marker database is not ours. Saying so where the map is used,
@@ -338,6 +400,7 @@ export default function InteractiveMapPage() {
         <div className="min-h-0 flex-1">
           <MapCanvas
             zone={zone}
+            tileUrl={tiles.ready ? tiles.urlFor : null}
             markers={shown}
             borders={zoneBorders}
             categories={categoryIndex}
