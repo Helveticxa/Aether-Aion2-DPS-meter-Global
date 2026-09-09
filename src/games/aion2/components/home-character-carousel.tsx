@@ -12,7 +12,7 @@ import { fetchFengwoV2 } from "@/games/aion2/lib/fetchFengwo";
 import { useAppTranslation } from "@/hooks/use-app-translation";
 import { getServerName, getServerShortName } from "@/games/aion2/lib/servers";
 
-import type { HistoryRecord, PlayerOverviewStat } from "@/games/aion2/types/aion2dps";
+import type { HistoryRecord, MainCharacter, PlayerOverviewStat } from "@/games/aion2/types/aion2dps";
 
 type FengwoResult = {
   queryResult?: {
@@ -162,6 +162,39 @@ function buildActors(records: HistoryRecord[]) {
   return Array.from(actors.values()).sort((a, b) => b.lastSeenAt - a.lastSeenAt);
 }
 
+// The character the running meter is following, which is known from the first
+// own-player packet -- long before any combat has been saved to history.
+///
+// Without this the card stayed blank through an entire play session and only
+// filled in once a fight had ended, which reads as the app not seeing you at
+// all.
+function withLiveCharacter(actors: HistoryActor[], live: MainCharacter | null) {
+  if (!live?.name) {
+    return actors;
+  }
+
+  const serverRaw = live.serverId ?? "";
+  const existing = actors.find(
+    (actor) => actor.actorName === live.name && (!serverRaw || actor.serverRaw === serverRaw)
+  );
+
+  if (existing) {
+    return actors;
+  }
+
+  const placeholder: HistoryActor = {
+    id: `live-${live.name}-${serverRaw || "unknown"}`,
+    actorId: live.actorId,
+    actorName: live.name,
+    serverId: parseServerId(serverRaw),
+    serverRaw,
+    lastSeenAt: Date.now(),
+    records: [],
+  };
+
+  return [placeholder, ...actors];
+}
+
 function buildRecentBossSummaries(actor: HistoryActor | null): RecentBossSummary[] {
   if (!actor) {
     return [];
@@ -207,6 +240,7 @@ function buildRecentBossSummaries(actor: HistoryActor | null): RecentBossSummary
 export function HomeCharacterCarousel() {
   const { t } = useAppTranslation();
   const [records, setRecords] = useState<HistoryRecord[]>([]);
+  const [liveCharacter, setLiveCharacter] = useState<MainCharacter | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [switchOpen, setSwitchOpen] = useState(false);
   const [deletingActorId, setDeletingActorId] = useState<string | null>(null);
@@ -216,12 +250,46 @@ export function HomeCharacterCarousel() {
     result: null,
   });
 
-  const actors = useMemo(() => buildActors(records), [records]);
+  const actors = useMemo(
+    () => withLiveCharacter(buildActors(records), liveCharacter),
+    [records, liveCharacter]
+  );
   const activeActor = actors[activeIndex] ?? null;
   const activeServerName = activeActor?.serverId
     ? getServerShortName(activeActor.serverId)
     : t("aion2Home.unknownServer");
   const recentBosses = useMemo(() => buildRecentBossSummaries(activeActor), [activeActor]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadLive() {
+      try {
+        const next = await invoke<MainCharacter | null>("get_main_character");
+        if (mounted) {
+          setLiveCharacter(next ?? null);
+        }
+      } catch (error) {
+        console.error("load main character failed:", error);
+      }
+    }
+
+    void loadLive();
+    const timer = window.setInterval(loadLive, 5000);
+
+    let unlistenStatus: (() => void) | undefined;
+    void listen("dps-meter-status", () => {
+      void loadLive();
+    }).then((handler) => {
+      unlistenStatus = handler;
+    });
+
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+      unlistenStatus?.();
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;

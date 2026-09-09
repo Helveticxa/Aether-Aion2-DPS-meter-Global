@@ -54,6 +54,7 @@ interface OverlaySettings {
   showServer: boolean;
   showDamage: boolean;
   showDps: boolean;
+  showCombatPower: boolean;
   pctMode: "contribution" | "share";
   showBossHp: boolean;
   maskNicknames: boolean;
@@ -97,7 +98,7 @@ export interface AppConfig {
 // =============================================================================
 
 const DEFAULTS: AppConfig = {
-  version: 2,
+  version: 3,
   app: {
     theme: "system",
     language: "en",
@@ -129,13 +130,14 @@ const DEFAULTS: AppConfig = {
       fontFamily: "Consolas",
       locked: false,
       alwaysOnTop: false,
-      background: [0, 0, 0, 102],
+      background: [8, 10, 16, 56],
       mainPlayerColor: [193, 81, 21, 204],
       otherPlayerColor: [46, 86, 142, 120],
       showPlayerName: true,
       showServer: false,
       showDamage: false,
       showDps: true,
+      showCombatPower: true,
       pctMode: "contribution",
       showBossHp: false,
       maskNicknames: false,
@@ -173,8 +175,41 @@ const STORAGE_KEY = "app-config";
  * to be wrong stays wrong forever for anyone who has already run the app. These
  * three had to be corrected rather than merely re-defaulted.
  */
+// The old overlay background, kept so the v3 migration can tell "never touched
+// it" apart from "chose black on purpose".
+const LEGACY_OVERLAY_BACKGROUND = [0, 0, 0, 102];
+
 function migrate(config: AppConfig, storedVersion: number): AppConfig {
-  if (storedVersion >= 2) return config;
+  let next = config;
+
+  if (storedVersion < 3) {
+    // v3: the overlay default sat at 40% black, which reads as a black box laid
+    // over the game rather than an overlay. Only replace it where it is still
+    // the old default -- a background someone picked deliberately is theirs.
+    const current = next.aion2.overlay.background;
+    const untouched =
+      Array.isArray(current) &&
+      current.length === LEGACY_OVERLAY_BACKGROUND.length &&
+      current.every((value, index) => value === LEGACY_OVERLAY_BACKGROUND[index]);
+
+    next = {
+      ...next,
+      version: 3,
+      aion2: {
+        ...next.aion2,
+        overlay: {
+          ...next.aion2.overlay,
+          background: untouched
+            ? [...DEFAULTS.aion2.overlay.background]
+            : next.aion2.overlay.background,
+        },
+      },
+    };
+  }
+
+  if (storedVersion >= 2) return next;
+
+  config = next;
 
   // v2: the meter shipped filtering everything that is not a boss, inherited
   // from upstream. Levelling on ordinary mobs showed a permanently empty meter
@@ -183,7 +218,7 @@ function migrate(config: AppConfig, storedVersion: number): AppConfig {
   // player packet.
   return {
     ...config,
-    version: 2,
+    version: 3,
     aion2: {
       ...config.aion2,
       backend: {

@@ -224,6 +224,17 @@ pub struct MainActorDetectedPayload {
     pub sid: Option<String>,
 }
 
+/// The live identity of the player running Aether.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MainCharacter {
+    pub actor_id: u32,
+    pub name: String,
+    pub server_id: Option<String>,
+    pub actor_class: Option<String>,
+    pub combat_power: Option<u64>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BuffOverlayContext {
@@ -1033,6 +1044,25 @@ impl DataStorage {
 
     pub fn main_actor_name(&self) -> Option<String> {
         self.inner.read().unwrap().main_actor_name.clone()
+    }
+
+    /// Who the meter currently believes you are.
+    ///
+    /// The Home card built its character list purely from finished combat
+    /// records, so it stayed empty until a fight had been fought and saved --
+    /// while the meter had known exactly who you were since the first own-player
+    /// packet. This reads that live state instead.
+    pub fn main_character(&self) -> Option<MainCharacter> {
+        let inner = self.inner.read().unwrap();
+        let actor_id = inner.main_actor_id?;
+        let name = inner.main_actor_name.clone()?;
+        Some(MainCharacter {
+            actor_id,
+            name,
+            server_id: inner.actor_id_server_map.get(&actor_id).cloned(),
+            actor_class: inner.actor_id_class_map.get(&actor_id).cloned(),
+            combat_power: inner.main_actor_combat_power,
+        })
     }
 
     pub fn last_target(&self) -> Option<u32> {

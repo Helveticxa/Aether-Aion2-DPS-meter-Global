@@ -11,7 +11,9 @@ use crate::dps_meter::preflight;
 use crate::dps_meter::capture::census::{self, CensusSnapshot};
 use crate::dps_meter::capture::recorder::{RecordingFile, RecordingStatus};
 use crate::dps_meter::region::{self, RegionStatus};
-use crate::dps_meter::storage::data_storage::{BuffOverlayContext, FieldBossTimerSnapshot};
+use crate::dps_meter::storage::data_storage::{
+    BuffOverlayContext, FieldBossTimerSnapshot, MainCharacter,
+};
 
 /// What [`install_npcap`] did, step by step, so a failure can be read off the
 /// screen instead of guessed at.
@@ -496,3 +498,8 @@ pub async fn install_npcap() -> Result<NpcapInstallOutcome, String> {
     }
 }
 
+
+#[tauri::command]
+pub fn get_main_character(meter: State<'_, DpsMeter>) -> Result<Option<MainCharacter>, String> {
+    Ok(meter.main_character())
+}

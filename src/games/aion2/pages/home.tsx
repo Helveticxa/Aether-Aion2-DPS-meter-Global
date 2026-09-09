@@ -51,16 +51,16 @@ export default function HomePage() {
   return (
     <div className="relative h-full w-full overflow-hidden bg-transparent text-white">
       <main className="absolute inset-0 z-20 overflow-hidden">
-        <div className="h-full overflow-y-auto px-10 pt-10 pb-0">
+        <div className="h-full overflow-y-auto px-10 pt-10 pb-[168px]">
           <div className="flex w-full items-start justify-end">
-            <div className="ml-auto w-[400px] shrink-0">
+            <div className="ml-auto w-full max-w-[400px] min-w-0">
               <HomeCharacterCarousel />
             </div>
           </div>
         </div>
       </main>
 
-      <section className="absolute right-10 bottom-10 z-30 flex flex-col items-end gap-2">
+      <section className="absolute right-10 bottom-10 z-30 flex max-w-[calc(100%-5rem)] flex-col items-end gap-2">
         <div className="flex items-center">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -105,13 +105,13 @@ export default function HomePage() {
           <DpsMeterLauncherButton />
         </div>
 
-        <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-white drop-shadow">
+        <label className="flex max-w-full cursor-pointer items-center gap-2 text-right text-sm font-semibold text-white drop-shadow">
           <button
             type="button"
             onClick={() => {
               void updateSettings("aion2.autoCloseMain", !config.aion2.autoCloseMain);
             }}
-            className="flex h-4 w-4 items-center justify-center rounded-sm border-2 border-white"
+            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border-2 border-white"
             aria-label="Close the main window once the overlay starts"
           >
             {config.aion2.autoCloseMain ? (

@@ -165,6 +165,8 @@
       "overlayShowDamageDesc": "Controls whether accumulated damage is shown on each row. It does not affect DPS or percentage calculations.",
       "overlayShowDps": "Show DPS",
       "overlayShowDpsDesc": "Controls whether realtime DPS is shown on each row. Disable it to reduce right-side information density.",
+      "overlayShowCombatPower": "Show combat power",
+      "overlayShowCombatPowerDesc": "Display each player's combat power beside their name, where the game has reported it.",
       "overlayPctMode": "Percentage mode",
       "overlayPctModeDesc": "Contribution is based on the visible list. Share is based on the full combat total.",
       "overlayPctContribution": "Contribution",

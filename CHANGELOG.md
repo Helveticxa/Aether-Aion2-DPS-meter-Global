@@ -5,6 +5,49 @@ numbering: this fork publishes to its own release channel, and the updater
 compares an installed build against these releases. Upstream's release history
 lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
 
+## [0.1.12]
+
+**The Home card now shows who you are playing, immediately.** It built its
+character list purely out of saved combat records, so it stayed blank until a
+fight had been finished and written to history — through an entire session, if
+you were levelling. The meter has known your name, server, class and combat
+power since the first own-player packet; the card reads that instead.
+
+**A Chinese mob name no longer replaces the window title.** Hitting a target
+overwrote "AETHER METER" with the target's name, taken from the bundled
+Traditional Chinese NPC catalogue — which reads as the app having switched
+language rather than as the name of what you are fighting. The target now has a
+slot of its own beside the title, and the title stays put.
+
+**The DPS Log window was showing an empty pane, and it was not broken.** It only
+ever listened for live events, and nearly everything is logged at startup and
+when capture begins — so opening the window afterwards, which is when you would
+open it, showed nothing at all. It now backfills the last 500 lines from disk,
+and its empty state says what empty means. The log file also rolls over at 4 MB
+instead of growing for the life of the install.
+
+**Combat power is shown next to each player's name**, where the game has
+reported it. It has been carried on every player stat since the fork with
+nothing displaying it. It sits with the name rather than among the damage
+numbers, because it says who someone is, not how they are doing.
+
+**CPU and memory now report the whole machine.** Aether's own footprint is a
+fraction of a percent, so its figure never answered the question anyone glancing
+at a status bar mid-fight is actually asking. Memory switches to GB once MB
+stops being readable, and hovering gives used against total.
+
+### Appearance
+
+The overlay background defaulted to 40% black, which reads as a black box laid
+over the game rather than an overlay. It is lighter and cooler now. A background
+that was deliberately changed is left alone — the migration only replaces the
+value where it is still the old default.
+
+The Home screen no longer overlaps itself in a small window. The launcher block
+is positioned over the scrolling area, and the area reserved no room for it, so
+the character card slid underneath the Start button as soon as the window was
+short enough. The card is also capped rather than fixed at 400px.
+
 ## [0.1.11]
 
 **The meter was set to ignore everything that is not a boss.** `Boss only` and

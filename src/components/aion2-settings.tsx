@@ -701,6 +701,16 @@ export function Aion2Settings() {
           </SettingRow>
 
           <SettingRow
+            title={t("settings.aion2.overlayShowCombatPower")}
+            description={t("settings.aion2.overlayShowCombatPowerDesc")}
+          >
+            <Switch
+              checked={config.aion2.overlay.showCombatPower}
+              onCheckedChange={(v) => updateSettings("aion2.overlay.showCombatPower", v)}
+            />
+          </SettingRow>
+
+          <SettingRow
             title={t("settings.aion2.overlayDamageFormat")}
             description={t("settings.aion2.overlayDamageFormatDesc")}
           >

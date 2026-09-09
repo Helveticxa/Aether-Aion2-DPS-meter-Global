@@ -96,3 +96,13 @@ export interface MainActorRecord {
   serverId: number;
   lastSeenAt: number;
 }
+
+// The character the running meter is following, read live rather than
+// reconstructed from saved combat records.
+export type MainCharacter = {
+  actorId: number;
+  name: string;
+  serverId: string | null;
+  actorClass: string | null;
+  combatPower: number | null;
+};

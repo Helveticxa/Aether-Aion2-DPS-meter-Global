@@ -45,6 +45,7 @@ body {
 }
 
 .title-bar__label {
+  flex-shrink: 0;
   color: #ffd700;
   font-family: var(--font-family);
   font-size: 12px;
@@ -80,6 +81,7 @@ body {
 .title-bar__drag {
   cursor: grab;
   flex: 1;
+  min-width: 0;
   height: 100%;
   display: flex;
   align-items: center;
@@ -554,4 +556,31 @@ body:not(.has-players) .player-list {
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+/* Combat power, beside the name rather than among the damage numbers:
+   it identifies the player, it is not part of their performance. */
+.player-row__power {
+  color: #f4c06a;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  margin-left: 6px;
+  opacity: 0.85;
+}
+
+/* What you are fighting, kept apart from the window's own name so a
+   Traditional Chinese mob name never reads as the app changing language. */
+.title-bar__target {
+  color: #cfd3dc;
+  font-family: var(--font-family);
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

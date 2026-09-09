@@ -176,7 +176,7 @@ export function DpsMeterLauncherButton() {
       disabled={isPending}
       onClick={handleToggle}
       className={cn(
-        "flex h-[54px] w-[260px] items-center justify-center gap-3 rounded-r-md px-4 shadow-xl transition disabled:pointer-events-none disabled:opacity-70",
+        "flex h-[54px] w-[260px] max-w-full min-w-0 items-center justify-center gap-3 rounded-r-md px-4 shadow-xl transition disabled:pointer-events-none disabled:opacity-70",
         isDpsMeterRunning
           ? "bg-red-500/70 text-white hover:bg-red-400/80"
           : "bg-white/90 text-neutral-800 hover:bg-white"

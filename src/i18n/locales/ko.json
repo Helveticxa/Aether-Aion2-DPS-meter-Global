@@ -126,6 +126,8 @@
       "overlayShowDamageDesc": "Controls whether accumulated damage is shown on each row. It does not affect DPS or percentage calculations.",
       "overlayShowDps": "Show DPS",
       "overlayShowDpsDesc": "Controls whether realtime DPS is shown on each row. Disable it to reduce right-side information density.",
+      "overlayShowCombatPower": "전투력 표시",
+      "overlayShowCombatPowerDesc": "게임이 알려준 경우, 각 플레이어의 전투력을 이름 옆에 표시합니다.",
       "overlayPctMode": "Percentage mode",
       "overlayPctModeDesc": "Contribution is based on the visible list. Share is based on the full combat total.",
       "overlayPctContribution": "Contribution",

@@ -51,7 +51,10 @@ function render() {
     </div>`;
   }
   $content.innerHTML =
-    html || `<div class="log-empty">${filter ? "No matches" : "Waiting for log events..."}</div>`;
+    html ||
+    `<div class="log-empty">${
+      filter ? "No matches" : "No log entries yet. Start the meter to see activity."
+    }</div>`;
   $content.scrollTop = $content.scrollHeight;
 }
 
@@ -108,6 +111,40 @@ listen("app-logger", (event) => {
   if (logLines.length > MAX_LINES) logLines.shift();
   render();
 });
+
+// Lines written before this window existed.
+//
+// The window only listened for live events, and nearly all logging happens at
+// startup and when capture begins -- so opening it later showed nothing at all
+// and read as a feature that did not work.
+function parseStoredLine(raw) {
+  const match = /^\[(\d+(?:\.\d+)?)\] \[([A-Z]+)\] ([\s\S]*)$/.exec(raw);
+  if (!match) {
+    return { time: "", level: "info", text: raw };
+  }
+
+  return {
+    time: fmtTime(Number(match[1])),
+    level: match[2].toLowerCase(),
+    text: match[3],
+  };
+}
+
+async function loadBacklog() {
+  try {
+    const stored = await invoke("read_app_log_tail");
+    if (!Array.isArray(stored) || stored.length === 0) {
+      return;
+    }
+
+    logLines = [...stored.map(parseStoredLine), ...logLines].slice(-MAX_LINES);
+    render();
+  } catch (error) {
+    console.error("read app log tail failed:", error);
+  }
+}
+
+void loadBacklog();
 
 async function initDebugToggle() {
   try {

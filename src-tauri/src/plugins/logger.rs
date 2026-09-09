@@ -1,4 +1,4 @@
-use std::fs::{create_dir_all, OpenOptions};
+use std::fs::{create_dir_all, rename, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -9,6 +9,13 @@ use tauri::{
     plugin::{Builder, TauriPlugin},
     AppHandle, Emitter, Manager, Runtime, State,
 };
+
+/// Roll the log over at this size. Without a cap the file grows for the life of
+/// the install, and reading its tail gets slower every session.
+const MAX_LOG_BYTES: u64 = 4 * 1024 * 1024;
+
+/// How many lines the log window backfills when it opens.
+const BACKFILL_LINES: usize = 500;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -67,8 +74,40 @@ impl AppLogger {
         self.write_line("ERROR", message.as_ref());
     }
 
+    /// Keep one previous log alongside the current one and discard the rest.
+    ///
+    /// One rollover is enough to survive a crash-and-restart, which is when the
+    /// interesting lines are in the older file.
+    fn rotate_if_large(&self) {
+        let Ok(meta) = std::fs::metadata(&self.file_path) else {
+            return;
+        };
+        if meta.len() < MAX_LOG_BYTES {
+            return;
+        }
+
+        let previous = self.file_path.with_extension("log.1");
+        let _ = std::fs::remove_file(&previous);
+        let _ = rename(&self.file_path, &previous);
+    }
+
+    /// The last lines already on disk, so a window opened mid-session shows the
+    /// session rather than waiting for the next thing to happen.
+    pub fn tail(&self, limit: usize) -> Vec<String> {
+        let _guard = self.write_lock.lock().unwrap();
+        let Ok(contents) = std::fs::read_to_string(&self.file_path) else {
+            return Vec::new();
+        };
+
+        let lines: Vec<&str> = contents.lines().filter(|line| !line.is_empty()).collect();
+        let start = lines.len().saturating_sub(limit);
+        lines[start..].iter().map(|line| (*line).to_string()).collect()
+    }
+
     fn write_line(&self, level: &str, message: &str) {
         let _guard = self.write_lock.lock().unwrap();
+        self.rotate_if_large();
+
         let Ok(mut file) = OpenOptions::new()
             .create(true)
             .append(true)
@@ -112,6 +151,16 @@ pub fn get_app_logger_debug_enabled(logger: State<'_, Arc<AppLogger>>) -> bool {
 pub fn set_app_logger_debug_enabled(logger: State<'_, Arc<AppLogger>>, enabled: bool) -> bool {
     logger.set_debug_enabled(enabled);
     logger.is_debug_enabled()
+}
+
+/// Backfill for the log window.
+///
+/// The window only ever listened for live `app-logger` events, so opening it
+/// after startup -- which is when nearly everything is logged -- showed an empty
+/// pane and read as a broken feature.
+#[tauri::command]
+pub fn read_app_log_tail(logger: State<'_, Arc<AppLogger>>) -> Vec<String> {
+    logger.tail(BACKFILL_LINES)
 }
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {

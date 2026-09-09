@@ -20,13 +20,14 @@ const STORAGE_KEY = "app-config";
 const DEFAULT_OVERLAY_CONFIG = {
   locked: false,
   alwaysOnTop: false,
-  background: [0, 0, 0, 102],
+  background: [8, 10, 16, 56],
   mainPlayerColor: [193, 81, 21, 204],
   otherPlayerColor: [46, 86, 142, 120],
   showPlayerName: true,
   showServer: true,
   showDamage: true,
   showDps: true,
+  showCombatPower: true,
   pctMode: "contribution",
   contentScale: 1,
   detailWindowMode: "follow",
@@ -101,11 +102,21 @@ const $playerList = document.getElementById("player-list");
 const $diag = document.getElementById("diag-message");
 const $titleBar = document.querySelector(".title-bar");
 const $titleLabel = document.querySelector(".title-bar__label");
+const $titleTarget = document.querySelector(".title-bar__target");
 const $content = document.querySelector(".content");
 const $statusPing = document.getElementById("status-ping");
 const $statusDps = document.getElementById("status-team-dps");
 const $statusFightTime = document.getElementById("status-fight-time");
 const $statusBar = document.querySelector(".status-bar");
+// GB once the number stops being readable in MB -- a PC sitting at 14 GB
+// should not be rendered as 14336.
+function formatMemory(mb) {
+  if (!Number.isFinite(mb) || mb <= 0) {
+    return "--";
+  }
+  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(0)} MB`;
+}
+
 const $statusCpu = document.getElementById("status-cpu");
 const $statusMem = document.getElementById("status-mem");
 const $scaledOverlay = document.getElementById("scaled-overlay");
@@ -466,6 +477,13 @@ function fmtDps(n) {
   return Math.round(n).toLocaleString("en-US");
 }
 
+// Combat power reads as an identity number, not a running total, so it is
+// grouped rather than abbreviated -- 24,180 rather than 24.2K.
+function fmtCombatPower(n) {
+  if (!Number.isFinite(n) || n <= 0) return "";
+  return Math.round(n).toLocaleString("en-US");
+}
+
 function maskName(name) {
   if (!overlayConfig?.maskNicknames) return name;
   const t = (name || "").trim();
@@ -563,13 +581,26 @@ function updateBossRow(targetInfo) {
 
   if (!hasTarget) {
     $titleLabel.textContent = "AETHER METER";
+    if ($titleTarget) {
+      $titleTarget.textContent = "";
+      $titleTarget.style.display = "none";
+    }
     $bossRow.style.display = "none";
     return;
   }
 
-  // Title always follows boss name regardless of HP bar setting
+  // The window keeps its own name; the target goes in a slot of its own.
+  //
+  // This used to overwrite the title, so hitting a mob replaced "AETHER METER"
+  // with a Traditional Chinese name from the bundled catalogue -- which reads as
+  // the app having switched language, not as the name of what you are fighting.
   const name = targetInfo.targetName || `Target ${targetInfo.id ?? ""}`.trim();
-  $titleLabel.textContent = name;
+  $titleLabel.textContent = "AETHER METER";
+  if ($titleTarget) {
+    $titleTarget.textContent = name;
+    $titleTarget.title = name;
+    $titleTarget.style.display = "";
+  }
 
   // Boss HP bar visibility is controlled by showBossHp setting
   $bossRow.style.display = showBossBar ? "" : "none";
@@ -635,8 +666,14 @@ function buildRowTemplate() {
   nameEl.className = "player-row__name";
   const serverEl = document.createElement("span");
   serverEl.className = "player-row__server";
+  // Combat power sits with the name rather than the numbers: it says who this
+  // is, not how they are doing. The backend has carried it on every player
+  // stat since the fork without anything showing it.
+  const powerEl = document.createElement("span");
+  powerEl.className = "player-row__power";
   nameWrap.appendChild(nameEl);
   nameWrap.appendChild(serverEl);
+  nameWrap.appendChild(powerEl);
 
   left.appendChild(iconWrap);
   left.appendChild(nameWrap);
@@ -680,6 +717,7 @@ function buildRowTemplate() {
     icon,
     nameEl,
     serverEl,
+    powerEl,
     damage,
     dpsVal,
     share,
@@ -696,6 +734,7 @@ function getRow() {
     icon: null,
     nameEl: null,
     serverEl: null,
+    powerEl: null,
     damage: null,
     dpsVal: null,
     share: null,
@@ -714,6 +753,7 @@ function populateRowRefs(raw) {
   const nameWrap = left.children[1];
   const nameEl = nameWrap.children[0];
   const serverEl = nameWrap.children[1];
+  const powerEl = nameWrap.children[2];
 
   const damage = right.children[0];
   const dpsWrap = right.children[1];
@@ -733,6 +773,7 @@ function populateRowRefs(raw) {
       icon,
       nameEl,
       serverEl,
+      powerEl,
       damage,
       dpsVal,
       share,
@@ -740,6 +781,7 @@ function populateRowRefs(raw) {
       _iconSrc: "",
       _nameRaw: "",
       _serverRaw: "",
+      _powerRaw: "",
       _damageRaw: "",
       _dpsRaw: "",
       _shareRaw: "",
@@ -814,6 +856,18 @@ function updatePlayerRow(entry, p, maxDamage) {
     c.serverEl.style.display = "";
   } else {
     c.serverEl.style.display = "none";
+  }
+
+  // Combat power / gear score, where the game has told us
+  if (cfg.showCombatPower !== false && p.combatPower > 0) {
+    const powerText = fmtCombatPower(p.combatPower);
+    if (powerText !== c._powerRaw) {
+      c.powerEl.textContent = powerText;
+      c._powerRaw = powerText;
+    }
+    c.powerEl.style.display = "";
+  } else {
+    c.powerEl.style.display = "none";
   }
 
   // Damage
@@ -1002,15 +1056,22 @@ function updatePlayerList(snap, fullRebuild) {
     listen("dps-memory", (event) => {
       const d = event.payload;
 
-      // Aether's own footprint, not the machine's -- the point is to show that
-      // the meter stays cheap to leave running alongside the game. The backend
-      // has always sent these; nothing displayed them until now.
-      if (d.cpuPercent != null && $statusCpu) {
-        $statusCpu.textContent = `${d.cpuPercent.toFixed(0)}%`;
+      // The whole machine, not Aether's slice of it. Someone glancing at this
+      // mid-fight wants to know whether the PC is struggling; Aether costs a
+      // fraction of a percent, so its own figure never answers that.
+      const cpu = d.systemCpuPercent ?? d.cpuPercent;
+      if (cpu != null && $statusCpu) {
+        $statusCpu.textContent = `${cpu.toFixed(0)}%`;
       }
-      if (d.rssMb != null && $statusMem) {
-        $statusMem.textContent =
-          d.rssMb >= 1024 ? `${(d.rssMb / 1024).toFixed(1)} GB` : `${d.rssMb.toFixed(0)} MB`;
+
+      const usedMb = d.systemMemoryUsedMb ?? d.rssMb;
+      if (usedMb != null && $statusMem) {
+        $statusMem.textContent = formatMemory(usedMb);
+        const totalMb = d.systemMemoryTotalMb;
+        $statusMem.title =
+          totalMb > 0
+            ? `${formatMemory(usedMb)} / ${formatMemory(totalMb)} used on this PC`
+            : "Memory in use on this PC";
       }
 
       if (d.pingMs != null) {

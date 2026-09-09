@@ -23,7 +23,7 @@ use crate::dps_meter::engine::calculator::DpsCalculator;
 use crate::dps_meter::history::HistoryStore;
 use crate::dps_meter::models::combat::{CombatSnapshot, PvpCombatStatsRow, PvpWatchInfoResponse};
 use crate::dps_meter::models::diagnostics::{DpsMeterState, MemorySnapshot};
-use crate::dps_meter::storage::data_storage::{DataStorage, FieldBossTimerSnapshot};
+use crate::dps_meter::storage::data_storage::{DataStorage, FieldBossTimerSnapshot, MainCharacter};
 use crate::plugins::logger::AppLogger;
 
 const STALE_ASSEMBLER_IDLE_SECS: u64 = 30;
@@ -338,6 +338,11 @@ impl DpsMeter {
             main_actor_dealt_player_overview_stats: Vec::new(),
         };
         let _ = self.app.emit("dps-snapshot", empty);
+    }
+
+    /// The character the meter is currently following, if it has seen one.
+    pub fn main_character(&self) -> Option<MainCharacter> {
+        self.data_storage.main_character()
     }
 
     pub fn is_running(&self) -> bool {
@@ -714,6 +719,7 @@ fn build_memory_snapshot(
     cap_port: Option<String>,
 ) -> Option<MemorySnapshot> {
     system.refresh_memory();
+    system.refresh_cpu_usage();
     let _ = system.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
     let process = system.process(pid)?;
 
@@ -728,11 +734,21 @@ fn build_memory_snapshot(
         packet_sizes.insert("channel".to_string(), channel_size);
     }
 
+    let cpus = system.cpus();
+    let system_cpu_percent = if cpus.is_empty() {
+        0.0
+    } else {
+        cpus.iter().map(|cpu| cpu.cpu_usage()).sum::<f32>() / cpus.len() as f32
+    };
+
     Some(MemorySnapshot {
         cpu_percent: normalized_cpu_percent,
         rss_mb: rss_bytes / (1024.0 * 1024.0),
         vms_mb: vms_bytes / (1024.0 * 1024.0),
         memory_percent: ((rss_bytes / total_memory) * 100.0) as f32,
+        system_cpu_percent: system_cpu_percent.clamp(0.0, 100.0),
+        system_memory_used_mb: system.used_memory() as f64 / (1024.0 * 1024.0),
+        system_memory_total_mb: total_memory / (1024.0 * 1024.0),
         cap_device,
         cap_port: dispatcher.current_combat_port().or(cap_port),
         packet_sizes,
