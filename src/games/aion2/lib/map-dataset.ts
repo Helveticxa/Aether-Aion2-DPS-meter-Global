@@ -52,6 +52,29 @@ export async function loadMapDataset(): Promise<MapDataset> {
   return { zones, categories, markers, borders };
 }
 
+/**
+ * What a first look shows: the landmarks you navigate by, not every gatherable
+ * in the zone.
+ *
+ * An allow-list rather than a deny-list, so a category added to the dataset
+ * later starts hidden instead of quietly crowding the map. Lives here rather
+ * than in the map page because the overlay needs it too, and the two windows
+ * must not disagree about what a fresh install shows.
+ */
+const SHOWN_BY_DEFAULT = new Set([
+  "waystone",
+  "bahan-monolith",
+  "segel",
+  "wilayah",
+  "medan-perang",
+  "desa",
+  "kubus-tersembunyi",
+]);
+
+export function defaultHidden(categories: Array<{ id: string }>): string[] {
+  return categories.filter((c) => !SHOWN_BY_DEFAULT.has(c.id)).map((c) => c.id);
+}
+
 const COLLECTED_KEY = "aion2-map-collected";
 const HIDDEN_KEY = "aion2-map-hidden";
 

@@ -8,6 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import {
+  defaultHidden,
   loadCollected,
   loadHidden,
   loadMapDataset,
@@ -52,7 +53,7 @@ const appWindow = getCurrentWindow();
 let dataset = null;
 let zone = null;
 let categories = new Map();
-let hidden = loadHidden(["npc"]);
+let hidden = new Set();
 let collected = new Set();
 let view = null;
 let dots = [];
@@ -98,8 +99,8 @@ function render() {
   const { width, height } = stageSize();
   const pad = 20;
   const fitted = fitView(width, height, 4).scale;
-  const dotSize = Math.min(15, Math.max(7, (7 * view.scale) / fitted));
-  const glyph = Math.round(dotSize * 0.62);
+  const dotSize = Math.min(19, Math.max(11, (11 * view.scale) / fitted));
+  const glyph = Math.round(dotSize * 0.95);
 
   renderTiles(view.scale / fitted);
 
@@ -348,6 +349,7 @@ window.addEventListener("focus", () => {
 async function start() {
   dataset = await loadMapDataset();
   collected = loadCollected();
+  hidden = loadHidden(defaultHidden(dataset.categories));
   categories = new Map(dataset.categories.map((c) => [c.id, c]));
 
   let requested = null;

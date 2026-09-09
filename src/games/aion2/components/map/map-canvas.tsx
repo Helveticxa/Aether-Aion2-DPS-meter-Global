@@ -15,10 +15,7 @@ import {
   TILE_FADE_IN_AT,
 } from "@/games/aion2/lib/map-tiles";
 
-/**
- * The plane's intrinsic size. Any value works; it exists only so markers can be
- * positioned in percentages and never re-laid-out.
- */
+/** The coordinate space the border paths are built in, via the SVG viewBox. */
 const PLANE = 1000;
 
 const ZOOM_STEP = 1.18;
@@ -44,12 +41,15 @@ export type MapCanvasProps = {
  * Verteron's 1,954 it would be a re-render per mouse event, and the map would
  * stutter exactly when someone is dragging across it.
  *
- * Markers now sit at percentage positions inside a fixed-size plane, so their
- * layout never changes. A pan or a zoom writes one transform on the plane and
- * one CSS variable -- the browser composites it on the GPU, and the cost stops
- * depending on how many markers are on screen. `--inv` is the inverse scale,
- * which keeps the markers the same size on screen while the map grows under
- * them.
+ * Markers sit at percentage positions inside the plane, so a pan is one
+ * translate and costs nothing per marker.
+ *
+ * The plane is sized in real pixels rather than scaled from a fixed box, which
+ * matters more than it sounds. A scaled, promoted layer is rasterised at its
+ * *unscaled* size: a 1000px plane shown at 10x resampled the 4096px image, the
+ * tiles and every glyph from a 1000px raster -- blurry, and a ~9500px layer to
+ * composite, which is what made scrolling crawl. Real pixels cost a reflow per
+ * zoom step instead, which is discrete and rare.
  */
 export function MapCanvas({
   zone,
@@ -166,16 +166,24 @@ export function MapCanvas({
     [borders, zone.bounds]
   );
 
-  const dotSize = compact ? 15 : 21;
-  const glyphSize = compact ? 14 : 20;
+  const zoomRatio = view ? view.scale / fitted : 1;
 
   // Markers shrink as the map zooms out. Holding them at a constant screen size
-  // turns a zone with two thousand of them into a single blob of overlapping
-  // rings at fit; letting them grow into full glyphs only as you zoom in keeps
-  // the overview readable and the detail available.
-  const zoomRatio = view ? view.scale / fitted : 1;
-  const markerSize = Math.min(dotSize, Math.max(dotSize * 0.5, dotSize * 0.5 * zoomRatio));
-  const inverse = view ? ((markerSize / dotSize) * PLANE) / view.scale : 1;
+  // turns a zone with two thousand of them into a single blob at fit; letting
+  // them grow into full glyphs only as you zoom in keeps the overview readable
+  // and the detail available.
+  //
+  // The plane is now sized in real pixels, so these are screen pixels directly
+  // -- no counter-scale to undo a transform.
+  const maxDot = compact ? 15 : 22;
+  const markerSize = Math.min(maxDot, Math.max(maxDot * 0.45, maxDot * 0.45 * zoomRatio));
+  const glyphSize = Math.round(markerSize * 0.95);
+
+  /** Once tiles cover the zone, the 4096px base underneath is dead weight. */
+  const tilesCover = Boolean(tileUrl) && zoomRatio >= TILE_FADE_IN_AT;
+
+  /** Border strokes are in viewBox units, so they undo the viewBox scale. */
+  const borderStroke = view ? (PLANE / view.scale) * 1.1 : 1;
 
   /**
    * Which tiles intersect the viewport.
@@ -219,15 +227,12 @@ export function MapCanvas({
     >
       {view && (
         <div
-          className="absolute top-0 left-0 origin-top-left will-change-transform"
-          style={
-            {
-              width: PLANE,
-              height: PLANE,
-              transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale / PLANE})`,
-              "--inv": inverse,
-            } as React.CSSProperties
-          }
+          className="absolute top-0 left-0 origin-top-left"
+          style={{
+            width: view.scale,
+            height: view.scale,
+            transform: `translate(${view.x}px, ${view.y}px)`,
+          }}
         >
           {zone.image ? (
             <img
@@ -235,6 +240,7 @@ export function MapCanvas({
               alt={zone.name}
               className="pointer-events-none absolute inset-0 h-full w-full object-fill select-none"
               draggable={false}
+              style={{ visibility: tilesCover ? "hidden" : "visible" }}
             />
           ) : (
             <div className="absolute inset-0 bg-[#0e1526]" />
@@ -273,8 +279,8 @@ export function MapCanvas({
                   d={border.d}
                   fill="none"
                   stroke="rgba(255,255,255,0.34)"
-                  strokeWidth={inverse * 0.9}
-                  strokeDasharray={`${inverse * 5} ${inverse * 4}`}
+                  strokeWidth={borderStroke}
+                  strokeDasharray={`${borderStroke * 5} ${borderStroke * 4}`}
                 />
               ))}
             </svg>
@@ -296,11 +302,10 @@ export function MapCanvas({
                 style={{
                   left,
                   top,
-                  width: dotSize,
-                  height: dotSize,
-                  marginLeft: -dotSize / 2,
-                  marginTop: -dotSize / 2,
-                  transform: "scale(var(--inv))",
+                  width: markerSize,
+                  height: markerSize,
+                  marginLeft: -markerSize / 2,
+                  marginTop: -markerSize / 2,
                   color: tint,
                   // No disc behind the glyph. The disc was carrying legibility
                   // over a busy map, so a dark outline takes that job instead --

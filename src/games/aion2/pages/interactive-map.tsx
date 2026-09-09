@@ -21,6 +21,7 @@ import {
   type MarkerCategory,
 } from "@/games/aion2/lib/map-data";
 import {
+  defaultHidden,
   loadCollected,
   loadHidden,
   loadMapDataset,
@@ -36,17 +37,10 @@ const WORLD_LABELS: Record<string, string> = {
   abyss: "Abyss",
 };
 
-/**
- * NPCs are a third of every marker in the game and are almost never what
- * someone opens a map to find, so they start hidden. The choice is remembered
- * after that.
- */
-const HIDDEN_BY_DEFAULT = ["npc"];
-
 export default function InteractiveMapPage() {
   const [dataset, setDataset] = useState<MapDataset | null>(null);
   const [zoneId, setZoneId] = useState<string | null>(null);
-  const [hidden, setHidden] = useState<Set<string>>(() => loadHidden(HIDDEN_BY_DEFAULT));
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [collected, setCollected] = useState<Set<string>>(() => loadCollected());
   const [query, setQuery] = useState("");
   const [showFound, setShowFound] = useState(true);
@@ -58,6 +52,9 @@ export default function InteractiveMapPage() {
     void loadMapDataset().then((next) => {
       if (!alive) return;
       setDataset(next);
+      // The default set depends on the dataset, so it is resolved once that
+      // has loaded rather than guessed at in a state initialiser.
+      setHidden(loadHidden(defaultHidden(next.categories)));
       // Land on the first zone that actually has markers.
       setZoneId(
         (current) =>

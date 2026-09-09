@@ -5,6 +5,37 @@ numbering: this fork publishes to its own release channel, and the updater
 compares an installed build against these releases. Upstream's release history
 lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
 
+## [0.1.8]
+
+**The map was blurry and slow for the same reason, and it was my optimisation
+that caused it.** The viewer kept a fixed 1000px plane and scaled it up, with
+`will-change: transform` so that panning stayed cheap. A promoted layer is
+rasterised at its *unscaled* size, so at 10× every pixel — the 4096px image, the
+downloaded tiles, every glyph — was being resampled from a 1000px raster. The
+same layer was about 9500px square to composite, which is what made scrolling
+crawl. Downloading full-resolution tiles could not help: they were being thrown
+away before they reached the screen.
+
+The plane is now sized in real pixels and moved with translate only. Panning got
+*faster* (0.013 ms per update, from 0.023) because there is no oversized layer
+to composite, and zooming costs one reflow of 1.5 ms — nine percent of a frame,
+on a gesture that is discrete. The minimap overlay has always worked this way,
+which is why it looked sharp while the main map did not.
+
+The base image also steps aside once tiles cover the zone, rather than being
+decoded and composited underneath them.
+
+**The map starts with the landmarks, not everything.** Waystones, monoliths,
+seals, regions, battlefields, villages and hidden cubes are on; the fifteen
+gathering materials and NPCs are off. That is 825 markers instead of 1,364 on a
+first look. It is an allow-list, so a category added later starts hidden rather
+than quietly crowding the map, and the choice is remembered once you change it.
+Both the map page and the overlay read the same default, so they cannot
+disagree about what a fresh install shows.
+
+**Minimap waypoints are legible.** They were sized for a dense overview and
+disappeared into the terrain; they are larger now, and the glyph fills them.
+
 ## [0.1.7]
 
 **Updates no longer fail on the WinDivert driver.** Installing 0.1.6 over 0.1.5
