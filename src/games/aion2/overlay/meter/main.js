@@ -106,6 +106,8 @@ const $statusPing = document.getElementById("status-ping");
 const $statusDps = document.getElementById("status-team-dps");
 const $statusFightTime = document.getElementById("status-fight-time");
 const $statusBar = document.querySelector(".status-bar");
+const $statusCpu = document.getElementById("status-cpu");
+const $statusMem = document.getElementById("status-mem");
 const $scaledOverlay = document.getElementById("scaled-overlay");
 const $scaledOverlayInner = document.getElementById("scaled-overlay-inner");
 const $pinBtn = document.getElementById("pin-btn");
@@ -413,6 +415,18 @@ const DIAG_MESSAGES = [
 async function runDiagnostic() {
   try {
     const state = await invoke("check_dps_meter_state");
+
+    // Say when a setting is the reason there is nothing here. An empty meter
+    // that explains itself is a setting to change; an empty meter that says
+    // nothing reads as a broken app, and cost a whole play session to diagnose.
+    if (!state.hasGameData && state.bossOnlyFiltered > 0) {
+      $diag.textContent = t("dps-overlay.diagBossOnly").replace(
+        "{count}",
+        state.bossOnlyFiltered.toLocaleString()
+      );
+      return false;
+    }
+
     for (const diag of DIAG_MESSAGES) {
       if (!state[diag.key]) {
         $diag.textContent = t(diag.i18n);
@@ -987,6 +1001,18 @@ function updatePlayerList(snap, fullRebuild) {
     const $pingIcon = $statusPing?.previousElementSibling;
     listen("dps-memory", (event) => {
       const d = event.payload;
+
+      // Aether's own footprint, not the machine's -- the point is to show that
+      // the meter stays cheap to leave running alongside the game. The backend
+      // has always sent these; nothing displayed them until now.
+      if (d.cpuPercent != null && $statusCpu) {
+        $statusCpu.textContent = `${d.cpuPercent.toFixed(0)}%`;
+      }
+      if (d.rssMb != null && $statusMem) {
+        $statusMem.textContent =
+          d.rssMb >= 1024 ? `${(d.rssMb / 1024).toFixed(1)} GB` : `${d.rssMb.toFixed(0)} MB`;
+      }
+
       if (d.pingMs != null) {
         const ping = Math.round(d.pingMs);
         $statusPing.textContent = `${ping} ms`;

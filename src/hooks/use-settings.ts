@@ -97,7 +97,7 @@ export interface AppConfig {
 // =============================================================================
 
 const DEFAULTS: AppConfig = {
-  version: 1,
+  version: 2,
   app: {
     theme: "system",
     language: "en",
@@ -115,12 +115,12 @@ const DEFAULTS: AppConfig = {
       stallResyncDelayMs: 1000,
       fullProcessorStallResyncDelayMs: 200,
       unknownPacketStallResyncDelayMs: 50,
-      bossOnly: true,
+      bossOnly: false,
       pvpModeOn: false,
       pvpOverlayPosition: "bottom",
       showPossibleBoss: false,
-      myMuzhuangOnly: true,
-      hideUnknownPlayers: true,
+      myMuzhuangOnly: false,
+      hideUnknownPlayers: false,
       maxPlayerCount: 10,
       captureBackendPriority: "npcapFirst",
       region: "auto",
@@ -166,6 +166,36 @@ const STORAGE_KEY = "app-config";
 // Helpers
 // =============================================================================
 
+/**
+ * Bring a stored config forward.
+ *
+ * A deep merge only fills in keys that are missing, so a default that turns out
+ * to be wrong stays wrong forever for anyone who has already run the app. These
+ * three had to be corrected rather than merely re-defaulted.
+ */
+function migrate(config: AppConfig, storedVersion: number): AppConfig {
+  if (storedVersion >= 2) return config;
+
+  // v2: the meter shipped filtering everything that is not a boss, inherited
+  // from upstream. Levelling on ordinary mobs showed a permanently empty meter
+  // with nothing to explain it. Unknown players were hidden for the same
+  // reason -- your own row vanishes until the game happens to re-send the
+  // player packet.
+  return {
+    ...config,
+    version: 2,
+    aion2: {
+      ...config.aion2,
+      backend: {
+        ...config.aion2.backend,
+        bossOnly: false,
+        myMuzhuangOnly: false,
+        hideUnknownPlayers: false,
+      },
+    },
+  };
+}
+
 function loadConfig(): AppConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -180,7 +210,8 @@ function loadConfig(): AppConfig {
         delete parsed.aion2.eventReminder.enabled;
       }
       // Deep merge with defaults to fill missing keys from newer versions
-      return deepMerge(DEFAULTS, parsed);
+      const merged = deepMerge(DEFAULTS, parsed);
+      return migrate(merged, Number(parsed?.version ?? 0));
     }
   } catch (e) {
     console.error("[useSettings] failed to load config:", e);

@@ -8,7 +8,8 @@
     "diagNpcap": "WinDivert packet capture driver is unavailable",
     "diagMeter": "Meter not running — starting...",
     "diagGameData": "Waiting for game data — please launch the game",
-    "diagPlayerId": "Player not identified — please teleport or use a skill"
+    "diagPlayerId": "Player not identified — please teleport or use a skill",
+    "diagBossOnly": "Boss only is on — {count} hits on other targets ignored. Turn it off in Settings → Aion 2."
   },
   "dps-history": {
     "title": "DPS History",

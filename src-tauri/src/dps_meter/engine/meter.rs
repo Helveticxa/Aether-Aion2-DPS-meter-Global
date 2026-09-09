@@ -374,6 +374,7 @@ impl DpsMeter {
         DpsMeterState {
             npcap_available: capture_available,
             npcap_error: capture_error,
+            boss_only_filtered: self.data_storage.boss_only_filtered(),
             meter_running,
             has_game_data,
             player_identified,
@@ -736,7 +737,6 @@ fn build_memory_snapshot(
         cap_port: dispatcher.current_combat_port().or(cap_port),
         packet_sizes,
         ping_ms: ping_tracker.current_ping_ms(),
-        ping_history: ping_tracker.history_snapshot(100),
         main_actor_name: data_storage.main_actor_name(),
     })
 }

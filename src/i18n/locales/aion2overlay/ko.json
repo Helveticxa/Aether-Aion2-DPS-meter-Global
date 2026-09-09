@@ -8,7 +8,8 @@
     "diagNpcap": "WinDivert 패킷 캡처 드라이버를 사용할 수 없음",
     "diagMeter": "미터가 실행되지 않음 — 시작 중...",
     "diagGameData": "게임 데이터 대기 중 — 게임을 실행하세요",
-    "diagPlayerId": "플레이어가 식별되지 않음 — 순간이동 또는 스킬을 사용하세요"
+    "diagPlayerId": "플레이어가 식별되지 않음 — 순간이동 또는 스킬을 사용하세요",
+    "diagBossOnly": "보스 전용이 켜져 있습니다 — 다른 대상에 대한 {count}회의 타격이 무시되었습니다. 설정 → Aion 2에서 끄세요."
   },
   "dps-history": {
     "title": "DPS 기록",

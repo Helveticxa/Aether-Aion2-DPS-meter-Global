@@ -1278,14 +1278,30 @@ export function Aion2Settings() {
             </div>
           </SettingRow>
 
+          {/* Two named modes rather than a switch. As a switch this read as a
+              refinement, when it decides whether the meter records anything at
+              all: with it on and no boss in front of you, every hit is
+              discarded and the overlay simply stays empty. */}
           <SettingRow
-            title={t("settings.aion2.bossOnly")}
-            description={t("settings.aion2.bossOnlyDesc")}
+            title={t("settings.aion2.countTargets")}
+            description={t("settings.aion2.countTargetsDesc")}
           >
-            <Switch
-              checked={config.aion2.backend.bossOnly}
-              onCheckedChange={(v) => updateSettings("aion2.backend.bossOnly", v)}
-            />
+            <div className="flex gap-2">
+              <Button
+                variant={config.aion2.backend.bossOnly ? "outline" : "default"}
+                size="sm"
+                onClick={() => updateSettings("aion2.backend.bossOnly", false)}
+              >
+                {t("settings.aion2.countAllTargets")}
+              </Button>
+              <Button
+                variant={config.aion2.backend.bossOnly ? "default" : "outline"}
+                size="sm"
+                onClick={() => updateSettings("aion2.backend.bossOnly", true)}
+              >
+                {t("settings.aion2.countBossOnly")}
+              </Button>
+            </div>
           </SettingRow>
 
           <SettingRow

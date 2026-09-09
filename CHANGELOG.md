@@ -5,6 +5,50 @@ numbering: this fork publishes to its own release channel, and the updater
 compares an installed build against these releases. Upstream's release history
 lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
 
+## [0.1.11]
+
+**The meter was set to ignore everything that is not a boss.** `Boss only` and
+`My training dummy only` both defaulted to on, inherited from upstream, so every
+hit on an ordinary mob was discarded before it reached the meter. Levelling
+showed a permanently empty overlay with nothing on screen to explain it.
+
+Both now default to off, and existing settings are migrated rather than merely
+re-defaulted — a stored value survives a changed default forever otherwise.
+`Hide unknown players` is off too: it was hiding your own row whenever the game
+had not re-sent the player packet since the meter started.
+
+**"What to count" is now two named modes** rather than a switch. As a switch it
+read as a refinement; it decides whether the meter records anything at all.
+
+**And the overlay says when a setting is the reason it is empty.** With Boss only
+on it now reports how many hits were ignored and where to change it. An empty
+meter that explains itself is a setting to fix; an empty meter that says nothing
+reads as a broken app.
+
+**CPU and memory are shown.** The backend has emitted them alongside ping every
+two seconds since the fork; nothing ever displayed them. They report Aether's own
+footprint, which is the number worth knowing when deciding whether to leave it
+running alongside the game.
+
+### Not getting heavier the longer it runs
+
+`dps_stats` — the combat totals, keyed by target — was the one map here that was
+not bounded, and it is deep-cloned five times a second to build the overlay
+snapshot. While the meter only counted bosses that was a handful of entries.
+Counting ordinary mobs, which is now the default, would have added one per kill
+and made every snapshot fractionally more expensive than the last, for the whole
+session. It is now capped at 512 targets, oldest evicted first.
+
+The ping history — a hundred samples serialised into every memory event, twice a
+second, read by nothing — is gone.
+
+### Correction
+
+0.1.10 said the reset bug explained a history record showing damage but "0
+players". That was wrong: `clear()` deliberately preserves the actor name tables,
+so it cannot have caused it. The reset fix stands on its own; that particular
+detail is still unexplained.
+
 ## [0.1.10]
 
 **The meter was clearing itself mid-fight.** Identifying the player fired a

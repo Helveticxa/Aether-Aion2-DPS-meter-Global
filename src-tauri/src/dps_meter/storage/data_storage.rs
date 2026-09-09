@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, RwLock};
 
 use serde::Serialize;
@@ -17,6 +18,9 @@ use crate::dps_meter::storage::loaders::{
 
 const ACTOR_METADATA_CAPACITY: usize = 2_000;
 const MOB_METADATA_CAPACITY: usize = 5_000;
+/// Targets kept in the combat totals. Far more than any encounter needs, and
+/// still small enough that cloning the map stays cheap.
+const COMBAT_TARGET_CAPACITY: usize = 512;
 const SUMMON_METADATA_CAPACITY: usize = 5_000;
 
 const BUFF_TARGET_CAPACITY: usize = 1_024;
@@ -119,7 +123,16 @@ where
 
 #[derive(Debug)]
 struct DataStorageInner {
-    dps_stats: HashMap<u32, HashMap<u32, HashMap<u32, SkillStats>>>,
+    /// Combat totals, keyed by target.
+    ///
+    /// Bounded, unlike the plain map this used to be. Every other metadata map
+    /// here was already bounded; this one was not, and it is deep-cloned five
+    /// times a second to build the overlay snapshot. While the meter only
+    /// counted bosses that was a handful of entries. Counting ordinary mobs as
+    /// well -- which is now the default -- means a grinding session would add a
+    /// target per kill and make every snapshot fractionally more expensive than
+    /// the last, forever.
+    dps_stats: BoundedMap<u32, HashMap<u32, HashMap<u32, SkillStats>>>,
     actor_id_name_map: BoundedMap<u32, String>,
     actor_id_server_map: BoundedMap<u32, String>,
     actor_id_class_map: BoundedMap<u32, String>,
@@ -157,7 +170,7 @@ struct PvpPlayerKey {
 impl Default for DataStorageInner {
     fn default() -> Self {
         Self {
-            dps_stats: HashMap::new(),
+            dps_stats: BoundedMap::new(COMBAT_TARGET_CAPACITY),
             actor_id_name_map: BoundedMap::new(ACTOR_METADATA_CAPACITY),
             actor_id_server_map: BoundedMap::new(ACTOR_METADATA_CAPACITY),
             actor_id_class_map: BoundedMap::new(ACTOR_METADATA_CAPACITY),
@@ -199,6 +212,8 @@ pub struct DataStorage {
     mob_code_name_map: HashMap<u32, String>,
     buff_templates: BuffTemplates,
     pub main_actor_callback: Mutex<Option<Box<MainActorCallback>>>,
+    /// Counts what the Boss only filter threw away, so the UI can say so.
+    boss_only_filtered: AtomicU64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -238,10 +253,12 @@ impl DataStorage {
             mob_code_name_map: load_npc_names(),
             buff_templates: load_buff_templates(),
             main_actor_callback: Mutex::new(None),
+            boss_only_filtered: AtomicU64::new(0),
         }
     }
 
     pub fn clear(&self) {
+        self.boss_only_filtered.store(0, Ordering::Relaxed);
         let mut inner = self.inner.write().unwrap();
         let main_actor_id = inner.main_actor_id;
         let main_actor_name = inner.main_actor_name.clone();
@@ -283,6 +300,11 @@ impl DataStorage {
         inner.field_boss_timers = field_boss_timers;
         // inner.summon_owner_map = summon_owner_map;
         inner.dot_skill_list = dot_skill_list;
+    }
+
+    /// Hits thrown away by the Boss only filter since the last reset.
+    pub fn boss_only_filtered(&self) -> u64 {
+        self.boss_only_filtered.load(Ordering::Relaxed)
     }
 
     pub fn append_damage(&self, packet: ParsedDamagePacket) {
@@ -449,6 +471,7 @@ impl DataStorage {
             && !inner.mob_id_code_map.contains_key(&packet.target_id);
 
         if config.boss_only && !is_target_boss && !(config.pvp_mode_on && is_target_player) {
+            self.boss_only_filtered.fetch_add(1, Ordering::Relaxed);
             return;
         }
 
@@ -547,8 +570,7 @@ impl DataStorage {
 
         let skill_stats = inner
             .dps_stats
-            .entry(packet.target_id)
-            .or_default()
+            .get_mut_or_insert_with(packet.target_id, Default::default)
             .entry(actor_id)
             .or_default()
             .entry(stats_skill_code)
@@ -745,7 +767,7 @@ impl DataStorage {
     }
 
     pub fn get_dps_stats_snapshot(&self) -> HashMap<u32, HashMap<u32, HashMap<u32, SkillStats>>> {
-        self.inner.read().unwrap().dps_stats.clone()
+        self.inner.read().unwrap().dps_stats.map.clone()
     }
 
     pub fn actor_id_name_snapshot(&self) -> HashMap<u32, String> {
@@ -1151,5 +1173,45 @@ mod main_actor_tests {
     #[test]
     fn switching_character_counts_as_a_change() {
         assert!(main_actor_changed(Some("Helveticaa"), "HiorV11"));
+    }
+}
+
+#[cfg(test)]
+mod bounded_map_tests {
+    use super::{BoundedMap, COMBAT_TARGET_CAPACITY};
+
+    #[test]
+    fn evicts_the_oldest_key_past_capacity() {
+        let mut map: BoundedMap<u32, u32> = BoundedMap::new(3);
+        for key in 1..=4 {
+            map.insert(key, key * 10);
+        }
+
+        assert_eq!(map.get(&1), None, "the oldest entry is dropped");
+        assert_eq!(map.get(&4), Some(&40));
+        assert_eq!(map.map.len(), 3);
+    }
+
+    #[test]
+    fn touching_a_key_keeps_it_alive() {
+        let mut map: BoundedMap<u32, u32> = BoundedMap::new(2);
+        map.insert(1, 10);
+        map.insert(2, 20);
+        map.insert(1, 11); // re-inserting moves it back to the newest end
+        map.insert(3, 30);
+
+        assert_eq!(map.get(&1), Some(&11));
+        assert_eq!(map.get(&2), None, "the key untouched for longest goes first");
+    }
+
+    #[test]
+    fn combat_targets_are_bounded() {
+        // The overlay snapshot deep-clones this map several times a second, so
+        // an unbounded one makes a long session progressively more expensive.
+        let mut map: BoundedMap<u32, u32> = BoundedMap::new(COMBAT_TARGET_CAPACITY);
+        for key in 0..(COMBAT_TARGET_CAPACITY as u32 * 3) {
+            map.insert(key, key);
+        }
+        assert_eq!(map.map.len(), COMBAT_TARGET_CAPACITY);
     }
 }

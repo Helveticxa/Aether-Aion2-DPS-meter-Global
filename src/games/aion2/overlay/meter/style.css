@@ -480,6 +480,14 @@ body:not(.has-players) .player-list {
   flex-shrink: 0;
   color: rgba(255, 255, 255, 0.3);
 }
+.status-bar__usage {
+  font-family: var(--font-family);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: #9aa3af;
+  margin-right: 4px;
+}
+
 .status-bar__ping {
   font-family: var(--font-family);
   font-size: 14px;

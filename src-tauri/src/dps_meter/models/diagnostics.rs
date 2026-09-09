@@ -10,6 +10,12 @@ pub struct DpsMeterState {
     pub meter_running: bool,
     pub has_game_data: bool,
     pub player_identified: bool,
+    /// Hits discarded because the target was not a boss while Boss only was on.
+    ///
+    /// Without this the meter is simply empty, with nothing on screen to say
+    /// that a setting is the reason -- which is exactly how a whole play
+    /// session was lost to a default nobody had looked at.
+    pub boss_only_filtered: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -23,6 +29,5 @@ pub struct MemorySnapshot {
     pub cap_port: Option<String>,
     pub packet_sizes: HashMap<String, usize>,
     pub ping_ms: Option<f64>,
-    pub ping_history: Vec<(u64, f64)>,
     pub main_actor_name: Option<String>,
 }
