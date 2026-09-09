@@ -155,16 +155,32 @@ body {
 
 .map-dot {
   position: absolute;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  border-style: solid;
-  border-width: 1px;
+  border: 1.5px solid;
+  background: rgba(8, 12, 22, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+.map-dot svg {
+  width: 10px;
+  height: 10px;
 }
 
 .map-dot.is-found {
-  background: transparent !important;
-  opacity: 0.4;
+  opacity: 0.5;
+  box-shadow: none;
+}
+
+/* A class that sets display outranks the UA rule for [hidden]. */
+.map-dot[hidden] {
+  display: none;
 }
 
 .map-empty {
@@ -187,7 +203,7 @@ body {
 .map-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 8px;
+  gap: 5px 9px;
   flex-shrink: 0;
   max-height: 44px;
   overflow-y: auto;
@@ -212,15 +228,25 @@ body {
 }
 
 .map-legend__swatch {
-  width: 7px;
-  height: 7px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
-  border: 1px solid;
+  border: 1.5px solid;
+  background: rgba(8, 12, 22, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 
+.map-legend__swatch svg {
+  width: 9px;
+  height: 9px;
+}
+
 .map-legend__item.is-hidden .map-legend__swatch {
-  background: transparent !important;
+  color: #5b6472 !important;
+  border-color: #3a4250 !important;
 }
 
 .map-footer {

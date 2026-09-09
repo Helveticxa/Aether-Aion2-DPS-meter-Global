@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { MapMarker, MapZone, MarkerCategory } from "@/games/aion2/lib/map-data";
+import { ICON_SVG_ATTRS, markerIcon } from "@/games/aion2/lib/map-icons";
 import {
   constrainView,
   fitView,
@@ -129,7 +130,10 @@ export function MapCanvas({
   }
 
   const culled = view ? markers.length - visible.length : 0;
-  const dotSize = compact ? 7 : 11;
+  // Big enough for a glyph to be legible; the old 11px dot could only ever
+  // carry a colour.
+  const dotSize = compact ? 16 : 22;
+  const glyphSize = compact ? 10 : 13;
 
   return (
     <div
@@ -166,19 +170,26 @@ export function MapCanvas({
           {visible.map(({ marker, x, y }) => {
             const category = categories.get(marker.category);
             const isCollected = collected.has(marker.id);
+            // Found markers drop to neutral rather than merely fading: at a
+            // glance the map should read as "what is left", and a dimmed
+            // version of the same colour still competes for attention.
+            const tint = isCollected ? "#7c8798" : (category?.color ?? "#9aa4b2");
+
             return (
               <button
                 key={marker.id}
                 type="button"
-                className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border transition-transform hover:scale-125"
+                className="absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[1.5px] transition-transform hover:z-10 hover:scale-125"
                 style={{
                   left: x,
                   top: y,
                   width: dotSize,
                   height: dotSize,
-                  background: isCollected ? "transparent" : (category?.color ?? "#9aa4b2"),
-                  borderColor: category?.color ?? "#9aa4b2",
-                  opacity: isCollected ? 0.45 : 1,
+                  color: tint,
+                  borderColor: tint,
+                  background: "rgba(8,12,22,0.82)",
+                  opacity: isCollected ? 0.5 : 1,
+                  boxShadow: isCollected ? "none" : `0 0 0 1px rgba(0,0,0,0.45)`,
                 }}
                 title={marker.name}
                 onPointerEnter={() => setHovered(marker)}
@@ -187,7 +198,9 @@ export function MapCanvas({
                   event.stopPropagation();
                   onToggleCollected(marker.id);
                 }}
-              />
+              >
+                <MarkerGlyph category={marker.category} size={glyphSize} />
+              </button>
             );
           })}
         </>
@@ -231,6 +244,28 @@ export function MapCanvas({
 }
 
 /**
+ * Markup comes from `map-icons`, which is authored source rather than data, so
+ * setting it as HTML is safe. Doing it here keeps that judgement in one place
+ * instead of at every call site.
+ */
+export function MarkerGlyph({ category, size = 13 }: { category: string; size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      dangerouslySetInnerHTML={{ __html: markerIcon(category) }}
+    />
+  );
+}
+
+/**
  * Stands in for a zone image that has not been added yet.
  *
  * Deliberately readable rather than decorative: the grid is the zone's world
@@ -257,4 +292,4 @@ function CalibrationGrid({ compact }: { compact: boolean }) {
   );
 }
 
-export { fromScreen };
+export { fromScreen, ICON_SVG_ATTRS };

@@ -8,6 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { loadCollected, loadMapDataset } from "@/games/aion2/lib/map-dataset";
+import { markerIconSvg } from "@/games/aion2/lib/map-icons";
 import {
   constrainView,
   fitView,
@@ -100,14 +101,22 @@ function render() {
       dots.push(dot);
     }
 
-    const color = categories.get(marker.category)?.color ?? "#9aa4b2";
+    const found = collected.has(marker.id);
+    // Neutral rather than merely faded, so the map reads as what is left.
+    const color = found ? "#7c8798" : (categories.get(marker.category)?.color ?? "#9aa4b2");
+
+    // Only rebuild the glyph when the category actually changes: dots are
+    // recycled across frames and this runs on every pointermove.
+    if (dot.dataset.category !== marker.category) {
+      dot.innerHTML = markerIconSvg(marker.category);
+      dot.dataset.category = marker.category;
+    }
+
     dot.style.left = `${point.x}px`;
     dot.style.top = `${point.y}px`;
-    dot.style.width = "7px";
-    dot.style.height = "7px";
-    dot.style.background = color;
+    dot.style.color = color;
     dot.style.borderColor = color;
-    dot.className = collected.has(marker.id) ? "map-dot is-found" : "map-dot";
+    dot.className = found ? "map-dot is-found" : "map-dot";
     dot.title = marker.name;
     dot.hidden = false;
     index += 1;
@@ -152,7 +161,8 @@ function renderLegend() {
 
     const swatch = document.createElement("span");
     swatch.className = "map-legend__swatch";
-    swatch.style.background = category.color;
+    swatch.innerHTML = markerIconSvg(category.id);
+    swatch.style.color = category.color;
     swatch.style.borderColor = category.color;
 
     const label = document.createElement("span");

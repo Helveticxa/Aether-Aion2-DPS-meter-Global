@@ -3,7 +3,7 @@ import { Eye, EyeOff, Loader2, Map as MapIcon, PictureInPicture2, Search } from 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { MapCanvas } from "@/games/aion2/components/map/map-canvas";
+import { MapCanvas, MarkerGlyph } from "@/games/aion2/components/map/map-canvas";
 import {
   countByCategory,
   groupCategories,
@@ -121,17 +121,18 @@ export default function InteractiveMapPage() {
 
   return (
     <div className="flex h-full w-full gap-4 overflow-hidden p-4 text-white">
-      <aside className="flex w-[290px] shrink-0 flex-col gap-3 overflow-y-auto pr-1">
+      <aside className="flex w-[290px] shrink-0 flex-col gap-3 overflow-hidden">
         <header className="flex items-center gap-2">
           <MapIcon className="size-4 text-cyan-300" />
           <h1 className="text-sm font-semibold tracking-wide">Interactive map</h1>
         </header>
 
         {dataset.sample && (
-          <p className="rounded-lg border border-amber-300/25 bg-amber-300/[0.06] px-3 py-2 text-xs leading-relaxed text-amber-100/90">
-            Showing <strong>sample markers</strong>. These coordinates were made up to exercise the
-            interface — they are not surveyed positions. Real data arrives when the global client
-            ships and can be extracted from it.
+          <p
+            className="rounded-lg border border-amber-300/25 bg-amber-300/[0.06] px-2.5 py-1.5 text-[11px] leading-snug text-amber-100/85"
+            title="Real data arrives when the global client ships and can be extracted from it."
+          >
+            <strong>Sample markers</strong> — invented coordinates, not a survey.
           </p>
         )}
 
@@ -181,7 +182,7 @@ export default function InteractiveMapPage() {
           </span>
         </div>
 
-        <section className="flex flex-col gap-3">
+        <section className="-mr-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
           {[...groups.entries()].map(([group, categories]) => {
             const inZone = categories.filter((category) => (counts.get(category.id) ?? 0) > 0);
             if (inZone.length === 0) return null;
@@ -206,12 +207,15 @@ export default function InteractiveMapPage() {
                         )}
                       >
                         <span
-                          className="size-2.5 shrink-0 rounded-full border"
+                          className="flex size-5 shrink-0 items-center justify-center rounded-full border-[1.5px]"
                           style={{
-                            background: isHidden ? "transparent" : category.color,
-                            borderColor: category.color,
+                            color: isHidden ? "#5b6472" : category.color,
+                            borderColor: isHidden ? "#3a4250" : category.color,
+                            background: "rgba(8,12,22,0.65)",
                           }}
-                        />
+                        >
+                          <MarkerGlyph category={category.id} size={11} />
+                        </span>
                         <span className="min-w-0 flex-1 truncate text-left">{category.label}</span>
                         <span className="text-white/35">{counts.get(category.id)}</span>
                         {isHidden ? (
