@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "check:undef": "eslint --config eslint.undef.config.mjs src",
     "preview": "vite preview",
     "release:version": "node scripts/release-version.mjs",
     "tauri": "tauri",

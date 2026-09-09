@@ -94,3 +94,23 @@ runner cannot launch an executable that demands elevation.
   must include `*.js`, or the overlays are silently skipped. That is how
   "NoiA METER" survived a rename: `overlay/meter/main.js` sets the title at
   runtime, overwriting the HTML.
+
+## The overlays are `.js`, so nothing type-checks them
+
+`tsc` does not see `src/games/aion2/overlay/**/*.js`, and those files are full of
+`try/catch` blocks. An undefined identifier there is a runtime `ReferenceError`
+that a catch swallows, so the symptom is a button that does nothing rather than
+an error anyone can see. Two shipped bugs came from exactly this:
+
+- the meter never imported `emit`, and passed it an undeclared `payload`, so
+  clicking a second player never switched the detail window;
+- `load` was declared inside `init()` but called from a module-scope handler, so
+  **Delete all history** deleted the records and then reported failure.
+
+```
+pnpm check:undef
+```
+
+Run it with `pnpm build` and `cargo test --lib`. It is `no-undef` only — it does
+not touch the 65 inherited ESLint errors, and it must stay that way to remain
+usable.

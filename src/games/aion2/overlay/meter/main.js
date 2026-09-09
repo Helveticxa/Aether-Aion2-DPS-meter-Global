@@ -1,6 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
-import { listen } from "@tauri-apps/api/event";
+import { listen, emit } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { t, setLanguage } from "../../i18n.js";
 import serversData from "../../data/servers.json";
@@ -275,70 +275,75 @@ function applyOverlayConfig(cfg) {
 // =============================================================================
 // Drag & close
 // =============================================================================
+// Every title-bar action used to swallow its own failure in an empty catch, so
+// a button whose command failed was indistinguishable from a button that did
+// nothing at all -- which is the single hardest kind of bug to report.
+//
+// Failures now say so on the overlay itself, and clear on their own.
+let actionErrorTimer = 0;
+
+function reportActionError(label, error) {
+  console.error("[dps-overlay] " + label + " failed:", error);
+
+  $diag.textContent = label + " failed — see the DPS Log";
+  clearTimeout(actionErrorTimer);
+  actionErrorTimer = setTimeout(() => {
+    if ($diag.textContent.endsWith("— see the DPS Log")) {
+      $diag.textContent = "";
+    }
+  }, 6000);
+}
+
+async function runAction(label, action) {
+  try {
+    await action();
+  } catch (error) {
+    reportActionError(label, error);
+  }
+}
+
 document.getElementById("drag-handle").addEventListener("mousedown", () => {
   getCurrentWindow().startDragging();
 });
-document.getElementById("close-btn").addEventListener("click", async () => {
-  try {
-    await getCurrentWindow().close();
-  } catch (_) {
-    /* ignore */
-  }
+document.getElementById("close-btn").addEventListener("click", () => {
+  void runAction("Close overlay", () => getCurrentWindow().close());
 });
 
 $pinBtn.addEventListener("click", () => {
   setAlwaysOnTop(overlayConfig?.alwaysOnTop !== true);
 });
 
-document.getElementById("settings-btn").addEventListener("click", async () => {
-  try {
-    await invoke("create_dps_settings");
-  } catch (_) {
-    /* ignore */
-  }
+document.getElementById("settings-btn").addEventListener("click", () => {
+  void runAction("Settings", () => invoke("create_dps_settings"));
 });
 
-document.getElementById("reset-btn").addEventListener("click", async () => {
-  try {
-    await invoke("reset_dps_meter");
-  } catch (_) {
-    /* ignore */
-  }
+document.getElementById("reset-btn").addEventListener("click", () => {
+  void runAction("Reset", () => invoke("reset_dps_meter"));
 });
 
-document.getElementById("history-btn").addEventListener("click", async () => {
-  try {
-    await invoke("create_dps_history");
-  } catch (_) {
-    /* ignore */
-  }
+document.getElementById("history-btn").addEventListener("click", () => {
+  void runAction("History", () => invoke("create_dps_history"));
 });
 
 const $buffBtn = document.getElementById("buff-btn");
 $buffBtn.addEventListener("mousedown", (event) => {
   event.stopPropagation();
 });
-$buffBtn.addEventListener("click", async (event) => {
+$buffBtn.addEventListener("click", (event) => {
   event.stopPropagation();
-  try {
-    await invoke("create_dps_buff");
-  } catch (_) {
-    /* ignore */
-  }
+  void runAction("Buff monitor", () => invoke("create_dps_buff"));
 });
 
 const $pvpBtn = document.getElementById("pvp-btn");
 $pvpBtn.addEventListener("mousedown", (event) => {
   event.stopPropagation();
 });
-$pvpBtn.addEventListener("click", async (event) => {
+$pvpBtn.addEventListener("click", (event) => {
   event.stopPropagation();
-  try {
+  void runAction("PVP meter", async () => {
     await enablePvpMode();
     await invoke("create_pvp_overlay");
-  } catch (_) {
-    /* ignore */
-  }
+  });
 });
 
 function buildBattleReport(snap) {
@@ -398,18 +403,16 @@ function buildBattleReport(snap) {
   return report;
 }
 
-document.getElementById("copy-report-btn").addEventListener("click", async () => {
+document.getElementById("copy-report-btn").addEventListener("click", () => {
   if (!lastSnapshot) return;
   const report = buildBattleReport(lastSnapshot);
-  try {
+  void runAction("Copy report", async () => {
     await navigator.clipboard.writeText(report);
     invoke("show_system_notification", {
       title: "Aether",
       body: "Battle report copied to clipboard",
     }).catch(() => {});
-  } catch (_) {
-    /* ignore */
-  }
+  });
 });
 
 // =============================================================================
@@ -1301,20 +1304,17 @@ function updatePlayerList(snap, fullRebuild) {
   startAutoHeightFallbackPolling();
 
   // Player row click → open detail window
-  $playerList.addEventListener("click", async (e) => {
+  $playerList.addEventListener("click", (e) => {
     const row = e.target.closest(".player-row");
     if (!row) return;
     const actorId = Number(row.dataset.actorId);
     if (!actorId) return;
 
-    try {
-      await invoke("set_detail_selection", {
-        value: { actorId, mode: "live" },
-      });
+    void runAction("Player detail", async () => {
+      const selection = { actorId, mode: "live" };
+      await invoke("set_detail_selection", { value: selection });
       await invoke("create_dps_detail");
-      await emit("select-player-detail", payload);
-    } catch (_) {
-      /* ignore */
-    }
+      await emit("select-player-detail", selection);
+    });
   });
 })();

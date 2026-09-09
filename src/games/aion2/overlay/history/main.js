@@ -133,6 +133,19 @@ async function uploadRecords(records, emptyMessage) {
   }
 }
 
+// Module scope, not init() scope: the handlers below are bound out here, and
+// one of them was calling this where it could not be seen.
+async function load() {
+  try {
+    const records = await invoke("get_history");
+    allRecords = Array.isArray(records) ? records : [];
+    refreshFilterOptions();
+    applyFilters();
+  } catch (e) {
+    console.error("[dps-history] load failed:", e);
+  }
+}
+
 document.getElementById("delete-all-btn").addEventListener("click", async () => {
   if (allRecords.length === 0) {
     setUploadStatus(t("dps-history.noRecordsToDelete"), "error");
@@ -472,16 +485,6 @@ $list.addEventListener("click", async (e) => {
     setLanguage(lang);
   } catch (_) {}
 
-  async function load() {
-    try {
-      const records = await invoke("get_history");
-      allRecords = Array.isArray(records) ? records : [];
-      refreshFilterOptions();
-      applyFilters();
-    } catch (e) {
-      console.error("[dps-history] load failed:", e);
-    }
-  }
   function setEmptyText() {
     $empty.textContent = t("dps-history.empty");
   }

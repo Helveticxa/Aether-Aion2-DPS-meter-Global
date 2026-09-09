@@ -47,14 +47,16 @@ body {
   flex-shrink: 0;
 }
 
+/* The wordmark is white. Gold made it the loudest thing on a bar that sits on
+   top of a game, competing with the numbers it is meant to introduce. */
 .title-bar__label {
   flex-shrink: 0;
-  color: #ffd700;
+  color: rgba(255, 255, 255, 0.92);
   font-family: var(--font-family);
   font-size: 12px;
   font-weight: bold;
-  letter-spacing: 1px;
-  text-shadow: 0 0 6px rgba(255, 215, 0, 0.4);
+  letter-spacing: 1.4px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
   max-width: 250px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -95,56 +97,83 @@ body {
   cursor: grabbing;
 }
 
+/* The five actions read as one control cluster rather than five loose glyphs
+   floating in the bar -- a single recessed pill, hairline dividers between the
+   buttons, and the destructive one kept outside it. */
+.title-bar__actions {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  margin-right: 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
 .title-bar__btn {
   pointer-events: auto;
   cursor: pointer;
   background: none;
   border: none;
-  color: #888;
+  color: rgba(255, 255, 255, 0.58);
   line-height: 1;
-  padding: 4px 6px;
-  border-radius: 4px;
+  padding: 5px 7px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition:
-    color 0.15s,
-    background 0.15s;
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.title-bar__actions .title-bar__btn + .title-bar__btn {
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.07);
 }
 
 .title-bar__btn:hover {
   color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.title-bar__btn:active {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .title-bar__pin.is-active {
   color: #ffd700;
-  background: rgba(255, 215, 0, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(255, 215, 0, 0.18);
+  background: rgba(255, 215, 0, 0.16);
 }
 
+/* Kept out of the action cluster: closing the overlay is not the same kind of
+   thing as toggling one, and it should not sit a pixel away from Settings. */
 .title-bar__close {
   pointer-events: auto;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
   background: none;
   border: none;
-  color: #888;
+  color: rgba(255, 255, 255, 0.5);
   font-size: 16px;
   line-height: 1;
-  padding: 4px 6px;
-  border-radius: 4px;
+  border-radius: 6px;
   transition:
-    color 0.15s,
-    background 0.15s;
+    color 0.15s ease,
+    background 0.15s ease;
 }
 
 .diag-message {
-  color: #ffd700;
+  color: rgba(255, 255, 255, 0.62);
   font-family: var(--font-family);
   font-size: 12px;
   text-align: center;
-  padding: 6px 0;
-  text-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
+  padding: 7px 0;
+  letter-spacing: 0.2px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 .diag-message:empty {
@@ -153,7 +182,7 @@ body {
 
 .title-bar__close:hover {
   color: #fff;
-  background: rgba(255, 60, 60, 0.5);
+  background: rgba(239, 68, 68, 0.65);
 }
 
 /* ---- Content area ---- */

@@ -47,6 +47,39 @@ lives there — beside the health it describes — instead of in the title slot.
 **Team DPS is gone from the status bar.** Solo, it printed the same number as
 the row directly above it; the row says it better.
 
+### The title bar
+
+The wordmark is white. Gold made it the loudest thing on a bar that sits on top
+of a game, competing with the numbers it is meant to introduce.
+
+The five actions are one recessed cluster with hairline dividers rather than
+five loose glyphs floating in the bar, and closing the overlay sits outside it —
+that is not the same kind of thing as toggling one, and it should not be a pixel
+away from Settings.
+
+The "waiting for game data" notice is no longer gold either. It was information,
+and it read as a warning.
+
+### Buttons that could not tell you they had failed
+
+Every action in the title bar caught its own errors and discarded them, so a
+button whose command failed looked exactly like a button that did nothing.
+Failures now say so on the overlay itself and clear on their own.
+
+That was hiding two real bugs, both of the same shape — an undefined identifier
+in a plain `.js` file, thrown at runtime and eaten by a catch:
+
+- **Clicking a second player never switched the detail window.** The meter
+  passed an undeclared `payload` to an `emit` it had never imported. Opening the
+  window worked because it reads the stored selection on startup, which is why
+  this survived; switching never did.
+- **Delete all history deleted the records and then reported failure.** It
+  called `load` from module scope, where the function — declared inside
+  `init()` — is not visible.
+
+`pnpm check:undef` now scans every plain `.js` in `src` for exactly this. The
+overlays are not TypeScript, so nothing else looks at them.
+
 ### Not getting heavier
 
 `MAX_ROWS` has been declared since the fork and never applied, so a full raid
