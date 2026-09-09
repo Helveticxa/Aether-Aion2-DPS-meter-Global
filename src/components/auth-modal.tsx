@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -519,20 +518,22 @@ export function AuthModal() {
       ) : (
         <TooltipProvider delayDuration={100}>
           <Tooltip>
+            {/* The account page it used to link to was upstream's premium
+                membership screen, wired to their Supabase. Removed with the
+                other unreachable cloud pages; the avatar now just opens the
+                tooltip menu below. */}
             <TooltipTrigger asChild>
-              <Link to="/user">
-                <Button
-                  variant="ghost"
-                  className="no-drag-region relative h-10 w-10 rounded-full bg-black/25 p-0 text-white/84 backdrop-blur-md transition hover:bg-white/18 hover:text-white"
-                >
-                  <Avatar className="h-8.5 w-8.5 rounded-full ring-1 ring-white/18 transition hover:brightness-110">
-                    <AvatarImage src={avatarUrl} alt={userName} />
-                    <AvatarFallback className="bg-white/12 text-xs font-semibold text-white">
-                      {userName.slice(0, 1).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
-              </Link>
+              <Button
+                variant="ghost"
+                className="no-drag-region relative h-10 w-10 rounded-full bg-black/25 p-0 text-white/84 backdrop-blur-md transition hover:bg-white/18 hover:text-white"
+              >
+                <Avatar className="h-8.5 w-8.5 rounded-full ring-1 ring-white/18 transition hover:brightness-110">
+                  <AvatarImage src={avatarUrl} alt={userName} />
+                  <AvatarFallback className="bg-white/12 text-xs font-semibold text-white">
+                    {userName.slice(0, 1).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
             </TooltipTrigger>
 
             <TooltipContent
