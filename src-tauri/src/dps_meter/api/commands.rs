@@ -7,30 +7,20 @@ use crate::dps_meter::engine::meter::DpsMeter;
 use crate::dps_meter::history::HistoryRecord;
 use crate::dps_meter::models::combat::{CombatSnapshot, PvpCombatStatsRow, PvpWatchInfoResponse};
 use crate::dps_meter::models::diagnostics::DpsMeterState;
+use crate::dps_meter::preflight;
 use crate::dps_meter::capture::census::{self, CensusSnapshot};
 use crate::dps_meter::capture::recorder::{RecordingFile, RecordingStatus};
 use crate::dps_meter::region::{self, RegionStatus};
 use crate::dps_meter::storage::data_storage::{BuffOverlayContext, FieldBossTimerSnapshot};
 
+/// What [`install_npcap`] did, step by step, so a failure can be read off the
+/// screen instead of guessed at.
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CaptureRuntimeCheck {
-    pub available: bool,
-    pub error_code: Option<i32>,
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CaptureRuntimeStatus {
-    pub windivert: CaptureRuntimeCheck,
-    pub npcap: CaptureRuntimeCheck,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RepairRuntimeResult {
-    pub success: bool,
+pub struct NpcapInstallOutcome {
+    /// Whether the official installer actually ran. False means Aether stopped
+    /// before launching anything -- download or verification failed.
+    pub launched: bool,
     pub steps: Vec<String>,
     pub error: Option<String>,
 }
@@ -370,115 +360,139 @@ pub fn check_npcap_available() -> Result<WinDivertStatus, String> {
     Ok(status)
 }
 
+/// Everything the startup gate needs, in one call.
 #[tauri::command]
-pub fn check_capture_runtime_status() -> Result<CaptureRuntimeStatus, String> {
-    let windivert_status = crate::dps_meter::capture::windivert_capturer::check_windivert_status();
-    let npcap_status = match crate::dps_meter::capture::capturer::check_npcap_available() {
-        Ok(()) => CaptureRuntimeCheck {
-            available: true,
-            error_code: None,
-            error: None,
-        },
-        Err(error) => CaptureRuntimeCheck {
-            available: false,
-            error_code: None,
-            error: Some(error),
-        },
-    };
-
-    Ok(CaptureRuntimeStatus {
-        windivert: CaptureRuntimeCheck {
-            available: windivert_status.available,
-            error_code: windivert_status.error_code,
-            error: windivert_status.error,
-        },
-        npcap: npcap_status,
-    })
+pub fn run_preflight() -> Result<preflight::Report, String> {
+    Ok(preflight::run())
 }
 
+/// Open the main window, but only if the checks still pass.
+///
+/// The decision lives here rather than in the gate's JavaScript so that it
+/// cannot drift: the checks are re-run at the moment of entry, which costs
+/// milliseconds and means a driver that died between the last check and the
+/// click cannot let anyone through.
 #[tauri::command]
-pub async fn repair_windivert_runtime() -> Result<RepairRuntimeResult, String> {
-    const WINDIVERT_SYS_URL: &str = "https://tguffyzmkjkxqmmosfhf.supabase.co/storage/v1/object/public/windivert/WinDivert64.sys";
+pub fn enter_app(app: AppHandle) -> Result<(), String> {
+    use tauri::Manager;
 
-    let mut steps = Vec::new();
-    steps.push("Locating the install directory".to_string());
+    let report = preflight::run();
+    if !report.ready {
+        return Err(report.summary);
+    }
+    preflight::mark_passed();
 
-    let exe_path = std::env::current_exe().map_err(|error| error.to_string())?;
-    let install_dir = exe_path
-        .parent()
-        .ok_or_else(|| "Cannot locate the install directory".to_string())?;
-    let target_path = install_dir.join("WinDivert64.sys");
+    if let Some(main) = app.get_webview_window("main") {
+        main.show().map_err(|error| error.to_string())?;
+        let _ = main.unminimize();
+        let _ = main.set_focus();
+    }
+    if let Some(gate) = app.get_webview_window("splashscreen") {
+        let _ = gate.close();
+    }
 
-    steps.push(format!("Install directory: {}", install_dir.display()));
-    steps.push("Downloading WinDivert64.sys".to_string());
+    Ok(())
+}
 
-    let response = match reqwest::Client::new().get(WINDIVERT_SYS_URL).send().await {
+/// Pinned to an exact build. The URL and the digest move together, in one
+/// commit, so what Aether executes is always something a human chose.
+const NPCAP_INSTALLER_URL: &str = "https://npcap.com/dist/npcap-1.88.exe";
+const NPCAP_INSTALLER_SHA256: &str =
+    "a2f4ec1e5ea353ff67efd24b2ebf081ba44532410fae8d5e146af0310aa4f56b";
+
+/// Fetch the official Npcap installer, verify it, and run it.
+///
+/// Npcap reserves silent installation for its OEM licence, so the installer
+/// shows its own window and the user clicks through it. Aether's part is to
+/// remove the guesswork around it: fetch the right build, prove it is the right
+/// build, and re-check on its own once the installer exits.
+///
+/// Verification is not ceremony. This downloads an executable and runs it with
+/// the administrator rights Aether already holds, so the digest is what stands
+/// between a hijacked download and a kernel driver of someone else's choosing.
+#[tauri::command]
+pub async fn install_npcap() -> Result<NpcapInstallOutcome, String> {
+    use sha2::{Digest, Sha256};
+
+    fn stop(steps: Vec<String>, error: String) -> Result<NpcapInstallOutcome, String> {
+        Ok(NpcapInstallOutcome {
+            launched: false,
+            steps,
+            error: Some(error),
+        })
+    }
+
+    let mut steps = vec![format!("Downloading {NPCAP_INSTALLER_URL}")];
+
+    let response = match reqwest::Client::new().get(NPCAP_INSTALLER_URL).send().await {
         Ok(response) => response,
-        Err(error) => {
-            steps.push("Download failed".to_string());
-            return Ok(RepairRuntimeResult {
-                success: false,
-                steps,
-                error: Some(error.to_string()),
-            });
-        }
+        Err(error) => return stop(steps, format!("Download failed: {error}")),
     };
-
     if !response.status().is_success() {
         let status = response.status();
-        steps.push(format!("Download failed: HTTP {status}"));
-        return Ok(RepairRuntimeResult {
-            success: false,
-            steps,
-            error: Some(format!("HTTP {status}")),
-        });
+        return stop(steps, format!("Download failed: HTTP {status}"));
     }
-
     let bytes = match response.bytes().await {
         Ok(bytes) => bytes,
-        Err(error) => {
-            steps.push("Could not read the downloaded file".to_string());
-            return Ok(RepairRuntimeResult {
-                success: false,
-                steps,
-                error: Some(error.to_string()),
-            });
-        }
+        Err(error) => return stop(steps, format!("Download failed: {error}")),
     };
     steps.push(format!("Downloaded {} bytes", bytes.len()));
-    steps.push(format!("Writing to {}", target_path.display()));
 
-    if let Err(error) = std::fs::write(&target_path, &bytes) {
-        steps.push("Write failed".to_string());
-        return Ok(RepairRuntimeResult {
-            success: false,
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    if digest != NPCAP_INSTALLER_SHA256 {
+        steps.push("Checksum did not match".to_string());
+        return stop(
             steps,
-            error: Some(format!(
-                "{error}. If Aether is installed under Program Files, run it as Administrator and try again."
-            )),
-        });
+            format!(
+                "The downloaded installer is not the build Aether expects \
+                 (sha256 {digest}). Nothing was run. Install Npcap yourself from npcap.com."
+            ),
+        );
     }
+    steps.push("Checksum verified against the pinned build".to_string());
 
-    steps.push("WinDivert64.sys written to the install directory".to_string());
-    steps.push("Re-checking WinDivert".to_string());
+    let path = std::env::temp_dir().join("aether-npcap-installer.exe");
+    if let Err(error) = std::fs::write(&path, &bytes) {
+        return stop(steps, format!("Could not write the installer: {error}"));
+    }
+    steps.push(format!("Saved to {}", path.display()));
+    steps.push("Waiting for the Npcap installer to finish".to_string());
 
-    let status = crate::dps_meter::capture::windivert_capturer::check_windivert_status();
-    if status.available {
-        steps.push("WinDivert repaired".to_string());
-        Ok(RepairRuntimeResult {
-            success: true,
-            steps,
-            error: None,
-        })
-    } else {
-        let error = status
-            .error
-            .unwrap_or_else(|| "WinDivert is still unavailable".to_string());
-        steps.push(format!("Re-check failed: {error}"));
-        Ok(RepairRuntimeResult {
-            success: false,
-            steps,
-            error: Some(error),
-        })
+    // Blocking wait on a background thread: the installer is interactive and
+    // takes as long as the user does.
+    let launch_path = path.clone();
+    let status = tauri::async_runtime::spawn_blocking(move || {
+        std::process::Command::new(&launch_path).status()
+    })
+    .await;
+
+    // Best effort -- a leftover installer in %TEMP% is harmless.
+    let _ = std::fs::remove_file(&path);
+
+    match status {
+        Ok(Ok(exit)) if exit.success() => {
+            steps.push("Installer finished".to_string());
+            Ok(NpcapInstallOutcome {
+                launched: true,
+                steps,
+                error: None,
+            })
+        }
+        Ok(Ok(exit)) => {
+            // A non-zero code usually means the user cancelled. Not an error
+            // worth shouting about; the re-check that follows tells the truth.
+            steps.push(format!("Installer exited with code {:?}", exit.code()));
+            Ok(NpcapInstallOutcome {
+                launched: true,
+                steps,
+                error: Some(
+                    "The installer closed without completing. Npcap was probably not installed."
+                        .to_string(),
+                ),
+            })
+        }
+        Ok(Err(error)) => stop(steps, format!("Could not start the installer: {error}")),
+        Err(error) => stop(steps, format!("Could not start the installer: {error}")),
     }
 }
+

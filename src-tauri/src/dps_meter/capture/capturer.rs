@@ -417,6 +417,35 @@ pub fn check_npcap_available() -> Result<(), String> {
     NpcapLib::load().map(|_| ())
 }
 
+/// A stricter check than [`check_npcap_available`], for the startup gate.
+///
+/// Loading `wpcap.dll` only proves a file is on the search path. It keeps
+/// succeeding after the Npcap service is stopped or its driver is uninstalled
+/// from under it, so a gate built on that would let a user into an app that can
+/// never see a packet. Enumerating adapters actually reaches the driver.
+///
+/// Returns how many non-loopback adapters are visible.
+pub fn probe_npcap() -> Result<usize, String> {
+    let npcap = NpcapLib::load().map_err(|_| {
+        "Npcap is not installed, or was installed without WinPcap API-compatible Mode."
+            .to_string()
+    })?;
+
+    let devices = npcap.find_all_devices().map_err(|error| {
+        format!("Npcap is installed but would not list adapters ({error}).")
+    })?;
+
+    let usable = devices.iter().filter(|device| !device.is_loopback).count();
+    if usable == 0 {
+        return Err(
+            "Npcap answered but reported no network adapters. Its driver service may be stopped."
+                .to_string(),
+        );
+    }
+
+    Ok(usable)
+}
+
 fn format_device_inventory(devices: &[DeviceInfo]) -> String {
     if devices.is_empty() {
         return "none".to_string();

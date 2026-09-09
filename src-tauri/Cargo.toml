@@ -1,9 +1,9 @@
 [package]
 name = "aether"
-version = "0.1.4"
+version = "0.1.5"
 license = "GPL-3.0-only"
-description = "A Tauri App"
-authors = ["zdyoung"]
+description = "Real-time DPS meter for AION 2"
+authors = ["Helveticxa"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -32,6 +32,7 @@ sysinfo = "0.33"
 libloading = "0.8"
 lz4_flex = "0.11"
 crc32fast = "1"
+sha2 = "0.10"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
@@ -46,5 +47,6 @@ windows = { version = "0.61.3", features = [
     "Win32_Foundation",
     "Win32_System_Threading",
     "Win32_UI_Accessibility",
+    "Win32_Security",
     "Win32_UI_WindowsAndMessaging",
 ] }

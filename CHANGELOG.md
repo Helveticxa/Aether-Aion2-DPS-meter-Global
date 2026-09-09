@@ -5,6 +5,48 @@ numbering: this fork publishes to its own release channel, and the updater
 compares an installed build against these releases. Upstream's release history
 lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
 
+## [0.1.5]
+
+**WinDivert was never shipped.** `WinDivert64.sys` sat in the repository and was
+copied into the build directory for local runs, but the installer's resource
+list named only `WinDivert.dll` — so every installed copy of Aether had the
+fallback capture backend permanently unavailable, reporting "WinDivert64.sys was
+not found" on a machine where nothing was wrong. The driver is now bundled, and
+the fallback works out of the box.
+
+**The startup screen is a real gate.** It used to run its checks and then let
+you through regardless, which is defensible — capture needs one backend, not
+both — but it said so while showing an amber warning and a Repair button, so a
+healthy machine looked broken. Now the checks are weighed: anything genuinely
+required holds the app closed until it passes, and anything optional is shown in
+plain grey with an "Optional" tag and never blocks. The gate cannot be walked
+around either; the tray icon and a second launch both land on it rather than
+opening the main window behind it.
+
+**Npcap installs from the gate.** When no capture backend is available, one
+button fetches the official Npcap installer, verifies it against a pinned
+SHA-256 before running anything, launches it, and re-checks by itself when it
+closes. Npcap reserves unattended installation for its OEM licence, so its own
+window still appears — the gate says which option to tick.
+
+**Checks test the driver, not the file.** Npcap used to count as present if
+`wpcap.dll` could be loaded, which stays true after its service stops or its
+driver is removed underneath. The check now enumerates adapters, so "available"
+means capture can actually start. Administrator rights are checked too, rather
+than assumed from the manifest.
+
+**Removed the WinDivert download.** Repairing WinDivert used to pull a kernel
+driver from a third-party storage bucket inherited from upstream, over plain
+HTTP semantics with no integrity check, and write it into the install directory.
+Bundling the driver makes that unnecessary and the code is gone.
+
+### Also
+
+- Starting the meter reports *why* it failed instead of "Failed to toggle DPS
+  meter" — the backend already names the backend and the error.
+- A failed meter start no longer leaves an empty overlay pinned over the game.
+- The setup guide points at the same Npcap build the gate installs.
+
 ## [0.1.4]
 
 **Window controls are readable now.** Minimise, maximise and close had no

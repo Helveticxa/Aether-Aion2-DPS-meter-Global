@@ -30,6 +30,46 @@ on global too. Still to be confirmed against a real global capture.
 
 ## Changes against upstream
 
+### The startup gate, and the driver upstream forgot to ship
+
+`src-tauri/resources/windivert/` holds both `WinDivert.dll` and
+`WinDivert64.sys`, and `scripts/copy-windivert-runtime.ps1` copies both into
+`src-tauri/target/<profile>/` before a dev run — so WinDivert works for whoever
+is building it. But `tauri.conf.json` listed only the DLL under `bundle.resources`,
+and that list is what the NSIS installer ships. Every *installed* copy therefore
+had no driver file at all, and reported `WinDivert64.sys was not found` forever.
+
+The service registration proves it: on a machine that had run 0.1.4, the
+`WinDivert` kernel service existed and pointed at
+`\??\C:\Program Files\Aether\WinDivert64.sys`, a path with no file behind it.
+Upstream papered over this at runtime instead — `repair_windivert_runtime`
+downloaded the `.sys` from a Supabase bucket and wrote it into the install
+directory, with no integrity check. That command is gone; the driver is bundled.
+
+For the record, the vendored binaries are **byte-identical** to the official
+`WinDivert-2.2.2-A.zip` from `basil00/WinDivert` (sha256
+`8da085…ddc2` for the driver). The Chinese company on the driver's Authenticode
+signature is upstream WinDivert's own signer, not something this fork's ancestor
+introduced.
+
+`src-tauri/src/dps_meter/preflight.rs` replaces `check_capture_runtime_status`
+with a weighed report:
+
+- **Required vs optional is computed, not fixed.** Capture needs one backend, so
+  Npcap is only required while WinDivert cannot stand in for it. An unavailable
+  WinDivert beside a working Npcap is shown in grey and never blocks — the old
+  screen dressed it in amber next to the word "starting", which is what made a
+  perfectly healthy machine look broken.
+- **The Npcap probe enumerates adapters** rather than loading `wpcap.dll`, which
+  keeps succeeding after the driver service stops.
+- **The gate is authoritative.** `enter_app` re-runs the checks in Rust and
+  refuses if anything required fails, and `preflight::passed()` gates
+  `show_main_window`, so the tray icon and a second launch cannot open the app
+  behind a gate that is still holding.
+- **`install_npcap`** fetches the pinned installer, verifies its SHA-256 before
+  executing anything, and re-checks when it exits. Npcap reserves silent
+  installation for its OEM licence, so its own window still appears.
+
 ### Cloud features made optional
 
 Upstream reads `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` from a gitignored

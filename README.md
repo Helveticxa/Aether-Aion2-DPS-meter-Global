@@ -40,12 +40,13 @@ searchable history and broken down by skill, buff uptime, and damage type.
 
 ## Install
 
-1. Install [Npcap](https://npcap.com/#download). **Tick "Install Npcap in
-   WinPcap API-compatible Mode"** during setup.
-2. Download the installer from [Releases](../../releases) and run it.
-3. Launch Aether **as Administrator** — packet capture requires it.
+1. Download the installer from [Releases](../../releases) and run it.
+2. Launch Aether **as Administrator** — packet capture requires it.
 
-Windows 10 or 11.
+Windows 10 or 11. No separate driver install: Aether bundles WinDivert and
+checks the capture environment on startup, holding the app closed until it can
+actually capture. If nothing is available it offers to install
+[Npcap](https://npcap.com/#download) for you.
 
 ## Built for the global servers
 

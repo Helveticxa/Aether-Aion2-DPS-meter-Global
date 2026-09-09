@@ -156,7 +156,14 @@ export function DpsMeterLauncherButton() {
       }
     } catch (error) {
       console.error("toggle dps meter failed:", error);
-      toast.error(t("aion2Home.meterToggleFailed"));
+      // The backend fails here for one reason that matters -- no capture
+      // backend would start -- and it says which one and why. Swallowing that
+      // behind a generic string leaves the user with nothing to act on.
+      const reason = error instanceof Error ? error.message : String(error);
+      toast.error(t("aion2Home.meterToggleFailed"), {
+        description: reason,
+        duration: 8000,
+      });
     } finally {
       setPendingAction(null);
       setIsPending(false);

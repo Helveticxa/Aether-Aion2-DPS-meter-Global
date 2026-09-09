@@ -45,12 +45,9 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            // When attempting to start a second instance, focus the existing main window
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_focus();
-                let _ = window.unminimize();
-                let _ = window.show();
-            }
+            // A second launch focuses what is already running -- which, while
+            // the startup gate is still holding, is the gate and not the app.
+            plugins::system_tray::show_main_window(app);
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_deep_link::init())
@@ -106,8 +103,9 @@ pub fn run() {
             dps_meter::api::commands::delete_history_records,
             dps_meter::api::commands::mark_history_records_uploaded,
             dps_meter::api::commands::check_npcap_available,
-            dps_meter::api::commands::check_capture_runtime_status,
-            dps_meter::api::commands::repair_windivert_runtime,
+            dps_meter::api::commands::run_preflight,
+            dps_meter::api::commands::enter_app,
+            dps_meter::api::commands::install_npcap,
             plugins::aion2_overlay::create_dps_overlay,
             plugins::aion2_overlay::destroy_dps_overlay,
             plugins::aion2_overlay::create_pvp_overlay,

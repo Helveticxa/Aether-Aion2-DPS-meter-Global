@@ -35,7 +35,7 @@ export default function HomePage() {
       url: "/splashscreen?manual=1",
       title: "Capture check",
       width: 640,
-      height: 460,
+      height: 520,
       decorations: false,
       transparent: true,
       center: true,

@@ -86,20 +86,20 @@ export function DpsLightGuideDialog({ open, onOpenChange }: DpsLightGuideDialogP
                 <div className="flex-1">
                   Install{" "}
                   <a
-                    href="https://npcap.com/dist/npcap-1.87.exe"
+                    href="https://npcap.com/dist/npcap-1.88.exe"
                     target="_blank"
                     rel="noreferrer"
                     className="font-medium text-white underline decoration-white/30 underline-offset-2 hover:text-cyan-200"
                     onClick={(event) => {
                       event.preventDefault();
                       void import("@tauri-apps/plugin-opener").then((module) =>
-                        module.openUrl("https://npcap.com/dist/npcap-1.87.exe")
+                        module.openUrl("https://npcap.com/dist/npcap-1.88.exe")
                       );
                     }}
                   >
                     Npcap
                   </a>
-                  {" "}(tick the third option during setup)
+                  {" "}(tick WinPcap API-compatible Mode during setup)
                   <button
                     type="button"
                     onClick={() => {

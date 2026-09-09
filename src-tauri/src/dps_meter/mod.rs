@@ -4,5 +4,6 @@ pub mod config;
 pub mod engine;
 pub mod history;
 pub mod models;
+pub mod preflight;
 pub mod region;
 pub mod storage;

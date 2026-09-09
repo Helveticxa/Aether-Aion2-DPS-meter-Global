@@ -11,7 +11,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { UpdaterDialog } from "@/components/updater-dialog";
 
 const UserPage = lazy(() => import("./pages/user"));
-const StartupSplashPage = lazy(() => import("./pages/startup-splash"));
+const PreflightGatePage = lazy(() => import("./pages/preflight-gate"));
 const SettingsViewPage = lazy(() => import("./pages/settings"));
 const Aion2HomePage = lazy(() => import("./games/aion2/pages/home"));
 const Aion2CharacterPage = lazy(() => import("./games/aion2/pages/character"));
@@ -40,7 +40,7 @@ function AppWrapper() {
 
   return (
     <Routes>
-      <Route path="/splashscreen" element={<StartupSplashPage />} />
+      <Route path="/splashscreen" element={<PreflightGatePage />} />
 
       {/* Main window for aion2*/}
       <Route

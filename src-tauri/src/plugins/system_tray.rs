@@ -57,6 +57,17 @@ pub(crate) fn ensure_main_window<R: Runtime>(
 }
 
 pub fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
+    // While the startup gate is still holding, surface the gate instead. The
+    // tray is otherwise a way straight past it into an app that cannot capture.
+    if !crate::dps_meter::preflight::passed() {
+        if let Some(gate) = app.get_webview_window("splashscreen") {
+            let _ = gate.show();
+            let _ = gate.unminimize();
+            let _ = gate.set_focus();
+            return;
+        }
+    }
+
     match ensure_main_window(app) {
         Ok(window) => {
             let _ = window.show();

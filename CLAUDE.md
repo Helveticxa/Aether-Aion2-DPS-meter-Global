@@ -57,6 +57,7 @@ runner cannot launch an executable that demands elevation.
 | `src-tauri/src/dps_meter/capture/recorder.rs` | Packet recording and replay |
 | `src-tauri/src/dps_meter/capture/census.rs` | Opcode census |
 | `src-tauri/src/dps_meter/region.rs` | Region profiles and traffic observations |
+| `src-tauri/src/dps_meter/preflight.rs` | Startup gate: what must be true before the app opens |
 | `src-tauri/src/dps_meter/engine/` | DPS calculation, meter lifecycle |
 | `src-tauri/src/plugins/` | Overlay windows, tray, logger, shortcuts |
 | `src/games/aion2/` | Game UI, five overlay windows, bundled game data |
@@ -75,6 +76,16 @@ runner cannot launch an executable that demands elevation.
 - **Overlays carry their own defaults.** They are separate HTML+JS entry points
   with their own config fallbacks and their own tiny i18n module. Changing an
   app-level default does not reach them.
+- **Two different lists decide what ships.** `scripts/copy-windivert-runtime.ps1`
+  copies the WinDivert files into `src-tauri/target/<profile>/` for local runs;
+  `bundle.resources` in `tauri.conf.json` decides what the *installer* carries.
+  They drifted apart once already and the driver went missing from every install
+  while working perfectly for whoever built it. Anything a released build needs
+  at runtime belongs in both.
+- **The startup gate is authoritative in Rust, not in the page.** `enter_app`
+  re-runs the checks before showing the main window, and `preflight::passed()`
+  guards `show_main_window`. Any new path that surfaces the main window has to
+  go through it, or it becomes a way around the gate.
 - **Overlays are `.js`.** Two consequences, both of which have already caused
   bugs. `tsc` does not check them, so always run the full `pnpm build` rather
   than `tsc --noEmit`. And any repo-wide scan — renaming, translating, auditing —

@@ -66,9 +66,16 @@ pub async fn create_dps_overlay<R: Runtime>(app: AppHandle<R>) -> Result<(), Str
     }
     set_dps_overlay_locked_for_app(&app, OVERLAY_LOCKED.load(Ordering::Relaxed))?;
 
-    // Start the DPS meter when overlay opens
+    // Start the DPS meter when overlay opens. If capture cannot start there is
+    // nothing to display, so take the window back down rather than leaving an
+    // empty overlay pinned over the game with the caller told it failed.
     let meter = app.state::<DpsMeter>();
-    meter.start_dps_meter()?;
+    if let Err(error) = meter.start_dps_meter() {
+        DPS_OVERLAY_ACTIVE.store(false, Ordering::Relaxed);
+        let _ = window.destroy();
+        destroy_event_timer_window(&app)?;
+        return Err(error);
+    }
 
     if BUFF_MONITOR_ENABLED.load(Ordering::Relaxed) {
         create_dps_buff(app).await?;
