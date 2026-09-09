@@ -5,6 +5,30 @@ numbering: this fork publishes to its own release channel, and the updater
 compares an installed build against these releases. Upstream's release history
 lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
 
+## [0.1.10]
+
+**The meter was clearing itself mid-fight.** Identifying the player fired a
+silent reset — intended to start clean when you log in. But the game re-sends
+the own-player packet throughout a session, ten times in one recorded session
+here, and every one of them wiped the accumulated damage. That is why the
+overlay sat at `--` while the fight was plainly happening.
+
+It now resets only when the player actually changes, keyed on the character name
+rather than the actor id: ids are per-session entity handles that change across
+zones — the same character appeared as both `15056` and `5492` in one recording
+— so keying on them would have cleared the meter every time you zoned.
+
+**The same bug emptied the Main Character card.** A reset clears the actor name
+table while damage keeps accumulating against actor ids, so a fight that ended
+in that window was filed as a record with damage but no players. The card builds
+its character list from those records, found no named player in any of them, and
+said "No main character recorded yet". With the resets gone, records keep their
+players and the card has something to read.
+
+Nothing was wrong with capture or parsing. The log from the reported session
+shows the player identified correctly ten times over — name, server, and class —
+and no errors at all.
+
 ## [0.1.9]
 
 **Minimising no longer throws the map view away.** Restoring the window brought

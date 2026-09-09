@@ -710,22 +710,28 @@ impl DataStorage {
     }
 
     pub fn set_main_actor(&self, actor_id: u32, actor_name: &str) {
-        let sid = {
+        let (sid, is_new_player) = {
             let mut inner = self.inner.write().unwrap();
-            if inner
-                .main_actor_name
-                .as_deref()
-                .is_some_and(|current_name| current_name != actor_name)
-            {
+            let is_new_player = main_actor_changed(inner.main_actor_name.as_deref(), actor_name);
+            if is_new_player {
                 inner.main_actor_combat_power = None;
             }
             inner.main_actor_id = Some(actor_id);
             inner.main_actor_name = Some(actor_name.to_string());
-            inner.actor_id_server_map.get(&actor_id).cloned()
+            (
+                inner.actor_id_server_map.get(&actor_id).cloned(),
+                is_new_player,
+            )
         }; // RwLock released — callback below can safely call clear()
 
-        if let Some(cb) = self.main_actor_callback.lock().unwrap().as_ref() {
-            cb(actor_id, actor_name, sid.clone());
+        // Only when the player actually changes. The callback clears the meter,
+        // and the game re-sends this packet throughout a session -- ten times in
+        // one recorded session -- so firing it every time wiped accumulated
+        // damage mid-fight and left the overlay showing nothing.
+        if is_new_player {
+            if let Some(cb) = self.main_actor_callback.lock().unwrap().as_ref() {
+                cb(actor_id, actor_name, sid.clone());
+            }
         }
 
         let _ = self.app.emit(
@@ -1114,4 +1120,36 @@ fn pvp_player_key(inner: &DataStorageInner, actor_id: u32) -> Option<PvpPlayerKe
             .cloned()
             .unwrap_or_default(),
     })
+}
+
+/// Whether identifying `next` as the main actor means the player has changed.
+///
+/// Keyed on the name rather than the actor id on purpose: ids are per-session
+/// entity handles that change across zones -- one recording shows the same
+/// character as both `15056` and `5492` -- so keying on them would clear the
+/// meter every time you zoned.
+fn main_actor_changed(current: Option<&str>, next: &str) -> bool {
+    current != Some(next)
+}
+
+#[cfg(test)]
+mod main_actor_tests {
+    use super::main_actor_changed;
+
+    #[test]
+    fn first_identification_counts_as_a_change() {
+        assert!(main_actor_changed(None, "Helveticaa"));
+    }
+
+    #[test]
+    fn re_identifying_the_same_player_does_not() {
+        // The game re-sends the own-player packet throughout a session. Treating
+        // each one as a change cleared the meter mid-fight.
+        assert!(!main_actor_changed(Some("Helveticaa"), "Helveticaa"));
+    }
+
+    #[test]
+    fn switching_character_counts_as_a_change() {
+        assert!(main_actor_changed(Some("Helveticaa"), "HiorV11"));
+    }
 }
