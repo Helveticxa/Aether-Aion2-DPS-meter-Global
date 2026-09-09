@@ -5,6 +5,43 @@ numbering: this fork publishes to its own release channel, and the updater
 compares an installed build against these releases. Upstream's release history
 lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
 
+## [0.1.6]
+
+**An interactive map.** A new tab beside Home, with an always-on-top minimap
+that behaves like the DPS overlay. Eight zones, 4,799 markers, 77 region
+outlines: waystones, seals, hidden cubes, monolith materials, gathering nodes,
+villages and NPCs, filterable by category and searchable by name. Clicking a
+marker marks it found, and that is remembered — the full map and the minimap
+share the same state, so hiding a category in one hides it in the other.
+
+The marker database and map images come from
+[AION2 Hub](https://aion2hub.com/maps). It is their work; if the map is useful
+to you, visit and support them. `public/aion2/maps/SOURCE.md` records exactly
+what was taken and how.
+
+Markers carry a glyph rather than only a colour, because fifteen categories
+separated by hue alone makes a map a memory test. Shape says what kind of thing
+it is — gem, ore, log, leaf, waystone — and colour says which one, with the
+palette arranged so that same-shaped categories land far apart.
+
+Pan and zoom move one transformed plane rather than repositioning every marker,
+which keeps the cost independent of how many are on screen: 0.023 ms per view
+update with 1,364 markers loaded. Markers shrink as the map zooms out, since
+holding them at a constant size turns a busy zone into a solid mass. Zoom stops
+at 12×, where the 4096px images stop being sharp.
+
+### Removed
+
+Four pages nothing could reach: the damage leaderboard, the account screen, and
+the two character-search pages. All needed a backend this build does not have,
+all were still in Chinese, and every audit kept re-reporting them. Deleting them
+freed a further 1.1 MB of data that only they held up. Git keeps them if the
+global service ever turns out to want a leaderboard.
+
+### Also
+
+- The setup guide and the startup gate now point at the same Npcap build.
+
 ## [0.1.5]
 
 **WinDivert was never shipped.** `WinDivert64.sys` sat in the repository and was
