@@ -7,7 +7,7 @@ import { Link } from "react-router-dom";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/custom-tooltip";
-import { renderEquipSlotSmall } from "@/games/aion2/components/aion2_ui/slot-equip";
+import { GearSlot } from "@/games/aion2/components/aion2_ui/gear-slot";
 import { fetchFengwoV2 } from "@/games/aion2/lib/fetchFengwo";
 import { useAppTranslation } from "@/hooks/use-app-translation";
 import { getServerName, getServerShortName } from "@/games/aion2/lib/servers";
@@ -493,11 +493,9 @@ export function HomeCharacterCarousel() {
 
                 <div className="mt-4">
                   {equipmentList.length > 0 ? (
-                    <div className="grid grid-cols-10 gap-2">
+                    <div className="grid grid-cols-12 gap-1.5">
                       {equipmentList.map((eq) => (
-                        <div key={eq.slotPos}>
-                          {renderEquipSlotSmall({ eq, size: 8, text_size: 10 })}
-                        </div>
+                        <GearSlot key={eq.slotPos} item={eq} />
                       ))}
                     </div>
                   ) : (

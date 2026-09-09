@@ -105,7 +105,6 @@ const $titleLabel = document.querySelector(".title-bar__label");
 const $titleTarget = document.querySelector(".title-bar__target");
 const $content = document.querySelector(".content");
 const $statusPing = document.getElementById("status-ping");
-const $statusDps = document.getElementById("status-team-dps");
 const $statusFightTime = document.getElementById("status-fight-time");
 const $statusBar = document.querySelector(".status-bar");
 // GB once the number stops being readable in MB -- a PC sitting at 14 GB
@@ -484,6 +483,71 @@ function fmtCombatPower(n) {
   return Math.round(n).toLocaleString("en-US");
 }
 
+// DPS counts toward its new value instead of snapping to it.
+//
+// One rAF loop drives every row, and it stops as soon as every row has settled
+// -- a permanently running frame loop on an overlay is exactly the kind of cost
+// that adds up over a long session. Each step writes one text node into a cell
+// with a fixed width, so nothing outside the cell can reflow.
+const DPS_TWEEN_RATE = 0.22;
+const DPS_TWEEN_EPSILON = 1;
+const tweeningCells = new Set();
+let dpsTweenFrame = 0;
+
+function stepDpsTweens() {
+  dpsTweenFrame = 0;
+
+  for (const cell of tweeningCells) {
+    const target = cell._dpsTarget;
+    let shown = cell._dpsShown;
+
+    if (Math.abs(target - shown) <= DPS_TWEEN_EPSILON) {
+      shown = target;
+      tweeningCells.delete(cell);
+    } else {
+      shown += (target - shown) * DPS_TWEEN_RATE;
+    }
+
+    cell._dpsShown = shown;
+    const text = fmtDps(shown);
+    if (text !== cell._dpsRaw) {
+      cell.dpsVal.textContent = text;
+      cell._dpsRaw = text;
+    }
+  }
+
+  if (tweeningCells.size > 0) {
+    dpsTweenFrame = requestAnimationFrame(stepDpsTweens);
+  }
+}
+
+function setDpsTarget(cell, value) {
+  const target = Number.isFinite(value) ? value : 0;
+  if (cell._dpsTarget === target) {
+    return;
+  }
+
+  cell._dpsTarget = target;
+
+  // A first value, or a reset to zero, lands immediately -- counting up from
+  // nothing at the start of every fight would just look like lag.
+  if (cell._dpsShown == null || target === 0) {
+    cell._dpsShown = target;
+    tweeningCells.delete(cell);
+    const text = fmtDps(target);
+    if (text !== cell._dpsRaw) {
+      cell.dpsVal.textContent = text;
+      cell._dpsRaw = text;
+    }
+    return;
+  }
+
+  tweeningCells.add(cell);
+  if (!dpsTweenFrame) {
+    dpsTweenFrame = requestAnimationFrame(stepDpsTweens);
+  }
+}
+
 function maskName(name) {
   if (!overlayConfig?.maskNicknames) return name;
   const t = (name || "").trim();
@@ -549,6 +613,26 @@ function getTeamBattleDuration(targetInfo) {
 // =============================================================================
 const CLASS_ICON_PATH = "/aion2/class/";
 
+// A colour per class, so a glance at the bars tells you the composition of the
+// group without reading a single name. Grey is for a class the parser has not
+// identified yet -- it should look unknown, not like some tenth class.
+const CLASS_COLORS = {
+  assassin: "168, 85, 247",
+  chanter: "52, 211, 153",
+  cleric: "251, 191, 36",
+  elementalist: "34, 211, 238",
+  fighter: "248, 113, 113",
+  gladiator: "251, 146, 60",
+  ranger: "163, 230, 53",
+  sorcerer: "232, 121, 249",
+  templar: "56, 189, 248",
+};
+
+function getClassColor(actorClass) {
+  if (!actorClass) return "";
+  return CLASS_COLORS[String(actorClass).toLowerCase()] || "";
+}
+
 function getClassIcon(actorClass) {
   if (!actorClass) return "";
   return CLASS_ICON_PATH + actorClass.toLowerCase() + ".png";
@@ -562,15 +646,7 @@ function getClassIcon(actorClass) {
 // Render: overview stats
 // =============================================================================
 function updateOverview(snap) {
-  const players = snap.lastTargetAllPlayersOverviewStats;
   const targetInfo = getLastTargetInfo(snap);
-  let totalDps = 0;
-  if (players) {
-    for (let i = 0; i < players.length; i++) {
-      totalDps += players[i].dps ?? 0;
-    }
-  }
-  $statusDps.textContent = fmtDps(totalDps);
   $statusFightTime.textContent = fmtDuration(getTeamBattleDuration(targetInfo));
   updateBossRow(targetInfo);
 }
@@ -596,10 +672,18 @@ function updateBossRow(targetInfo) {
   // the app having switched language, not as the name of what you are fighting.
   const name = targetInfo.targetName || `Target ${targetInfo.id ?? ""}`.trim();
   $titleLabel.textContent = "AETHER METER";
+
+  // The name belongs in one place. With the health row showing it already sits
+  // next to the health it describes, so the title slot stands down.
   if ($titleTarget) {
-    $titleTarget.textContent = name;
-    $titleTarget.title = name;
-    $titleTarget.style.display = "";
+    if (showBossBar) {
+      $titleTarget.textContent = "";
+      $titleTarget.style.display = "none";
+    } else {
+      $titleTarget.textContent = name;
+      $titleTarget.title = name;
+      $titleTarget.style.display = "";
+    }
   }
 
   // Boss HP bar visibility is controlled by showBossHp setting
@@ -630,6 +714,7 @@ function updateBossRow(targetInfo) {
 // Player list — pre-allocated rows with diff/minimal DOM writes
 // =============================================================================
 const MAX_ROWS = 10;
+const BAR_SCALE_FLOOR = 0.06;
 const playerRows = new Map(); // actorId → { row, cells }
 const rowPool = []; // pre-built hidden rows for reuse
 let rowTemplate = null;
@@ -725,7 +810,6 @@ function buildRowTemplate() {
 }
 
 function getRow() {
-  if (rowPool.length > 0) return rowPool.pop();
   if (!rowTemplate) buildRowTemplate();
   const t = rowTemplate;
   return {
@@ -739,6 +823,24 @@ function getRow() {
     dpsVal: null,
     share: null,
   };
+}
+
+// Wipe the "what is currently rendered" caches on a recycled row. Without this
+// a row reused for a different player keeps the previous player's strings and
+// skips writing the new ones, because the cache says they are already there.
+function resetRow(entry) {
+  const c = entry.cells;
+  c._barScale = -1;
+  c._iconSrc = "";
+  c._nameRaw = "";
+  c._serverRaw = "";
+  c._powerRaw = "";
+  c._damageRaw = "";
+  c._dpsRaw = "";
+  c._shareRaw = "";
+  c._dpsShown = null;
+  c._dpsTarget = null;
+  return entry;
 }
 
 function populateRowRefs(raw) {
@@ -782,6 +884,8 @@ function populateRowRefs(raw) {
       _nameRaw: "",
       _serverRaw: "",
       _powerRaw: "",
+      _dpsShown: null,
+      _dpsTarget: null,
       _damageRaw: "",
       _dpsRaw: "",
       _shareRaw: "",
@@ -790,11 +894,10 @@ function populateRowRefs(raw) {
 }
 
 function createPlayerRow(p) {
-  const raw = getRow();
-  const entry = populateRowRefs(raw);
+  const entry = rowPool.length > 0 ? resetRow(rowPool.pop()) : populateRowRefs(getRow());
   const c = entry.cells;
 
-  // Icon
+  // Icon, and the class colour its bar is drawn in
   const iconSrc = getClassIcon(p.actorClass);
   if (iconSrc) {
     c.icon.src = iconSrc;
@@ -804,8 +907,28 @@ function createPlayerRow(p) {
   }
   c._iconSrc = iconSrc;
 
-  // Show row
+  const rowColor = getClassColor(p.actorClass);
+  if (rowColor) {
+    entry.row.style.setProperty("--row-rgb", rowColor);
+  } else {
+    entry.row.style.removeProperty("--row-rgb");
+  }
+
+  // Show row. Rows are positioned rather than stacked, so a new one has to be
+  // attached here -- there is no insertBefore doing it as a side effect.
   entry.row.style.display = "";
+  entry.row.classList.add("is-entering");
+  if (entry.row.parentNode !== $playerList) {
+    $playerList.appendChild(entry.row);
+  }
+
+  // Two frames: one for the browser to accept the entering state as the start
+  // of the transition, one to transition away from it.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      entry.row.classList.remove("is-entering");
+    });
+  });
 
   return entry;
 }
@@ -813,14 +936,19 @@ function createPlayerRow(p) {
 function updatePlayerRow(entry, p, maxDamage) {
   const c = entry.cells;
 
-  // Background bar — GPU-composited via CSS var on ::after
-  const barScale = maxDamage > 0 ? p.totalDamage / maxDamage : 0;
+  // Background bar — GPU-composited via CSS var on ::after.
+  //
+  // A floor keeps the tail of the list visible: someone contributing 1% still
+  // gets a readable sliver of their class colour, which is what tells you they
+  // are in the fight at all.
+  const rawScale = maxDamage > 0 ? p.totalDamage / maxDamage : 0;
+  const barScale = rawScale > 0 ? Math.max(rawScale, BAR_SCALE_FLOOR) : 0;
   if (barScale !== c._barScale) {
     c.bar.style.setProperty("--bar-scale", barScale);
     c._barScale = barScale;
   }
 
-  // Icon
+  // Icon, and the class colour the bar is drawn in
   const iconSrc = getClassIcon(p.actorClass);
   if (iconSrc !== c._iconSrc) {
     if (iconSrc) {
@@ -830,6 +958,13 @@ function updatePlayerRow(entry, p, maxDamage) {
       c.icon.style.display = "none";
     }
     c._iconSrc = iconSrc;
+
+    const rowColor = getClassColor(p.actorClass);
+    if (rowColor) {
+      entry.row.style.setProperty("--row-rgb", rowColor);
+    } else {
+      entry.row.style.removeProperty("--row-rgb");
+    }
   }
 
   const cfg = overlayConfig || {};
@@ -882,13 +1017,9 @@ function updatePlayerRow(entry, p, maxDamage) {
     c.damage.style.display = "none";
   }
 
-  // DPS
+  // DPS, counted toward rather than snapped to
   if (cfg.showDps !== false) {
-    const dpsText = fmtDps(p.dps);
-    if (dpsText !== c._dpsRaw) {
-      c.dpsVal.textContent = dpsText;
-      c._dpsRaw = dpsText;
-    }
+    setDpsTarget(c, p.dps);
     c.dpsVal.parentElement.style.display = "";
   } else {
     c.dpsVal.parentElement.style.display = "none";
@@ -903,8 +1034,66 @@ function updatePlayerRow(entry, p, maxDamage) {
   }
 }
 
+let rowHeightPx = 0;
+
+function getRowHeight() {
+  if (rowHeightPx > 0) {
+    return rowHeightPx;
+  }
+  const raw = getComputedStyle(document.documentElement).getPropertyValue("--row-height");
+  rowHeightPx = parseFloat(raw) || 28;
+  return rowHeightPx;
+}
+
+function placeRow(entry, index) {
+  const y = index * getRowHeight();
+  if (entry._y === y) {
+    return;
+  }
+  entry._y = y;
+  entry.row.style.setProperty("--row-y", y + "px");
+  entry.row.style.transform = "translateY(" + y + "px)";
+}
+
+// Recycled rows must forget everything, or a row reused for a different player
+// counts from the previous player's DPS.
+function releaseRow(entry) {
+  tweeningCells.delete(entry.cells);
+  entry.cells._dpsShown = null;
+  entry.cells._dpsTarget = null;
+  entry._y = undefined;
+  entry.row.style.display = "none";
+  entry.row.classList.remove("is-main");
+  entry.row.classList.remove("is-entering");
+  rowPool.push(entry);
+}
+
+// MAX_ROWS has been declared since the fork and never applied, so a full raid
+// rendered a row per participant and the overlay grew to whatever the party
+// size was. Capping it fixes the height at a known maximum.
+//
+// Your own row is never the one dropped: an overlay that hides you when you are
+// eleventh is answering the wrong question.
+function limitPlayers(players, mainName) {
+  if (!players || players.length <= MAX_ROWS) {
+    return players;
+  }
+
+  const shown = players.slice(0, MAX_ROWS);
+  if (!mainName || shown.some((player) => player.actorName === mainName)) {
+    return shown;
+  }
+
+  const main = players.find((player) => player.actorName === mainName);
+  if (main) {
+    shown[shown.length - 1] = main;
+  }
+  return shown;
+}
+
 function updatePlayerList(snap, fullRebuild) {
-  const players = snap.lastTargetAllPlayersOverviewStats;
+  const mainName = snap.combatInfos?.mainActorName ?? null;
+  const players = limitPlayers(snap.lastTargetAllPlayersOverviewStats, mainName);
   const playerCount = players?.length ?? 0;
   const shouldResize =
     fullRebuild === true ||
@@ -913,13 +1102,13 @@ function updatePlayerList(snap, fullRebuild) {
   lastAutoResizePlayerCount = playerCount;
 
   // Track main actor for .is-main class
-  mainActorName = snap.combatInfos?.mainActorName ?? null;
+  mainActorName = mainName;
 
   // Full rebuild: clear everything
   if (fullRebuild) {
     for (const [, entry] of playerRows) {
+      tweeningCells.delete(entry.cells);
       entry.row.remove();
-      rowPool.push(entry.row);
     }
     playerRows.clear();
   }
@@ -934,10 +1123,10 @@ function updatePlayerList(snap, fullRebuild) {
   // Hide all rows when no players
   if (!players || players.length === 0) {
     for (const [, entry] of playerRows) {
-      entry.row.style.display = "none";
-      rowPool.push(entry.row);
+      releaseRow(entry);
     }
     playerRows.clear();
+    $playerList.style.height = "0px";
     if (shouldResize) {
       scheduleAutoHeightReconcile();
     }
@@ -969,21 +1158,23 @@ function updatePlayerList(snap, fullRebuild) {
     entry.row.classList.toggle("is-main", isMain);
     entry.row.dataset.actorId = p.actorId;
 
-    // Move row to correct position if needed
-    const target = $playerList.children[i];
-    if (target !== entry.row) {
-      $playerList.insertBefore(entry.row, target || null);
-    }
+    // Place the row by rank. Rows live in one fixed order in the DOM and are
+    // moved with a transform, so a rank change animates on the compositor
+    // instead of being an insertBefore that redraws the list.
+    placeRow(entry, i);
   }
 
   // Hide stale rows (players who left combat)
   for (const [id, entry] of playerRows) {
     if (!seen.has(id)) {
-      entry.row.style.display = "none";
-      rowPool.push(entry.row);
+      releaseRow(entry);
       playerRows.delete(id);
     }
   }
+
+  // The list is absolutely populated, so it needs an explicit height for the
+  // auto-resize pass to have anything to measure.
+  $playerList.style.height = players.length * getRowHeight() + "px";
 
   if (shouldResize) {
     scheduleAutoHeightReconcile();

@@ -139,7 +139,7 @@ const DEFAULTS: AppConfig = {
       showDps: true,
       showCombatPower: true,
       pctMode: "contribution",
-      showBossHp: false,
+      showBossHp: true,
       maskNicknames: false,
       contentScale: 1,
       detailWindowMode: "follow",
@@ -202,6 +202,9 @@ function migrate(config: AppConfig, storedVersion: number): AppConfig {
           background: untouched
             ? [...DEFAULTS.aion2.overlay.background]
             : next.aion2.overlay.background,
+          // The target's health is the context every damage number on the
+          // overlay is relative to, and it was off by default.
+          showBossHp: true,
         },
       },
     };

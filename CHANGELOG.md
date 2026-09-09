@@ -5,6 +5,59 @@ numbering: this fork publishes to its own release channel, and the updater
 compares an installed build against these releases. Upstream's release history
 lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
 
+## [0.1.13]
+
+**The equipment row on the Home card was showing broken images and Chinese
+text, and no amount of CSS was going to fix it.** The character API stopped
+returning `icon` and `grade` entirely. Upstream's slot renderer asked for both,
+so every tile rendered an `<img>` with no source and the browser fell back to
+its `alt` — which is the item's Traditional Chinese name. A row of broken images
+bleeding names across the card is what that looked like.
+
+The tiles are now built only from fields the API actually sends: slot, enchant
+level, exceed level, item level, name and stats. Each one carries its slot, its
+`+N`, and a colour taken from item level, with the full name and main stats on
+hover. Upstream's renderer went with it — 489 lines that nothing could reach.
+
+### The overlay
+
+**Bars are coloured by class.** A glance now tells you the composition of the
+group without reading a single name, and your own row is marked with a rim
+rather than a different fill, so it stands out without losing the colour that
+identifies it.
+
+**DPS counts toward its new value instead of snapping to it.** One frame loop
+drives every row and stops the moment they have all settled — a permanently
+running animation on an overlay is exactly the kind of cost that adds up over an
+evening. The column is wide enough that a counting number never shoves its
+neighbours.
+
+**Rows slide when the ranking changes.** They are positioned rather than
+stacked, so a rank change is a transform the compositor animates for free, with
+no layout and no measuring. New players fade in; players who leave stop
+occupying space.
+
+**Numbers are white**, per the reference: DPS, percentage and health all read as
+values now, with combat power kept quieter beside the name where it belongs.
+
+**Target health is shown by default.** It is the context every damage number on
+the overlay is relative to, and it was off. With it showing, the target's name
+lives there — beside the health it describes — instead of in the title slot.
+
+**Team DPS is gone from the status bar.** Solo, it printed the same number as
+the row directly above it; the row says it better.
+
+### Not getting heavier
+
+`MAX_ROWS` has been declared since the fork and never applied, so a full raid
+rendered a row per participant and the overlay grew to whatever the party size
+was. It is capped at ten — and your own row is never the one dropped, because an
+overlay that hides you when you are eleventh is answering the wrong question.
+
+The row recycler pushed DOM elements into a pool that pops them expecting
+objects, so the first reuse would have thrown. Reuse only happens when one
+player leaves combat and another joins, which is why it survived this long.
+
 ## [0.1.12]
 
 **The Home card now shows who you are playing, immediately.** It built its
