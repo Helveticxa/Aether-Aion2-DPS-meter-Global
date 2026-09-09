@@ -1,58 +1,74 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import type { MapMarker, MapZone, MarkerCategory } from "@/games/aion2/lib/map-data";
-import { ICON_SVG_ATTRS, markerIcon } from "@/games/aion2/lib/map-icons";
+import type { MapBorder, MapMarker, MapZone, MarkerCategory } from "@/games/aion2/lib/map-data";
+import { shapeIcon } from "@/games/aion2/lib/map-icons";
 import {
   constrainView,
   fitView,
-  fromScreen,
   normalise,
-  toScreen,
   zoomAt,
   type View,
 } from "@/games/aion2/lib/map-projection";
 
 /**
- * Markers are DOM nodes, culled to what is on screen.
- *
- * A zone can hold thousands of them -- creature spawns alone run into four
- * figures -- and rendering every one as an element is what makes a map like
- * this crawl. Culling to the viewport keeps the node count proportional to
- * what is actually visible rather than to the dataset, and the cap below is
- * the backstop for a fully zoomed-out view of a dense zone.
+ * The plane's intrinsic size. Any value works; it exists only so markers can be
+ * positioned in percentages and never re-laid-out.
  */
-const MAX_RENDERED_MARKERS = 1200;
+const PLANE = 1000;
 
 const ZOOM_STEP = 1.18;
+/**
+ * Past this the map image is being upscaled and turns to mush -- the sources are
+ * 4096px, half the resolution of the largest zones. Markers stay crisp, being
+ * vector, so the ceiling is set by the image rather than by the maths.
+ */
+const MAX_ZOOM = 12;
 
 export type MapCanvasProps = {
   zone: MapZone;
   markers: MapMarker[];
+  borders: MapBorder[];
   categories: Map<string, MarkerCategory>;
   collected: Set<string>;
   onToggleCollected: (id: string) => void;
-  /** Rendered smaller, without labels or the grid legend. */
+  showBorders?: boolean;
   compact?: boolean;
 };
 
+/**
+ * Pan and zoom by transforming one plane, not by moving each marker.
+ *
+ * The first version recomputed every marker's screen position on every
+ * pointermove. With a couple of dozen sample markers that was invisible; with
+ * Verteron's 1,954 it would be a re-render per mouse event, and the map would
+ * stutter exactly when someone is dragging across it.
+ *
+ * Markers now sit at percentage positions inside a fixed-size plane, so their
+ * layout never changes. A pan or a zoom writes one transform on the plane and
+ * one CSS variable -- the browser composites it on the GPU, and the cost stops
+ * depending on how many markers are on screen. `--inv` is the inverse scale,
+ * which keeps the markers the same size on screen while the map grows under
+ * them.
+ */
 export function MapCanvas({
   zone,
   markers,
+  borders,
   categories,
   collected,
   onToggleCollected,
+  showBorders = true,
   compact = false,
 }: MapCanvasProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [view, setView] = useState<View | null>(null);
   const [hovered, setHovered] = useState<MapMarker | null>(null);
-  const dragRef = useRef<{ x: number; y: number; view: View } | null>(null);
+  const dragRef = useRef<{ x: number; y: number; view: View; moved: boolean } | null>(null);
 
   useLayoutEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-
     const observer = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
       setSize({ width, height });
@@ -61,27 +77,25 @@ export function MapCanvas({
     return () => observer.disconnect();
   }, []);
 
+  const padding = compact ? 2 : 12;
+
   const reset = useCallback(() => {
     if (size.width > 0 && size.height > 0) {
-      setView(fitView(size.width, size.height, compact ? 4 : 24));
+      setView(fitView(size.width, size.height, padding));
     }
-  }, [compact, size.height, size.width]);
+  }, [padding, size.height, size.width]);
 
-  // Refit when the viewport resizes or the zone changes, but never while the
-  // user is mid-gesture.
   useEffect(() => {
     if (!dragRef.current) reset();
   }, [reset, zone.id]);
 
-  const limits = view
-    ? { min: fitView(size.width, size.height, compact ? 4 : 24).scale * 0.8, max: 20000 }
-    : { min: 1, max: 20000 };
+  const fitted = size.width > 0 ? fitView(size.width, size.height, padding).scale : 1;
+  const limits = { min: fitted * 0.9, max: fitted * MAX_ZOOM };
 
   const handleWheel = (event: React.WheelEvent) => {
     if (!view) return;
     const rect = hostRef.current?.getBoundingClientRect();
     if (!rect) return;
-
     const factor = event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
     const next = zoomAt(view, event.clientX - rect.left, event.clientY - rect.top, factor, limits);
     setView(constrainView(next, size.width, size.height));
@@ -89,56 +103,76 @@ export function MapCanvas({
 
   const handlePointerDown = (event: React.PointerEvent) => {
     if (!view) return;
-    (event.target as Element).setPointerCapture?.(event.pointerId);
-    dragRef.current = { x: event.clientX, y: event.clientY, view };
+    (event.currentTarget as Element).setPointerCapture?.(event.pointerId);
+    dragRef.current = { x: event.clientX, y: event.clientY, view, moved: false };
   };
 
   const handlePointerMove = (event: React.PointerEvent) => {
     const drag = dragRef.current;
     if (!drag) return;
-    const next: View = {
-      scale: drag.view.scale,
-      x: drag.view.x + (event.clientX - drag.x),
-      y: drag.view.y + (event.clientY - drag.y),
-    };
-    setView(constrainView(next, size.width, size.height));
+    const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
+    if (!drag.moved && Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+    setView(
+      constrainView(
+        { scale: drag.view.scale, x: drag.view.x + dx, y: drag.view.y + dy },
+        size.width,
+        size.height
+      )
+    );
   };
 
   const endDrag = (event: React.PointerEvent) => {
-    (event.target as Element).releasePointerCapture?.(event.pointerId);
+    (event.currentTarget as Element).releasePointerCapture?.(event.pointerId);
+    // Cleared on the next tick so a click that ended a drag can still see it.
+    const drag = dragRef.current;
     dragRef.current = null;
+    if (drag?.moved) {
+      const host = hostRef.current;
+      host?.setAttribute("data-dragged", "1");
+      window.setTimeout(() => host?.removeAttribute("data-dragged"), 0);
+    }
   };
 
-  // Cull first, then cap. Slicing an unculled list would drop markers that are
-  // on screen in favour of ones that are not.
-  const visible: Array<{ marker: MapMarker; x: number; y: number }> = [];
-  if (view) {
-    const pad = 24;
-    for (const marker of markers) {
-      const point = toScreen(view, normalise(zone.bounds, marker.x, marker.y));
-      if (
-        point.x < -pad ||
-        point.y < -pad ||
-        point.x > size.width + pad ||
-        point.y > size.height + pad
-      ) {
-        continue;
-      }
-      visible.push({ marker, x: point.x, y: point.y });
-      if (visible.length >= MAX_RENDERED_MARKERS) break;
-    }
-  }
+  /** Positions depend only on the zone, so they survive every pan and zoom. */
+  const placed = useMemo(
+    () =>
+      markers.map((marker) => {
+        const { u, v } = normalise(zone.bounds, marker.x, marker.y);
+        return { marker, left: `${u * 100}%`, top: `${v * 100}%` };
+      }),
+    [markers, zone.bounds]
+  );
 
-  const culled = view ? markers.length - visible.length : 0;
-  // Big enough for a glyph to be legible; the old 11px dot could only ever
-  // carry a colour.
-  const dotSize = compact ? 16 : 22;
-  const glyphSize = compact ? 10 : 13;
+  const borderPaths = useMemo(
+    () =>
+      borders.map((border) => ({
+        id: border.id,
+        d: border.points
+          .map(([x, y], index) => {
+            const { u, v } = normalise(zone.bounds, x, y);
+            return `${index === 0 ? "M" : "L"}${(u * PLANE).toFixed(1)} ${(v * PLANE).toFixed(1)}`;
+          })
+          .join(" "),
+      })),
+    [borders, zone.bounds]
+  );
+
+  const dotSize = compact ? 15 : 21;
+  const glyphSize = compact ? 9 : 12;
+
+  // Markers shrink as the map zooms out. Holding them at a constant screen size
+  // turns a zone with two thousand of them into a single blob of overlapping
+  // rings at fit; letting them grow into full glyphs only as you zoom in keeps
+  // the overview readable and the detail available.
+  const zoomRatio = view ? view.scale / fitted : 1;
+  const markerSize = Math.min(dotSize, Math.max(dotSize * 0.5, dotSize * 0.5 * zoomRatio));
+  const inverse = view ? ((markerSize / dotSize) * PLANE) / view.scale : 1;
 
   return (
     <div
       ref={hostRef}
-      className="relative h-full w-full cursor-grab overflow-hidden rounded-xl bg-[#0b1020] active:cursor-grabbing"
+      className="group relative h-full w-full cursor-grab overflow-hidden rounded-xl bg-[#0b1020] active:cursor-grabbing"
       onWheel={handleWheel}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -146,76 +180,99 @@ export function MapCanvas({
       onPointerCancel={endDrag}
     >
       {view && (
-        <>
-          <div
-            className="absolute origin-top-left"
-            style={{
-              width: view.scale,
-              height: view.scale,
-              transform: `translate(${view.x}px, ${view.y}px)`,
-            }}
-          >
-            {zone.image ? (
-              <img
-                src={zone.image}
-                alt={zone.name}
-                className="pointer-events-none h-full w-full object-fill select-none"
-                draggable={false}
-              />
-            ) : (
-              <CalibrationGrid compact={compact} />
-            )}
-          </div>
+        <div
+          className="absolute top-0 left-0 origin-top-left will-change-transform"
+          style={
+            {
+              width: PLANE,
+              height: PLANE,
+              transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale / PLANE})`,
+              "--inv": inverse,
+            } as React.CSSProperties
+          }
+        >
+          {zone.image ? (
+            <img
+              src={zone.image}
+              alt={zone.name}
+              className="pointer-events-none absolute inset-0 h-full w-full object-fill select-none"
+              draggable={false}
+            />
+          ) : (
+            <div className="absolute inset-0 bg-[#0e1526]" />
+          )}
 
-          {visible.map(({ marker, x, y }) => {
+          {showBorders && borderPaths.length > 0 && (
+            <svg
+              viewBox={`0 0 ${PLANE} ${PLANE}`}
+              className="pointer-events-none absolute inset-0 h-full w-full"
+              aria-hidden
+            >
+              {borderPaths.map((border) => (
+                <path
+                  key={border.id}
+                  d={border.d}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.34)"
+                  strokeWidth={inverse * 0.9}
+                  strokeDasharray={`${inverse * 5} ${inverse * 4}`}
+                />
+              ))}
+            </svg>
+          )}
+
+          {placed.map(({ marker, left, top }) => {
             const category = categories.get(marker.category);
             const isCollected = collected.has(marker.id);
-            // Found markers drop to neutral rather than merely fading: at a
-            // glance the map should read as "what is left", and a dimmed
-            // version of the same colour still competes for attention.
+            // Found markers go neutral rather than merely fading: the map
+            // should read as what is left, and a dimmed version of the same
+            // colour still competes for attention.
             const tint = isCollected ? "#7c8798" : (category?.color ?? "#9aa4b2");
 
             return (
               <button
                 key={marker.id}
                 type="button"
-                className="absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[1.5px] transition-transform hover:z-10 hover:scale-125"
+                className="absolute flex items-center justify-center rounded-full border-[1.5px] hover:z-10"
                 style={{
-                  left: x,
-                  top: y,
+                  left,
+                  top,
                   width: dotSize,
                   height: dotSize,
+                  marginLeft: -dotSize / 2,
+                  marginTop: -dotSize / 2,
+                  transform: "scale(var(--inv))",
                   color: tint,
                   borderColor: tint,
-                  background: "rgba(8,12,22,0.82)",
+                  background: "rgba(8,12,22,0.85)",
                   opacity: isCollected ? 0.5 : 1,
-                  boxShadow: isCollected ? "none" : `0 0 0 1px rgba(0,0,0,0.45)`,
                 }}
                 title={marker.name}
                 onPointerEnter={() => setHovered(marker)}
                 onPointerLeave={() => setHovered((current) => (current === marker ? null : current))}
                 onClick={(event) => {
                   event.stopPropagation();
+                  // A click that ended a pan should not also toggle a marker.
+                  if (hostRef.current?.hasAttribute("data-dragged")) return;
                   onToggleCollected(marker.id);
                 }}
               >
-                <MarkerGlyph category={marker.category} size={glyphSize} />
+                <MarkerGlyph shape={category?.shape} size={glyphSize} />
               </button>
             );
           })}
-        </>
+        </div>
       )}
 
       {!compact && (
         <>
-          <div className="pointer-events-none absolute top-3 left-3 rounded-lg bg-black/55 px-2.5 py-1.5 text-xs text-white/70 backdrop-blur-sm">
+          <div className="pointer-events-none absolute top-3 left-3 max-w-[70%] truncate rounded-lg bg-black/60 px-2.5 py-1.5 text-xs text-white/70 backdrop-blur-sm">
             {hovered ? (
               <span>
                 <span className="text-white">{hovered.name}</span>
                 <span className="text-white/40">
-                  {" "}
-                  · {categories.get(hovered.category)?.label ?? hovered.category} ·{" "}
-                  {Math.round(hovered.x)}, {Math.round(hovered.y)}
+                  {" · "}
+                  {categories.get(hovered.category)?.label ?? hovered.category}
                 </span>
               </span>
             ) : (
@@ -224,14 +281,12 @@ export function MapCanvas({
           </div>
 
           <div className="absolute right-3 bottom-3 flex items-center gap-1.5">
-            {culled > 0 && (
-              <span className="rounded-lg bg-black/55 px-2 py-1 text-[11px] text-white/50 backdrop-blur-sm">
-                {culled.toLocaleString()} off screen
-              </span>
-            )}
+            <span className="rounded-lg bg-black/60 px-2 py-1 text-[11px] text-white/45 backdrop-blur-sm">
+              {markers.length.toLocaleString()} shown · {view ? (view.scale / fitted).toFixed(1) : "1.0"}×
+            </span>
             <button
               type="button"
-              className="rounded-lg bg-black/55 px-2.5 py-1 text-[11px] text-white/70 backdrop-blur-sm transition hover:bg-black/70 hover:text-white"
+              className="rounded-lg bg-black/60 px-2.5 py-1 text-[11px] text-white/70 backdrop-blur-sm transition hover:bg-black/80 hover:text-white"
               onClick={reset}
             >
               Reset view
@@ -245,10 +300,9 @@ export function MapCanvas({
 
 /**
  * Markup comes from `map-icons`, which is authored source rather than data, so
- * setting it as HTML is safe. Doing it here keeps that judgement in one place
- * instead of at every call site.
+ * setting it as HTML is safe. Doing it here keeps that judgement in one place.
  */
-export function MarkerGlyph({ category, size = 13 }: { category: string; size?: number }) {
+export function MarkerGlyph({ shape, size = 12 }: { shape?: string; size?: number }) {
   return (
     <svg
       width={size}
@@ -260,36 +314,7 @@ export function MarkerGlyph({ category, size = 13 }: { category: string; size?: 
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden
-      dangerouslySetInnerHTML={{ __html: markerIcon(category) }}
+      dangerouslySetInnerHTML={{ __html: shapeIcon(shape) }}
     />
   );
 }
-
-/**
- * Stands in for a zone image that has not been added yet.
- *
- * Deliberately readable rather than decorative: the grid is the zone's world
- * bounds in tenths, so marker positions can be sanity-checked against known
- * coordinates before any image exists.
- */
-function CalibrationGrid({ compact }: { compact: boolean }) {
-  const lines = Array.from({ length: 11 }, (_, index) => index / 10);
-  return (
-    <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full">
-      <rect width="100" height="100" fill="#0e1526" />
-      {lines.map((t) => (
-        <g key={t} stroke="#1e2b45" strokeWidth={t === 0 || t === 1 ? 0.5 : 0.2}>
-          <line x1={t * 100} y1={0} x2={t * 100} y2={100} />
-          <line x1={0} y1={t * 100} x2={100} y2={t * 100} />
-        </g>
-      ))}
-      {!compact && (
-        <text x="50" y="52" textAnchor="middle" fill="#31415f" fontSize="4">
-          no map image for this zone yet
-        </text>
-      )}
-    </svg>
-  );
-}
-
-export { fromScreen, ICON_SVG_ATTRS };

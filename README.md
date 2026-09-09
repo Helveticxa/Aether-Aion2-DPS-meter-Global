@@ -31,7 +31,7 @@ searchable history and broken down by skill, buff uptime, and damage type.
 ## Features
 
 - Floating overlay in two styles, with click-through and opacity control
-- Interactive map with an always-on-top minimap overlay
+- Interactive map — 8 zones, 4,799 markers, with an always-on-top minimap overlay
 - Live ping, CPU, and memory footer
 - Battle history with per-skill and per-player breakdowns
 - Damage-type split, buff timelines, and cast ordering
@@ -103,6 +103,12 @@ All off by default. Recordings stay on your machine.
 The layout is shared; this build is in English.</sub>
 
 ## Credit
+
+The interactive map is built on marker data and map images from
+**[AION2 Hub](https://aion2hub.com/maps)**. That database is their work; if the
+map is useful to you, visit and support them.
+[`public/aion2/maps/SOURCE.md`](./public/aion2/maps/SOURCE.md) records exactly
+what was taken and how.
 
 Aether is a fork of **[NOIA2](https://github.com/ZDYoung0519/NOIA2)** by
 [zdyoung](https://github.com/ZDYoung0519), which does the heavy lifting: the Rust

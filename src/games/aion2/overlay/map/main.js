@@ -7,8 +7,13 @@ installDevBrowserShim();
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-import { loadCollected, loadMapDataset } from "@/games/aion2/lib/map-dataset";
-import { markerIconSvg } from "@/games/aion2/lib/map-icons";
+import {
+  loadCollected,
+  loadHidden,
+  loadMapDataset,
+  saveHidden,
+} from "@/games/aion2/lib/map-dataset";
+import { shapeIconSvg } from "@/games/aion2/lib/map-icons";
 import {
   constrainView,
   fitView,
@@ -39,7 +44,7 @@ const appWindow = getCurrentWindow();
 let dataset = null;
 let zone = null;
 let categories = new Map();
-let hidden = new Set();
+let hidden = loadHidden(["npc"]);
 let collected = new Set();
 let view = null;
 let dots = [];
@@ -81,7 +86,10 @@ function render() {
 
   const markers = zoneMarkers();
   const { width, height } = stageSize();
-  const pad = 16;
+  const pad = 20;
+  const fitted = fitView(width, height, 4).scale;
+  const dotSize = Math.min(15, Math.max(7, (7 * view.scale) / fitted));
+  const glyph = Math.round(dotSize * 0.62);
 
   // Reuse the dot elements rather than rebuilding the list every frame: this
   // runs on every pointermove, and churning hundreds of nodes there is what
@@ -93,32 +101,35 @@ function render() {
       continue;
     }
 
-    let dot = dots[index];
-    if (!dot) {
-      dot = document.createElement("div");
-      dot.className = "map-dot";
-      $stage.appendChild(dot);
-      dots.push(dot);
+    let el = dots[index];
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "map-dot";
+      $stage.appendChild(el);
+      dots.push(el);
     }
 
     const found = collected.has(marker.id);
     // Neutral rather than merely faded, so the map reads as what is left.
     const color = found ? "#7c8798" : (categories.get(marker.category)?.color ?? "#9aa4b2");
 
-    // Only rebuild the glyph when the category actually changes: dots are
+    // Only rebuild the glyph when it would actually differ: elements are
     // recycled across frames and this runs on every pointermove.
-    if (dot.dataset.category !== marker.category) {
-      dot.innerHTML = markerIconSvg(marker.category);
-      dot.dataset.category = marker.category;
+    if (el.dataset.category !== marker.category || el.dataset.glyph !== String(glyph)) {
+      el.innerHTML = shapeIconSvg(categories.get(marker.category)?.shape, glyph);
+      el.dataset.category = marker.category;
+      el.dataset.glyph = String(glyph);
     }
 
-    dot.style.left = `${point.x}px`;
-    dot.style.top = `${point.y}px`;
-    dot.style.color = color;
-    dot.style.borderColor = color;
-    dot.className = found ? "map-dot is-found" : "map-dot";
-    dot.title = marker.name;
-    dot.hidden = false;
+    el.style.left = `${point.x}px`;
+    el.style.top = `${point.y}px`;
+    el.style.width = `${dotSize}px`;
+    el.style.height = `${dotSize}px`;
+    el.style.color = color;
+    el.style.borderColor = color;
+    el.className = found ? "map-dot is-found" : "map-dot";
+    el.title = marker.name;
+    el.hidden = false;
     index += 1;
   }
 
@@ -161,7 +172,7 @@ function renderLegend() {
 
     const swatch = document.createElement("span");
     swatch.className = "map-legend__swatch";
-    swatch.innerHTML = markerIconSvg(category.id);
+    swatch.innerHTML = shapeIconSvg(category.shape, 9);
     swatch.style.color = category.color;
     swatch.style.borderColor = category.color;
 
@@ -172,6 +183,7 @@ function renderLegend() {
     button.addEventListener("click", () => {
       if (hidden.has(category.id)) hidden.delete(category.id);
       else hidden.add(category.id);
+      saveHidden(hidden);
       renderLegend();
       render();
     });
@@ -186,7 +198,9 @@ $stage.addEventListener("wheel", (event) => {
   const rect = $stage.getBoundingClientRect();
   const factor = event.deltaY < 0 ? 1.18 : 1 / 1.18;
   const { width, height } = stageSize();
-  const limits = { min: fitView(width, height, 4).scale * 0.8, max: 20000 };
+  // Same ceiling as the main viewer: past this the 4096px map is upscaled mush.
+  const fitted = fitView(width, height, 4).scale;
+  const limits = { min: fitted * 0.9, max: fitted * 12 };
   view = constrainView(
     zoomAt(view, event.clientX - rect.left, event.clientY - rect.top, factor, limits),
     width,

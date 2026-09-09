@@ -1,17 +1,177 @@
 [
-  { "id": "settlement", "group": "Locations", "label": "Settlement", "color": "#e2c275" },
-  { "id": "region", "group": "Locations", "label": "Region", "color": "#c9a227" },
-  { "id": "stronghold", "group": "Locations", "label": "Stronghold", "color": "#d08a5a" },
-  { "id": "dungeon", "group": "Locations", "label": "Dungeon", "color": "#b5651d" },
-  { "id": "sealed-dungeon", "group": "Locations", "label": "Sealed Dungeon", "color": "#8d6b94" },
-  { "id": "rift", "group": "Locations", "label": "Rift", "color": "#9b5de5" },
-  { "id": "monolith", "group": "Locations", "label": "Monolith", "color": "#4cc9f0" },
-  { "id": "kibelisk", "group": "Locations", "label": "Kibelisk", "color": "#4ea8de" },
-  { "id": "updraft", "group": "Locations", "label": "Updraft", "color": "#90e0ef" },
-  { "id": "empyrean-trace", "group": "Collectibles", "label": "Empyrean Trace", "color": "#f2b880" },
-  { "id": "hidden-cube", "group": "Collectibles", "label": "Hidden Cube", "color": "#ffd166" },
-  { "id": "gathering", "group": "Gathering", "label": "Gathering node", "color": "#5cb85c" },
-  { "id": "boss", "group": "Creatures", "label": "Named boss", "color": "#e5383b" },
-  { "id": "elite", "group": "Creatures", "label": "Elite", "color": "#bc4749" },
-  { "id": "npc", "group": "Creatures", "label": "NPC", "color": "#48cae4" }
+  {
+    "id": "medan-perang",
+    "group": "Region",
+    "label": "Battlefield",
+    "color": "#da6262",
+    "shape": "flag"
+  },
+  {
+    "id": "wilayah",
+    "group": "Region",
+    "label": "Region",
+    "color": "#62dada",
+    "shape": "flag"
+  },
+  {
+    "id": "segel",
+    "group": "Seal",
+    "label": "Seal",
+    "color": "#dac062",
+    "shape": "diamond"
+  },
+  {
+    "id": "waystone",
+    "group": "Waystone",
+    "label": "Waystone",
+    "color": "#96da62",
+    "shape": "ring"
+  },
+  {
+    "id": "desa",
+    "group": "Region",
+    "label": "Village",
+    "color": "#62da8c",
+    "shape": "house"
+  },
+  {
+    "id": "kubus-tersembunyi",
+    "group": "Cube",
+    "label": "Hidden Cube",
+    "color": "#62cada",
+    "shape": "cube"
+  },
+  {
+    "id": "bahan-monolith",
+    "group": "Monolith",
+    "label": "Monolith Material",
+    "color": "#626cda",
+    "shape": "feather"
+  },
+  {
+    "id": "aria",
+    "group": "Materials",
+    "label": "Aria",
+    "color": "#b662da",
+    "shape": "leaf"
+  },
+  {
+    "id": "coriolus",
+    "group": "Materials",
+    "label": "Coriolus",
+    "color": "#da62bd",
+    "shape": "leaf"
+  },
+  {
+    "id": "cypri",
+    "group": "Materials",
+    "label": "Cypri",
+    "color": "#da627b",
+    "shape": "leaf"
+  },
+  {
+    "id": "diamond-gemstone",
+    "group": "Materials",
+    "label": "Diamond Gemstone",
+    "color": "#da62a0",
+    "shape": "gem"
+  },
+  {
+    "id": "inina",
+    "group": "Materials",
+    "label": "Inina",
+    "color": "#da8a62",
+    "shape": "leaf"
+  },
+  {
+    "id": "kukuru",
+    "group": "Materials",
+    "label": "Kukuru",
+    "color": "#dacc62",
+    "shape": "leaf"
+  },
+  {
+    "id": "mela",
+    "group": "Materials",
+    "label": "Mela",
+    "color": "#a7da62",
+    "shape": "leaf"
+  },
+  {
+    "id": "orichalcum-ore",
+    "group": "Materials",
+    "label": "Orichalcum Ore",
+    "color": "#da8262",
+    "shape": "ore"
+  },
+  {
+    "id": "ruby-gemstone",
+    "group": "Materials",
+    "label": "Ruby Gemstone",
+    "color": "#a0da62",
+    "shape": "gem"
+  },
+  {
+    "id": "sapphire-gemstone",
+    "group": "Materials",
+    "label": "Sapphire Gemstone",
+    "color": "#62a0da",
+    "shape": "gem"
+  },
+  {
+    "id": "targena",
+    "group": "Materials",
+    "label": "Targena",
+    "color": "#65da62",
+    "shape": "leaf"
+  },
+  {
+    "id": "yggdrasil-log",
+    "group": "Materials",
+    "label": "Yggdrasil Log",
+    "color": "#d4da62",
+    "shape": "log"
+  },
+  {
+    "id": "npc",
+    "group": "NPC",
+    "label": "NPC",
+    "color": "#76da62",
+    "shape": "person"
+  },
+  {
+    "id": "food",
+    "group": "Materials",
+    "label": "Food",
+    "color": "#62daa0",
+    "shape": "leaf"
+  },
+  {
+    "id": "herb",
+    "group": "Materials",
+    "label": "Herb",
+    "color": "#62d3da",
+    "shape": "leaf"
+  },
+  {
+    "id": "ore",
+    "group": "Materials",
+    "label": "Ore",
+    "color": "#62bada",
+    "shape": "ore"
+  },
+  {
+    "id": "resource",
+    "group": "Materials",
+    "label": "Resource",
+    "color": "#6291da",
+    "shape": "leaf"
+  },
+  {
+    "id": "odyle",
+    "group": "Materials",
+    "label": "Odyle",
+    "color": "#7562da",
+    "shape": "leaf"
+  }
 ]

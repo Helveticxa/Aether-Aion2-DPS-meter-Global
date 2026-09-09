@@ -41,8 +41,13 @@ export type MarkerCategory = {
   /** Heading it sits under in the filter panel. */
   group: string;
   label: string;
-  /** CSS colour for the marker dot and the filter swatch. */
+  /** CSS colour for the marker and the filter swatch. */
   color: string;
+  /**
+   * Which glyph to draw. Categories share shapes -- every herb is a leaf --
+   * and are told apart by colour within a shape. See `map-icons`.
+   */
+  shape: string;
 };
 
 export type MapMarker = {
@@ -55,16 +60,18 @@ export type MapMarker = {
   note?: string;
 };
 
+/** One closed region outline, in world coordinates. */
+export type MapBorder = {
+  id: string;
+  zone: string;
+  points: Array<[number, number]>;
+};
+
 export type MapDataset = {
   zones: MapZone[];
   categories: MarkerCategory[];
   markers: MapMarker[];
-  /**
-   * True while the bundled sample data is in use. The UI says so plainly --
-   * coordinates that were never measured must not be mistaken for surveyed
-   * ones.
-   */
-  sample: boolean;
+  borders: MapBorder[];
 };
 
 export function groupCategories(categories: MarkerCategory[]): Map<string, MarkerCategory[]> {

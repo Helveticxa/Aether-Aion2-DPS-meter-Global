@@ -1,50 +1,98 @@
 [
   {
-    "id": "verteron",
+    "id": "world-l-a",
     "name": "Verteron",
     "world": "elyos",
-    "bounds": { "minX": 0, "minY": 0, "maxX": 3000, "maxY": 3000 }
+    "bounds": {
+      "minX": 0,
+      "minY": 0,
+      "maxX": 8192,
+      "maxY": 8192
+    },
+    "image": "/aion2/maps/World_L_A.jpg"
   },
   {
-    "id": "eltnen",
+    "id": "world-l-b",
     "name": "Eltnen",
     "world": "elyos",
-    "bounds": { "minX": 0, "minY": 0, "maxX": 3000, "maxY": 3000 }
+    "bounds": {
+      "minX": 0,
+      "minY": 0,
+      "maxX": 8192,
+      "maxY": 8192
+    },
+    "image": "/aion2/maps/World_L_B.jpg"
   },
   {
-    "id": "poeta",
+    "id": "world-l-starter",
     "name": "Poeta",
     "world": "elyos",
-    "bounds": { "minX": 0, "minY": 0, "maxX": 1500, "maxY": 1500 }
+    "bounds": {
+      "minX": 0,
+      "minY": 0,
+      "maxX": 4096,
+      "maxY": 4096
+    },
+    "image": "/aion2/maps/World_L_Starter.jpg"
   },
   {
-    "id": "altgard",
+    "id": "world-d-a",
     "name": "Altgard",
     "world": "asmodian",
-    "bounds": { "minX": 0, "minY": 0, "maxX": 3000, "maxY": 3000 }
+    "bounds": {
+      "minX": 0,
+      "minY": 0,
+      "maxX": 8192,
+      "maxY": 8192
+    },
+    "image": "/aion2/maps/World_D_A.jpg"
   },
   {
-    "id": "morheim",
+    "id": "world-d-b",
     "name": "Morheim",
     "world": "asmodian",
-    "bounds": { "minX": 0, "minY": 0, "maxX": 3000, "maxY": 3000 }
+    "bounds": {
+      "minX": 0,
+      "minY": 0,
+      "maxX": 8192,
+      "maxY": 8192
+    },
+    "image": "/aion2/maps/World_D_B.jpg"
   },
   {
-    "id": "ishalgen",
+    "id": "world-d-starter",
     "name": "Ishalgen",
     "world": "asmodian",
-    "bounds": { "minX": 0, "minY": 0, "maxX": 1500, "maxY": 1500 }
+    "bounds": {
+      "minX": 0,
+      "minY": 0,
+      "maxX": 5120,
+      "maxY": 5120
+    },
+    "image": "/aion2/maps/World_D_Starter.jpg"
   },
   {
-    "id": "reshanta-lower",
-    "name": "Chaotic Lower Reshanta",
+    "id": "abyss-reshanta-a",
+    "name": "Lower Reshanta",
     "world": "abyss",
-    "bounds": { "minX": 0, "minY": 0, "maxX": 4000, "maxY": 4000 }
+    "bounds": {
+      "minX": 0,
+      "minY": 0,
+      "maxX": 4096,
+      "maxY": 4096
+    },
+    "image": "/aion2/maps/Abyss_Reshanta_A.jpg"
   },
   {
-    "id": "reshanta-middle",
-    "name": "Chaotic Middle Reshanta",
+    "id": "abyss-reshanta-b",
+    "name": "Middle Reshanta",
     "world": "abyss",
-    "bounds": { "minX": 0, "minY": 0, "maxX": 4000, "maxY": 4000 }
+    "bounds": {
+      "minX": 0,
+      "minY": 0,
+      "maxX": 2048,
+      "maxY": 2048
+    },
+    "image": "/aion2/maps/Abyss_Reshanta_B.jpg"
   }
 ]

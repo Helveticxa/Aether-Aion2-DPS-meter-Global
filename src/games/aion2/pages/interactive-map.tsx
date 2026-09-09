@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { Eye, EyeOff, Loader2, Map as MapIcon, PictureInPicture2, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -10,7 +11,13 @@ import {
   type MapDataset,
   type MarkerCategory,
 } from "@/games/aion2/lib/map-data";
-import { loadCollected, loadMapDataset, saveCollected } from "@/games/aion2/lib/map-dataset";
+import {
+  loadCollected,
+  loadHidden,
+  loadMapDataset,
+  saveCollected,
+  saveHidden,
+} from "@/games/aion2/lib/map-dataset";
 import { cn } from "@/lib/utils";
 
 const WORLD_LABELS: Record<string, string> = {
@@ -19,12 +26,21 @@ const WORLD_LABELS: Record<string, string> = {
   abyss: "Abyss",
 };
 
+/**
+ * NPCs are a third of every marker in the game and are almost never what
+ * someone opens a map to find, so they start hidden. The choice is remembered
+ * after that.
+ */
+const HIDDEN_BY_DEFAULT = ["npc"];
+
 export default function InteractiveMapPage() {
   const [dataset, setDataset] = useState<MapDataset | null>(null);
   const [zoneId, setZoneId] = useState<string | null>(null);
-  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [hidden, setHidden] = useState<Set<string>>(() => loadHidden(HIDDEN_BY_DEFAULT));
   const [collected, setCollected] = useState<Set<string>>(() => loadCollected());
   const [query, setQuery] = useState("");
+  const [showFound, setShowFound] = useState(true);
+  const [showBorders, setShowBorders] = useState(true);
   const [openingOverlay, setOpeningOverlay] = useState(false);
 
   useEffect(() => {
@@ -32,7 +48,14 @@ export default function InteractiveMapPage() {
     void loadMapDataset().then((next) => {
       if (!alive) return;
       setDataset(next);
-      setZoneId((current) => current ?? next.zones[0]?.id ?? null);
+      // Land on the first zone that actually has markers.
+      setZoneId(
+        (current) =>
+          current ??
+          next.zones.find((z) => next.markers.some((m) => m.zone === z.id))?.id ??
+          next.zones[0]?.id ??
+          null
+      );
     });
     return () => {
       alive = false;
@@ -52,21 +75,47 @@ export default function InteractiveMapPage() {
     [dataset, zone]
   );
 
+  const zoneBorders = useMemo(
+    () => (zone ? (dataset?.borders.filter((b) => b.zone === zone.id) ?? []) : []),
+    [dataset, zone]
+  );
+
   const counts = useMemo(() => countByCategory(zoneMarkers), [zoneMarkers]);
 
   const shown = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return zoneMarkers.filter((marker) => {
       if (hidden.has(marker.category)) return false;
+      if (!showFound && collected.has(marker.id)) return false;
       if (needle && !marker.name.toLowerCase().includes(needle)) return false;
       return true;
     });
-  }, [hidden, query, zoneMarkers]);
+  }, [collected, hidden, query, showFound, zoneMarkers]);
 
-  const groups = useMemo(
-    () => groupCategories(dataset?.categories ?? []),
-    [dataset]
-  );
+  const groups = useMemo(() => groupCategories(dataset?.categories ?? []), [dataset]);
+
+  const updateHidden = (next: Set<string>) => {
+    setHidden(next);
+    saveHidden(next);
+  };
+
+  const toggleCategory = (id: string) => {
+    const next = new Set(hidden);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    updateHidden(next);
+  };
+
+  const toggleGroup = (categories: MarkerCategory[]) => {
+    const ids = categories.map((c) => c.id);
+    const allHidden = ids.every((id) => hidden.has(id));
+    const next = new Set(hidden);
+    for (const id of ids) {
+      if (allHidden) next.delete(id);
+      else next.add(id);
+    }
+    updateHidden(next);
+  };
 
   const toggleCollected = (id: string) => {
     setCollected((current) => {
@@ -74,15 +123,6 @@ export default function InteractiveMapPage() {
       if (next.has(id)) next.delete(id);
       else next.add(id);
       saveCollected(next);
-      return next;
-    });
-  };
-
-  const toggleCategory = (id: string) => {
-    setHidden((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
       return next;
     });
   };
@@ -121,43 +161,40 @@ export default function InteractiveMapPage() {
 
   return (
     <div className="flex h-full w-full gap-4 overflow-hidden p-4 text-white">
-      <aside className="flex w-[290px] shrink-0 flex-col gap-3 overflow-hidden">
+      <aside className="flex w-[288px] shrink-0 flex-col gap-2.5 overflow-hidden">
         <header className="flex items-center gap-2">
           <MapIcon className="size-4 text-cyan-300" />
           <h1 className="text-sm font-semibold tracking-wide">Interactive map</h1>
         </header>
 
-        {dataset.sample && (
-          <p
-            className="rounded-lg border border-amber-300/25 bg-amber-300/[0.06] px-2.5 py-1.5 text-[11px] leading-snug text-amber-100/85"
-            title="Real data arrives when the global client ships and can be extracted from it."
-          >
-            <strong>Sample markers</strong> — invented coordinates, not a survey.
-          </p>
-        )}
-
-        <section className="flex flex-col gap-2">
+        <section className="flex flex-col gap-1.5">
           {[...zonesByWorld.entries()].map(([world, zones]) => (
             <div key={world}>
-              <p className="mb-1.5 text-[10px] font-semibold tracking-[0.18em] text-white/35 uppercase">
+              <p className="mb-1 text-[10px] font-semibold tracking-[0.18em] text-white/35 uppercase">
                 {WORLD_LABELS[world] ?? world}
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {zones.map((z) => (
-                  <button
-                    key={z.id}
-                    type="button"
-                    onClick={() => setZoneId(z.id)}
-                    className={cn(
-                      "rounded-lg px-2.5 py-1 text-xs font-medium transition",
-                      z.id === zone.id
-                        ? "bg-amber-200/85 text-neutral-900"
-                        : "bg-white/6 text-white/70 hover:bg-white/12 hover:text-white"
-                    )}
-                  >
-                    {z.name}
-                  </button>
-                ))}
+                {zones.map((z) => {
+                  const empty = !dataset.markers.some((m) => m.zone === z.id);
+                  return (
+                    <button
+                      key={z.id}
+                      type="button"
+                      onClick={() => setZoneId(z.id)}
+                      title={empty ? "No markers for this zone in the dataset" : undefined}
+                      className={cn(
+                        "rounded-lg px-2.5 py-1 text-xs font-medium transition",
+                        z.id === zone.id
+                          ? "bg-amber-200/85 text-neutral-900"
+                          : empty
+                            ? "bg-white/4 text-white/25 hover:bg-white/8"
+                            : "bg-white/6 text-white/70 hover:bg-white/12 hover:text-white"
+                      )}
+                    >
+                      {z.name}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -173,25 +210,53 @@ export default function InteractiveMapPage() {
           />
         </div>
 
+        <div className="flex items-center gap-3 text-[11px] text-white/55">
+          <label className="flex cursor-pointer items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={showFound}
+              onChange={(event) => setShowFound(event.target.checked)}
+              className="size-3 accent-cyan-400"
+            />
+            Show found
+          </label>
+          <label className="flex cursor-pointer items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={showBorders}
+              onChange={(event) => setShowBorders(event.target.checked)}
+              className="size-3 accent-cyan-400"
+            />
+            Region borders
+          </label>
+        </div>
+
         <div className="flex items-center justify-between text-[11px] text-white/45">
           <span>
             {shown.length.toLocaleString()} of {zoneMarkers.length.toLocaleString()} shown
           </span>
-          <span>
-            {foundHere.toLocaleString()} found
-          </span>
+          <span>{foundHere.toLocaleString()} found</span>
         </div>
 
         <section className="-mr-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
           {[...groups.entries()].map(([group, categories]) => {
             const inZone = categories.filter((category) => (counts.get(category.id) ?? 0) > 0);
             if (inZone.length === 0) return null;
+            const allHidden = inZone.every((category) => hidden.has(category.id));
 
             return (
               <div key={group}>
-                <p className="mb-1.5 text-[10px] font-semibold tracking-[0.18em] text-white/35 uppercase">
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(inZone)}
+                  className="mb-1 flex w-full items-center justify-between text-[10px] font-semibold tracking-[0.18em] text-white/35 uppercase transition hover:text-white/70"
+                >
                   {group}
-                </p>
+                  <span className="tracking-normal normal-case">
+                    {allHidden ? "show all" : "hide all"}
+                  </span>
+                </button>
+
                 <div className="flex flex-col gap-0.5">
                   {inZone.map((category) => {
                     const isHidden = hidden.has(category.id);
@@ -201,9 +266,8 @@ export default function InteractiveMapPage() {
                         type="button"
                         onClick={() => toggleCategory(category.id)}
                         className={cn(
-                          "flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition",
-                          isHidden ? "text-white/30" : "text-white/80",
-                          "hover:bg-white/6"
+                          "flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition hover:bg-white/6",
+                          isHidden ? "text-white/30" : "text-white/80"
                         )}
                       >
                         <span
@@ -214,7 +278,7 @@ export default function InteractiveMapPage() {
                             background: "rgba(8,12,22,0.65)",
                           }}
                         >
-                          <MarkerGlyph category={category.id} size={11} />
+                          <MarkerGlyph shape={category.shape} size={11} />
                         </span>
                         <span className="min-w-0 flex-1 truncate text-left">{category.label}</span>
                         <span className="text-white/35">{counts.get(category.id)}</span>
@@ -231,6 +295,19 @@ export default function InteractiveMapPage() {
             );
           })}
         </section>
+
+        {/* The marker database is not ours. Saying so where the map is used,
+            not only in the README. */}
+        <footer className="shrink-0 border-t border-white/8 pt-2 text-[10px] leading-snug text-white/30">
+          Marker data and maps from{" "}
+          <button
+            type="button"
+            className="text-white/50 underline decoration-white/20 underline-offset-2 transition hover:text-cyan-200"
+            onClick={() => void openUrl("https://aion2hub.com/maps")}
+          >
+            AION2 Hub
+          </button>
+        </footer>
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col gap-3">
@@ -238,8 +315,8 @@ export default function InteractiveMapPage() {
           <div className="min-w-0">
             <h2 className="truncate text-lg font-semibold">{zone.name}</h2>
             <p className="text-xs text-white/40">
-              {WORLD_LABELS[zone.world] ?? zone.world} ·{" "}
-              {zone.image ? "map image loaded" : "no map image yet"}
+              {WORLD_LABELS[zone.world] ?? zone.world} · {zoneMarkers.length.toLocaleString()}{" "}
+              markers · {zoneBorders.length} regions
             </p>
           </div>
 
@@ -262,9 +339,11 @@ export default function InteractiveMapPage() {
           <MapCanvas
             zone={zone}
             markers={shown}
+            borders={zoneBorders}
             categories={categoryIndex}
             collected={collected}
             onToggleCollected={toggleCollected}
+            showBorders={showBorders}
           />
         </div>
       </main>

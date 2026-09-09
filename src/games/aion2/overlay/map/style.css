@@ -169,8 +169,7 @@ body {
 }
 
 .map-dot svg {
-  width: 10px;
-  height: 10px;
+  display: block;
 }
 
 .map-dot.is-found {
