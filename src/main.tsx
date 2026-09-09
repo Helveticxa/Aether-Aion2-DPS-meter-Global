@@ -1,3 +1,7 @@
+import { installDevBrowserShim } from "@/lib/dev-browser-shim";
+
+installDevBrowserShim();
+
 import React, { lazy } from "react";
 import { ThemeProvider } from "./components/theme-provider";
 import ReactDOM from "react-dom/client";
@@ -13,6 +17,7 @@ import { UpdaterDialog } from "@/components/updater-dialog";
 const PreflightGatePage = lazy(() => import("./pages/preflight-gate"));
 const SettingsViewPage = lazy(() => import("./pages/settings"));
 const Aion2HomePage = lazy(() => import("./games/aion2/pages/home"));
+const Aion2MapPage = lazy(() => import("./games/aion2/pages/interactive-map"));
 
 const Aion2OverlaySettingPage = lazy(() => import("./games/aion2/overlay/setting/page"));
 
@@ -54,6 +59,7 @@ function AppWrapper() {
         {/* AION */}
         <Route path="/aion2" element={<Aion2HomePage />} />
         <Route path="/aion2/settings" element={<Aion2HomePage />} />
+        <Route path="/aion2/map" element={<Aion2MapPage />} />
 
         {/* POE2 */}
       </Route>

@@ -1,0 +1,250 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: "Inter", "Segoe UI", "Consolas", sans-serif;
+  font-size: 12px;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 8px;
+  gap: 6px;
+  background:
+    linear-gradient(180deg, rgba(21, 18, 13, 0.96), rgba(5, 6, 8, 0.94)), rgba(0, 0, 0, 0.9);
+  color: #e5e7eb;
+  border-radius: 10px;
+}
+
+.map-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  flex-shrink: 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.map-titlebar__label {
+  color: #f5d78a;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-titlebar__count {
+  color: #9aa3af;
+  font-size: 11px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.map-titlebar__btn {
+  -webkit-app-region: no-drag;
+  background: transparent;
+  border: none;
+  color: #9aa3af;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.map-titlebar__btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.map-titlebar__btn.is-close:hover {
+  background: rgba(220, 60, 60, 0.75);
+  color: #fff;
+}
+
+.map-titlebar__btn[aria-pressed="true"] {
+  color: #f5d78a;
+}
+
+.map-zone-row {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  scrollbar-width: none;
+}
+
+.map-zone-row::-webkit-scrollbar {
+  display: none;
+}
+
+.map-zone {
+  -webkit-app-region: no-drag;
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.62);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 3px 7px;
+  white-space: nowrap;
+}
+
+.map-zone:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.map-zone.is-active {
+  background: rgba(245, 215, 138, 0.85);
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+.map-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #0b1020;
+  cursor: grab;
+}
+
+.map-stage:active {
+  cursor: grabbing;
+}
+
+.map-plane {
+  position: absolute;
+  transform-origin: top left;
+}
+
+.map-image {
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+}
+
+.map-grid {
+  position: absolute;
+  inset: 0;
+  background-color: #0e1526;
+  background-image:
+    linear-gradient(to right, #1e2b45 1px, transparent 1px),
+    linear-gradient(to bottom, #1e2b45 1px, transparent 1px);
+  background-size: 10% 10%;
+}
+
+.map-dot {
+  position: absolute;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  border-style: solid;
+  border-width: 1px;
+  pointer-events: none;
+}
+
+.map-dot.is-found {
+  background: transparent !important;
+  opacity: 0.4;
+}
+
+.map-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.28);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+/* A class that sets `display` outranks the user-agent rule for [hidden], so
+   `el.hidden = true` alone leaves this on screen. */
+.map-empty[hidden] {
+  display: none;
+}
+
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  flex-shrink: 0;
+  max-height: 44px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.map-legend__item {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.62);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0;
+}
+
+.map-legend__item.is-hidden {
+  color: rgba(255, 255, 255, 0.24);
+}
+
+.map-legend__swatch {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+
+.map-legend__item.is-hidden .map-legend__swatch {
+  background: transparent !important;
+}
+
+.map-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.32);
+  font-size: 10px;
+}
+
+.map-footer__btn {
+  -webkit-app-region: no-drag;
+  background: rgba(255, 255, 255, 0.07);
+  border: none;
+  border-radius: 5px;
+  color: rgba(255, 255, 255, 0.66);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 3px 7px;
+}
+
+.map-footer__btn:hover {
+  background: rgba(255, 255, 255, 0.13);
+  color: #fff;
+}

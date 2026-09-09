@@ -1,0 +1,17 @@
+[
+  { "id": "settlement", "group": "Locations", "label": "Settlement", "color": "#e2c275" },
+  { "id": "region", "group": "Locations", "label": "Region", "color": "#c9a227" },
+  { "id": "stronghold", "group": "Locations", "label": "Stronghold", "color": "#d08a5a" },
+  { "id": "dungeon", "group": "Locations", "label": "Dungeon", "color": "#b5651d" },
+  { "id": "sealed-dungeon", "group": "Locations", "label": "Sealed Dungeon", "color": "#8d6b94" },
+  { "id": "rift", "group": "Locations", "label": "Rift", "color": "#9b5de5" },
+  { "id": "monolith", "group": "Locations", "label": "Monolith", "color": "#4cc9f0" },
+  { "id": "kibelisk", "group": "Locations", "label": "Kibelisk", "color": "#4ea8de" },
+  { "id": "updraft", "group": "Locations", "label": "Updraft", "color": "#90e0ef" },
+  { "id": "empyrean-trace", "group": "Collectibles", "label": "Empyrean Trace", "color": "#f2b880" },
+  { "id": "hidden-cube", "group": "Collectibles", "label": "Hidden Cube", "color": "#ffd166" },
+  { "id": "gathering", "group": "Gathering", "label": "Gathering node", "color": "#5cb85c" },
+  { "id": "boss", "group": "Creatures", "label": "Named boss", "color": "#e5383b" },
+  { "id": "elite", "group": "Creatures", "label": "Elite", "color": "#bc4749" },
+  { "id": "npc", "group": "Creatures", "label": "NPC", "color": "#48cae4" }
+]

@@ -31,6 +31,7 @@ searchable history and broken down by skill, buff uptime, and damage type.
 ## Features
 
 - Floating overlay in two styles, with click-through and opacity control
+- Interactive map with an always-on-top minimap overlay
 - Live ping, CPU, and memory footer
 - Battle history with per-skill and per-player breakdowns
 - Damage-type split, buff timelines, and cast ordering

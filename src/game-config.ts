@@ -1,6 +1,4 @@
-import { Home, LineChart, ShieldCheck, type LucideIcon } from "lucide-react";
-
-import { isCloudEnabled } from "@/lib/supabase";
+import { Home, Map, type LucideIcon } from "lucide-react";
 
 export type NavItem = {
   label: string;
@@ -24,21 +22,7 @@ export const AION2_GAME: GameConfig = {
   rootPath: "/aion2",
   navItems: [
     { label: "Home", path: "/aion2", icon: Home },
-    // Character search and the damage leaderboard both need a community
-    // backend: the first a Taiwan-only character API, the second the Supabase
-    // project behind the leaderboard. Neither can answer in this build, so they
-    // are hidden rather than left to fail in the UI.
-    ...(isCloudEnabled
-      ? [
-          {
-            label: "Character",
-            path: "/aion2/character/search",
-            icon: ShieldCheck,
-            activePaths: ["/aion2/character/search", "/aion2/character/view"],
-          },
-          { label: "Damage Ranking", path: "/aion2/dps-rank", icon: LineChart },
-        ]
-      : []),
+    { label: "Map", path: "/aion2/map", icon: Map },
   ],
 
   bgVideo: "/aion2/bg.mp4",

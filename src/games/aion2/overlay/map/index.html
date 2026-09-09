@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aether Map</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="map-titlebar" data-tauri-drag-region>
+        <span class="map-titlebar__label" id="zone-name">Map</span>
+        <span class="map-titlebar__count" id="marker-count">--</span>
+        <button class="map-titlebar__btn" id="pin-btn" title="Always on top" aria-pressed="true">
+          &#9679;
+        </button>
+        <button class="map-titlebar__btn is-close" id="close-btn" title="Close">&times;</button>
+      </div>
+
+      <div class="map-zone-row" id="zone-row"></div>
+
+      <div class="map-stage" id="stage">
+        <div class="map-plane" id="plane">
+          <img class="map-image" id="map-image" alt="" draggable="false" hidden />
+          <div class="map-grid" id="map-grid"></div>
+        </div>
+        <div class="map-empty" id="empty" hidden>No markers for this zone</div>
+      </div>
+
+      <div class="map-legend" id="legend"></div>
+
+      <div class="map-footer">
+        <span id="hint">Drag to pan · scroll to zoom</span>
+        <button class="map-footer__btn" id="reset-btn">Reset</button>
+      </div>
+    </div>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

@@ -60,7 +60,9 @@ runner cannot launch an executable that demands elevation.
 | `src-tauri/src/dps_meter/preflight.rs` | Startup gate: what must be true before the app opens |
 | `src-tauri/src/dps_meter/engine/` | DPS calculation, meter lifecycle |
 | `src-tauri/src/plugins/` | Overlay windows, tray, logger, shortcuts |
-| `src/games/aion2/` | Game UI, five overlay windows, bundled game data |
+| `src/games/aion2/` | Game UI, six overlay windows, bundled game data |
+| `src/games/aion2/lib/map-*.ts` | Interactive map: data model, projection, dataset loading |
+| `src/games/aion2/data/maps/` | Map zones, marker categories, and the sample marker set |
 | `src/components/` | Shared UI, including the Runtime tools panel |
 | `src/i18n/locales/` | English and Korean only |
 | `docs/` | `AION2_PACKET_PROTOCOL_ANALYSIS.zh-CN.md` — upstream's protocol notes, in Chinese. Useful reference; not yet translated. |
