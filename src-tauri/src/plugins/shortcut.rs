@@ -120,11 +120,13 @@ fn dispatch<R: Runtime>(app: &AppHandle<R>, action: Action) {
             tauri::async_runtime::spawn_blocking(on_top::toggle_pin_foreground);
         }
         Action::ToggleGhost => {
-            tauri::async_runtime::spawn_blocking(on_top::toggle_ghost_all);
+            let app = app.clone();
+            tauri::async_runtime::spawn_blocking(move || on_top::toggle_ghost_everything(&app));
         }
         Action::HideOnTop => {
-            tauri::async_runtime::spawn_blocking(|| {
-                on_top::set_all_hidden(None);
+            let app = app.clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                on_top::set_everything_hidden(&app, None);
             });
         }
     }

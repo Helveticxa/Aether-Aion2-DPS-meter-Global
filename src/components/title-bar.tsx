@@ -144,7 +144,7 @@ export function TitleBar({
         {showClose && (
           <button
             onClick={handleClose}
-            className="title-bar-control no-drag-region hover:bg-destructive/90 hover:text-white"
+            className="title-bar-control no-drag-region hover:bg-destructive/90 hover:text-[#fff]"
             aria-label="Close"
             tabIndex={-1}
           >

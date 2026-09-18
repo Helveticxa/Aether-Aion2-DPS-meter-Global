@@ -247,11 +247,11 @@ export default function PreflightGatePage() {
 
   return (
     <div
-      className="text-foreground flex h-screen w-screen items-center justify-center overflow-hidden rounded-2xl bg-zinc-950 select-none"
+      className="text-foreground flex h-screen w-screen items-center justify-center overflow-hidden rounded-2xl bg-black select-none"
       data-tauri-drag-region
     >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_12%,rgba(34,211,238,0.20),transparent_34%),radial-gradient(circle_at_82%_86%,rgba(99,102,241,0.18),transparent_32%)]" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-cyan-950/24 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-cyan-300/10 to-transparent dark:from-cyan-950/24" />
 
       <main className="relative grid w-full max-w-[600px] grid-cols-[168px_1fr] items-start gap-5 px-6 py-6">
         <section className="flex flex-col items-center gap-3 pt-2">
@@ -367,7 +367,7 @@ export default function PreflightGatePage() {
             {ready ? (
               <button
                 type="button"
-                className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-white/90 px-3 text-xs font-semibold text-neutral-900 transition hover:bg-white"
+                className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-white/90 px-3 text-xs font-semibold text-black transition hover:bg-white"
                 data-tauri-drag-region="false"
                 onClick={() => void enterApp()}
               >

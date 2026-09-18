@@ -32,6 +32,9 @@ searchable history and broken down by skill, buff uptime, and damage type.
 
 - Floating overlay in two styles, with click-through and opacity control
 - Interactive map — 8 zones, 4,799 markers, with an always-on-top minimap overlay
+- Always on top — keep your own signed-in Chrome or Edge above the game, with opacity and click-through
+- YouTube live chat overlay — the chat alone over the game, transparent, outlined for any scene
+- Light and dark themes
 - Live ping, CPU, and memory footer
 - Battle history with per-skill and per-player breakdowns
 - Damage-type split, buff timelines, and cast ordering
@@ -103,6 +106,9 @@ All off by default. Recordings stay on your machine.
 The layout is shared; this build is in English.</sub>
 
 ## Credit
+
+The animated background is **Dune** by [R](https://vimeo.com/theraa), a motion
+design piece published on Vimeo.
 
 The interactive map is built on marker data and map images from
 **[AION2 Hub](https://aion2hub.com/maps)**. That database is their work; if the

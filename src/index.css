@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* dark: follows the theme the app chose, not the operating system's. Without
+   this, picking Light on a machine set to dark mode gave shadcn components
+   their dark variants inside a light page. */
+@custom-variant dark (&:is(.dark *));
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -69,6 +74,53 @@
   --border: oklch(0.269 0 0);
   --input: oklch(0.269 0 0);
   --ring: oklch(0.439 0 0);
+}
+
+/*
+ * The light theme.
+ *
+ * The app's glass surfaces are written white-on-dark: text-white/60,
+ * bg-white/6, bg-black/45, and some three hundred more like them. Tailwind
+ * compiles every one through var(--color-white) and var(--color-black), so
+ * swapping those two here turns each into its dark-on-light twin at once,
+ * instead of rewriting three hundred class names across upstream's files.
+ *
+ * Anything that must stay white whatever the theme (text on a red button, on
+ * a profile colour, inside a tooltip) uses a literal such as text-[#fff].
+ *
+ * Scoped to .light, which only the main app's theme provider sets. The
+ * overlays are separate documents that never load this stylesheet.
+ */
+.light {
+  --color-white: oklch(0.2 0.012 260);
+  --color-black: oklch(1 0 0);
+
+  /* The accents were picked for dark glass: cyan-300 text, amber-200 chips.
+     On paper those pastels all but vanish, so each maps to a deep shade of
+     the same hue (Tailwind's own values). At low opacity (bg-cyan-300/10)
+     the deeper colour is still a light tint. */
+  --color-cyan-100: oklch(45% 0.085 224.283);
+  --color-cyan-200: oklch(52% 0.105 223.128);
+  --color-cyan-300: oklch(60.9% 0.126 221.723);
+  --color-amber-100: oklch(47.3% 0.137 46.201);
+  --color-amber-200: oklch(66.6% 0.179 58.318);
+  --color-amber-300: oklch(66.6% 0.179 58.318);
+  --color-sky-100: oklch(44.3% 0.11 240.79);
+  --color-sky-300: oklch(58.8% 0.158 241.966);
+  --color-violet-300: oklch(54.1% 0.281 293.009);
+  --color-indigo-300: oklch(51.1% 0.262 276.966);
+  --color-emerald-100: oklch(43.2% 0.095 166.913);
+  --color-emerald-300: oklch(59.6% 0.145 163.225);
+  --color-red-200: oklch(50.5% 0.213 27.518);
+  --color-red-300: oklch(57.7% 0.245 27.325);
+  --color-rose-200: oklch(51.4% 0.222 16.935);
+}
+
+/* The background artwork is white line work on black. Inverted, it is the
+   same drawing in ink on paper: the light theme's own version of it. The
+   filter runs on the compositor, so the video costs nothing extra. */
+.light .bg-artwork {
+  filter: invert(1);
 }
 
 @layer base {

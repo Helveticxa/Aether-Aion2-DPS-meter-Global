@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ReleaseNotes } from "@/components/release-notes";
 import { useTranslation } from "react-i18next";
 
 import { useUpdater } from "@/hooks/use-updater";
@@ -103,7 +104,7 @@ export function UpdaterDialog({
               {t("updater.releaseNotes")}
             </p>
             <div className="bg-muted/40 min-h-0 flex-1 overflow-y-auto rounded-md border p-3">
-              <p className="text-sm leading-6 whitespace-pre-wrap">{notes}</p>
+              <ReleaseNotes text={notes} />
             </div>
           </div>
         ) : null}

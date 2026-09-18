@@ -13,6 +13,7 @@
 //! or unclickable because Aether went away.
 
 mod browsers;
+pub mod live_chat;
 #[cfg(windows)]
 mod win32;
 
@@ -32,7 +33,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tauri::{
     plugin::{Builder, TauriPlugin},
-    Emitter, Manager, Runtime,
+    AppHandle, Emitter, Manager, Runtime,
 };
 
 pub use browsers::{BrowserId, BrowserInfo};
@@ -183,7 +184,7 @@ fn pin_and_fit(raw: isize, corner: Corner, size: SizePreset) -> Result<(), Strin
     let fills = platform::fills_screen(raw);
     pin(raw)?;
     if fills {
-        platform::snap(raw, corner, size, true)?;
+        platform::snap(raw, corner, size.logical(), true)?;
     }
     Ok(())
 }
@@ -263,24 +264,47 @@ pub fn toggle_pin_foreground() {
     notify();
 }
 
-/// Ghost every pinned window, or un-ghost them all if every one already is.
-/// A ghost window cannot be clicked, so this hotkey is the way back.
-pub fn toggle_ghost_all() {
+/// Ghost every pinned window and the live chat overlay, or un-ghost them all
+/// if every one already is. A ghost window cannot be clicked, so this hotkey
+/// is the way back.
+pub fn toggle_ghost_everything<R: Runtime>(app: &AppHandle<R>) {
     let handles: Vec<(isize, bool)> = managed().iter().map(|(raw, m)| (*raw, m.ghost)).collect();
-    if handles.is_empty() {
+    let chat_open = live_chat::is_open(app);
+    let mut states: Vec<bool> = handles.iter().map(|(_, ghost)| *ghost).collect();
+    if chat_open {
+        states.push(live_chat::ghost());
+    }
+    if states.is_empty() {
         return;
     }
-    let target = handles.iter().any(|(_, ghost)| !ghost);
+    let target = states.iter().any(|ghost| !ghost);
     for (raw, _) in handles {
         if let Err(error) = set_ghost(raw, target) {
             eprintln!("[on-top] ghost toggle skipped a window: {error}");
         }
     }
+    if chat_open {
+        live_chat::set_ghost(app, target);
+    }
     notify();
 }
 
+/// Tuck away every pinned window and the live chat overlay, or bring them
+/// all back.
+pub fn set_everything_hidden<R: Runtime>(app: &AppHandle<R>, target: Option<bool>) -> bool {
+    let chat_open = live_chat::is_open(app);
+    let hide = target.unwrap_or_else(|| {
+        managed().values().any(|m| !m.hidden) || (chat_open && !live_chat::is_hidden())
+    });
+    set_all_hidden(Some(hide));
+    if chat_open {
+        live_chat::set_hidden(app, hide);
+    }
+    hide
+}
+
 /// Minimise every pinned window, or bring them all back.
-pub fn set_all_hidden(target: Option<bool>) -> bool {
+fn set_all_hidden(target: Option<bool>) -> bool {
     let mut map = managed();
     let hide = target.unwrap_or_else(|| map.values().any(|m| !m.hidden));
     for (raw, entry) in map.iter_mut() {
@@ -544,12 +568,12 @@ fn launch_blocking(
     // Let the browser finish its own first layout before moving the window.
     std::thread::sleep(Duration::from_millis(150));
     pin(raw)?;
-    platform::snap(raw, corner, size, true)?;
+    platform::snap(raw, corner, size.logical(), true)?;
     // Chromium restores an app window's remembered bounds as it finishes
     // opening. If that landed after our move, this puts it back; if not, it
     // is the same rectangle again and nothing moves.
     std::thread::sleep(Duration::from_millis(400));
-    let _ = platform::snap(raw, corner, size, true);
+    let _ = platform::snap(raw, corner, size.logical(), true);
 
     notify();
     Ok(raw as i64)
@@ -680,7 +704,7 @@ pub async fn on_top_snap(hwnd: i64, corner: Corner, size: SizePreset) -> Result<
                 Ok(())
             });
         }
-        platform::snap(raw, corner, size, pinned)?;
+        platform::snap(raw, corner, size.logical(), pinned)?;
         notify();
         Ok(())
     })
@@ -703,8 +727,11 @@ pub async fn on_top_focus(hwnd: i64) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn on_top_set_hidden(hidden: Option<bool>) -> Result<bool, String> {
-    blocking(move || Ok(set_all_hidden(hidden))).await
+pub async fn on_top_set_hidden<R: Runtime>(
+    app: AppHandle<R>,
+    hidden: Option<bool>,
+) -> Result<bool, String> {
+    blocking(move || Ok(set_everything_hidden(&app, hidden))).await
 }
 
 #[tauri::command]
@@ -762,7 +789,7 @@ mod platform {
 
     use serde::{Deserialize, Serialize};
 
-    use super::{browsers::BrowserId, Corner, SizePreset};
+    use super::{browsers::BrowserId, Corner};
 
     const UNSUPPORTED: &str = "Always on top is only available on Windows.";
 
@@ -806,6 +833,9 @@ mod platform {
     pub fn fills_screen(_: isize) -> bool {
         false
     }
+    pub fn rect_visible(_: i32, _: i32, _: i32, _: i32) -> bool {
+        false
+    }
     pub fn has_layering(_: isize, _: bool) -> bool {
         false
     }
@@ -826,7 +856,7 @@ mod platform {
     }
     pub fn restore_original(_: isize, _: &Original) {}
     pub fn clear_border(_: isize) {}
-    pub fn snap(_: isize, _: Corner, _: SizePreset, _: bool) -> Result<(), String> {
+    pub fn snap(_: isize, _: Corner, _: (i32, i32), _: bool) -> Result<(), String> {
         Err(UNSUPPORTED.into())
     }
     pub fn minimize(_: isize) {}

@@ -5,6 +5,24 @@ numbering: this fork publishes to its own release channel, and the updater
 compares an installed build against these releases. Upstream's release history
 lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
 
+<!-- 2.0.0's notes are shown by the update dialog of 0.1.15 and earlier, which
+     prints them verbatim: so no hard wraps and no bold here. From 2.0.0 on the
+     dialog renders Markdown. -->
+
+## [2.0.0]
+
+A new look, a proper light theme, and a YouTube live chat overlay. The version jumps to 2.0.0 so it sorts cleanly above 0.1.x everywhere.
+
+New background: an animated HUD, "Dune" by R (credited under Settings, Credits). It is less than half the size of the old video, and its still frame is 32 KB.
+
+Light theme fixed from top to bottom. Pages used to wash out to white with white text on them. Every page, card, button, and dialog now has proper contrast in both themes, and the background turns to ink on paper in light mode.
+
+YouTube live chat overlay (Always on top, Live chat): paste a live link, a Studio link, or a channel @handle, and the chat appears over the game with no background, white outlined text that stays readable on any scene. Choose the text size, avatars, and an optional shadow, turn on Ghost to click through it to the game, and move it anywhere. Read-only: no sign-in needed.
+
+- Ctrl+Alt+G and Ctrl+Alt+H now cover the chat overlay too.
+- Release notes in this dialog are now formatted.
+- New Artwork and data section on the Credits page.
+
 ## [0.1.15]
 
 **Pinned windows look like themselves again.** 0.1.14 drew a yellow outline

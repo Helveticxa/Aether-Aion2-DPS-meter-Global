@@ -104,7 +104,7 @@ export function GearSlot({ item }: { item: GearItem }) {
           </span>
 
           {exceed > 0 ? (
-            <span className="absolute -right-0.5 -bottom-1 rounded-[3px] bg-teal-400 px-[3px] text-[9px] leading-[13px] font-bold text-black shadow">
+            <span className="absolute -right-0.5 -bottom-1 rounded-[3px] bg-teal-400 px-[3px] text-[9px] leading-[13px] font-bold text-neutral-950 shadow">
               {exceed}
             </span>
           ) : enchant > 0 ? (

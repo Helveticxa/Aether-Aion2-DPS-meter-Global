@@ -14,7 +14,7 @@ PowerShell 5.1 on the development machine has no `&&` — chain with `;`.
 ```
 pnpm install
 pnpm build                        # tsc + vite, ~6s
-cd src-tauri; cargo test --lib    # 58 tests
+cd src-tauri; cargo test --lib    # 65 tests
 pnpm tauri:dev                    # must be an ELEVATED terminal
 pnpm tauri:build                  # NSIS installer + updater bundle
 ```

@@ -26,8 +26,8 @@ export const AION2_GAME: GameConfig = {
     { label: "Always on top", path: "/aion2/on-top", icon: Pin },
   ],
 
-  bgVideo: "/aion2/bg.mp4",
-  bgImage: "/aion2/background.webp",
+  bgVideo: "/aion2/bg-dune.mp4",
+  bgImage: "/aion2/background-dune.webp",
 };
 
 export const ALL_GAMES: GameConfig[] = [AION2_GAME];

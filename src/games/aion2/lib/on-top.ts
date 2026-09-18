@@ -51,6 +51,69 @@ export interface BrowserWindow {
 
 /** Emitted by the backend whenever pinned windows change, from anywhere. */
 export const ON_TOP_CHANGED = "on-top-changed";
+/** Emitted whenever the live chat overlay opens, closes, or changes. */
+export const LIVE_CHAT_CHANGED = "live-chat-changed";
+
+// =============================================================================
+// Live chat overlay
+// =============================================================================
+
+export interface ChatStyle {
+  fontSize: number;
+  avatars: boolean;
+  backdrop: boolean;
+  allMessages: boolean;
+}
+
+/** Physical pixels. */
+export interface PhysicalRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface ChatStatus {
+  open: boolean;
+  videoId: string | null;
+  ghost: boolean;
+  adjusting: boolean;
+  hidden: boolean;
+  rect: PhysicalRect | null;
+}
+
+export const CHAT_SIZES: { id: SizePreset; label: string; hint: string }[] = [
+  { id: "small", label: "S", hint: "320 × 420" },
+  { id: "medium", label: "M", hint: "380 × 540" },
+  { id: "large", label: "L", hint: "440 × 680" },
+];
+
+/** Share of a 1920×1080 screen each chat size takes, for drawing a target. */
+export const CHAT_FRACTION: Record<SizePreset, { w: number; h: number }> = {
+  small: { w: 320 / 1920, h: 420 / 1080 },
+  medium: { w: 380 / 1920, h: 540 / 1080 },
+  large: { w: 440 / 1920, h: 680 / 1080 },
+};
+
+export const liveChat = {
+  /** A link, a video id, or a channel (@handle) -> the live video id. */
+  resolve: (input: string) => invoke<string>("live_chat_resolve", { input }),
+  open: (args: {
+    videoId: string;
+    style: ChatStyle;
+    ghost: boolean;
+    placement: { corner: Corner; size: SizePreset; rect: PhysicalRect | null };
+  }) => invoke<void>("live_chat_open", args),
+  close: () => invoke<void>("live_chat_close"),
+  style: (style: ChatStyle) => invoke<void>("live_chat_style", { style }),
+  setGhost: (ghost: boolean) => invoke<void>("live_chat_set_ghost", { ghost }),
+  setHidden: (hidden: boolean) => invoke<void>("live_chat_set_hidden", { hidden }),
+  /** Leaving moving mode returns where the window ended up. */
+  setAdjusting: (adjusting: boolean) =>
+    invoke<PhysicalRect | null>("live_chat_set_adjusting", { adjusting }),
+  snap: (corner: Corner, size: SizePreset) => invoke<void>("live_chat_snap", { corner, size }),
+  status: () => invoke<ChatStatus>("live_chat_status"),
+};
 
 export const MIN_OPACITY = 20;
 
@@ -175,24 +238,50 @@ export function nearestPreset(item: BrowserWindow): SizePreset | null {
 // Preferences
 // =============================================================================
 
+export type OnTopMode = "browser" | "chat";
+
 export interface OnTopPrefs {
+  mode: OnTopMode;
   browser: BrowserId;
   profiles: Partial<Record<BrowserId, string>>;
   url: string;
   corner: Corner;
   size: SizePreset;
   recent: string[];
+  chatSource: string;
+  chatRecent: string[];
+  chatStyle: ChatStyle;
+  chatGhost: boolean;
+  chatCorner: Corner;
+  chatSize: SizePreset;
+  /** Where the player last put the chat by hand; cleared by picking a corner. */
+  chatRect: PhysicalRect | null;
 }
 
 const PREFS_KEY = "aether-on-top";
 
+const DEFAULT_CHAT_STYLE: ChatStyle = {
+  fontSize: 15,
+  avatars: true,
+  backdrop: false,
+  allMessages: true,
+};
+
 const DEFAULT_PREFS: OnTopPrefs = {
+  mode: "browser",
   browser: "chrome",
   profiles: {},
   url: "https://www.youtube.com",
   corner: "top-right",
   size: "medium",
   recent: [],
+  chatSource: "",
+  chatRecent: [],
+  chatStyle: DEFAULT_CHAT_STYLE,
+  chatGhost: true,
+  chatCorner: "bottom-left",
+  chatSize: "medium",
+  chatRect: null,
 };
 
 export function loadPrefs(): OnTopPrefs {
@@ -205,6 +294,8 @@ export function loadPrefs(): OnTopPrefs {
       ...stored,
       profiles: { ...(stored.profiles ?? {}) },
       recent: Array.isArray(stored.recent) ? stored.recent.slice(0, 5) : [],
+      chatRecent: Array.isArray(stored.chatRecent) ? stored.chatRecent.slice(0, 5) : [],
+      chatStyle: { ...DEFAULT_CHAT_STYLE, ...(stored.chatStyle ?? {}) },
     };
   } catch {
     return { ...DEFAULT_PREFS };

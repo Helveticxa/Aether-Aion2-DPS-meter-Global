@@ -256,15 +256,25 @@ artifacts the updater expects.
 
 ## Background
 
-The home-screen background is a looping 1080p video (`public/aion2/bg.mp4`) drawn
-over a still (`public/aion2/background.webp`) that the other pages use on its own.
+The home-screen background is a looping 1080p video
+(`public/aion2/bg-dune.mp4`) drawn over a still
+(`public/aion2/background-dune.webp`) that the other pages use on their own.
 
-Both were replaced. The still is now a frame of the video, so the pages agree with
-each other, and it was moved from PNG to WebP: 1.8 MB to 143 KB for the same
-image.
+Since 2.0.0 it is **Dune** by [R](https://vimeo.com/theraa), credited in the README
+and on the in-app Credits page. It replaced the flower video. The file names
+changed with it, so a webview cache can never serve the old clip after an
+update.
 
-The video is re-encoded at CRF 26 -- 1.45 Mbps, below the 1.68 Mbps of the clip it
-replaced, so it costs less to decode per frame despite running longer.
+- The video is re-encoded from the 60 fps original to 30 fps H.264 at CRF 27
+  (`-tune animation`, faststart, no audio track): 3.8 MB to 1.7 MB. At full
+  resolution, thin line work on black is indistinguishable from the source, and
+  decoding costs half as much per second.
+- The still is the frame at 2.45 s, taken from the source, not the re-encode,
+  and stored as lossless WebP: 32 KB against the 143 KB of the one it replaced.
+  It is also the video's `poster`, so there is no black flash before playback.
+- In the light theme both are inverted with `filter: invert(1)` (the
+  `bg-artwork` class): white line work on black becomes ink on paper, drawn by
+  the compositor at no extra cost.
 
 Playback pauses whenever nobody can see it. Upstream already paused on window
 blur; that now also honours the Page Visibility API, which covers states the
@@ -406,6 +416,64 @@ window. A ghost window cannot be clicked, so its shortcut is the way back.
 Shortcut registration used to stop at the first failure, which left every
 shortcut after it dead. One combination held by another program no longer costs
 the others. The failures are reported, and the page marks them.
+
+### YouTube live chat overlay
+
+The page's second mode shows a YouTube live chat on its own, over the game,
+with no background: the look stream overlays use. A pinned browser cannot do
+this. A browser page's background cannot be made see-through while its text
+stays solid, and lowering a window's opacity fades the words with everything
+else. So this is Aether's own transparent window (`on_top/live_chat.rs`),
+loading YouTube's popout chat and restyled by `on_top/live_chat.js`. It hides the
+header, input, ticker, banners and scrollbars, and draws the text white with a
+dark outline so it reads over any scene. It picks "Live chat" (every message)
+over YouTube's filtered "Top chat". Reading a public chat needs no sign-in,
+which is why the browser's session does not matter here.
+
+- **Input** is a watch, live, Studio, or youtu.be link, a bare video id, or a
+  channel (`@handle`, a channel link). A channel is resolved to its current
+  stream through the canonical link of `/<channel>/live`.
+- **Settings travel in the URL fragment** (`#aether={...}`), which YouTube
+  ignores, so the page is styled from its first paint and switching streams is a
+  `navigate()`. Recreating a window under the same label while the old one is
+  still being torn down is a race, and this avoids it. Live changes go through
+  `window.__aetherChat.apply()`.
+- **The page gets nothing of Aether's.** It is a remote origin with no
+  capability, navigation is held to `/live_chat` (and YouTube's consent step),
+  and popups are refused (`NewWindowResponse::Deny`). Without that, WebView2
+  opens a popup window for any link clicked in the chat.
+- **Ghost** is `set_ignore_cursor_events` on our own window, and the ghost and
+  hide shortcuts cover it along with pinned windows. **Moving it** turns on its
+  title bar and a dashed outline. When the player is done, the position is
+  returned and remembered. The window is excluded from the window-state plugin,
+  which would otherwise restore a title bar left on mid-move.
+
+`live_chat.js` has no backslashes: Tailwind scans it as a source file, and a
+backslash followed by hex digits breaks the CSS build.
+
+Checked in a real transparent WebView2 window against a live stream: the
+background composited through to a bright window behind it, and the moving mode
+and live restyling (size, shadow band, avatars off) behaved.
+
+## Light theme
+
+Upstream's pages and most of Aether's are written white-on-dark glass:
+`text-white/60`, `bg-white/6`, `bg-black/45`, some three hundred of them. In
+the light theme that put white text on a white wash. Rewriting three hundred
+class names across upstream files would make every merge painful, so
+`src/index.css` instead redefines `--color-white` and `--color-black` under
+`.light`. Tailwind compiles every one of those utilities through the variables,
+so each becomes its dark-on-light twin in one place. The pastel accents
+(cyan-300, amber-200, ...) were picked for dark glass; under `.light` they map
+to deep shades of the same hue.
+
+The exceptions are literal: text that must stay white on a coloured fill (a red
+button, a profile colour) uses `text-[#fff]`, and white primary buttons take
+`text-black`, which the swap turns white on an ink button.
+
+Also fixed: `dark:` variants followed the operating system rather than the
+theme the app chose, because Tailwind v4 defaults to the media query. A
+`@custom-variant` ties them to the `.dark` class.
 
 ## Repository cleanup
 

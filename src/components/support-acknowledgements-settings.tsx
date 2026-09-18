@@ -59,6 +59,26 @@ const TECHNICAL_CREDITS: CreditItem[] = [
   },
 ];
 
+/** Work that is not code: what the app shows, rather than how it runs. */
+const ARTWORK_CREDITS: CreditItem[] = [
+  {
+    name: "Dune by R",
+    description:
+      "The animated background and its still frame. Motion design by R, published on Vimeo.",
+    href: "https://vimeo.com/theraa",
+    avatarSrc: "/aion2/credits/dune.webp",
+    avatarFallback: "R",
+    badge: "Background",
+  },
+  {
+    name: "AION2 Hub",
+    description: "Marker positions, region borders, and the base map images on the Map page.",
+    href: "https://aion2hub.com/maps",
+    avatarFallback: "AH",
+    badge: "Map data",
+  },
+];
+
 function openExternalLink(href: string) {
   void openUrl(href);
 }
@@ -105,6 +125,12 @@ export function SupportAcknowledgementsSettings() {
 
       <SettingsGroup title="References">
         {TECHNICAL_CREDITS.map((item) => (
+          <CreditRow key={item.href} item={item} />
+        ))}
+      </SettingsGroup>
+
+      <SettingsGroup title="Artwork and data">
+        {ARTWORK_CREDITS.map((item) => (
           <CreditRow key={item.href} item={item} />
         ))}
       </SettingsGroup>

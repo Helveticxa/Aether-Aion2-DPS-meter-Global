@@ -204,7 +204,7 @@ export function WindowFrame({
     >
       {gameConfig?.bgImage && (
         <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-70"
+          className="bg-artwork absolute inset-0 bg-cover bg-center bg-no-repeat opacity-70"
           style={{ backgroundImage: `url("${gameConfig.bgImage}")` }}
         />
       )}
@@ -215,12 +215,17 @@ export function WindowFrame({
       {isHomePage && gameConfig?.bgVideo ? (
         <video
           ref={bgVideoRef}
-          className="absolute inset-0 h-full w-full object-cover"
+          className="bg-artwork absolute inset-0 h-full w-full object-cover"
+          // The still is a frame of the same video, so the hand-over from
+          // poster to playback is not a black flash.
+          poster={gameConfig.bgImage}
           autoPlay
           muted
           loop
           playsInline
+          disablePictureInPicture
           preload="auto"
+          aria-hidden
         >
           <source src={gameConfig.bgVideo} type="video/mp4" />
         </video>

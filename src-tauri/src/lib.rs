@@ -39,6 +39,9 @@ pub fn run() {
                     !matches!(
                         label,
                         "splashscreen"| "dps-overlay-pvp"| "aion2-event-timer-boss"
+                            // Placed from the Always on top page, which remembers
+                            // it; restoring decorations mid-move would be wrong.
+                            | "aion2-live-chat"
                             // | "aion2-event-timer"
                     )
                 })
@@ -154,6 +157,15 @@ pub fn run() {
             plugins::on_top::on_top_set_hidden,
             plugins::on_top::on_top_unpin_all,
             plugins::on_top::on_top_launch,
+            plugins::on_top::live_chat::live_chat_resolve,
+            plugins::on_top::live_chat::live_chat_open,
+            plugins::on_top::live_chat::live_chat_close,
+            plugins::on_top::live_chat::live_chat_style,
+            plugins::on_top::live_chat::live_chat_set_ghost,
+            plugins::on_top::live_chat::live_chat_set_hidden,
+            plugins::on_top::live_chat::live_chat_set_adjusting,
+            plugins::on_top::live_chat::live_chat_snap,
+            plugins::on_top::live_chat::live_chat_status,
         ])
         .setup(|app| {
             let logger = app

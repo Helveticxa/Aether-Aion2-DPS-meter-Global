@@ -32,8 +32,9 @@ use windows::{
                 DWMWA_EXTENDED_FRAME_BOUNDS,
             },
             Gdi::{
-                GetMonitorInfoW, MonitorFromWindow, RedrawWindow, MONITORINFO,
-                MONITOR_DEFAULTTONEAREST, RDW_ALLCHILDREN, RDW_ERASE, RDW_FRAME, RDW_INVALIDATE,
+                GetMonitorInfoW, MonitorFromRect, MonitorFromWindow, RedrawWindow, MONITORINFO,
+                MONITOR_DEFAULTTONEAREST, MONITOR_DEFAULTTONULL, RDW_ALLCHILDREN, RDW_ERASE,
+                RDW_FRAME, RDW_INVALIDATE,
             },
         },
         Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY},
@@ -71,7 +72,7 @@ use windows::{
 };
 
 use super::browsers::BrowserId;
-use super::{Corner, SizePreset};
+use super::Corner;
 
 /// Chromium's top-level window class, for Chrome and Edge alike.
 const CHROMIUM_WINDOW_CLASS: &str = "Chrome_WidgetWin_1";
@@ -244,6 +245,14 @@ pub fn fills_screen(raw: isize) -> bool {
     let (_, work) = monitor_rects(raw);
     let area = |r: &Rect| (r.width().max(0) as i64) * (r.height().max(0) as i64);
     area(&work) > 0 && area(&frame) * 10 >= area(&work) * 9
+}
+
+/// Whether any part of a rectangle is on a connected monitor. A remembered
+/// position can outlive the monitor it was on.
+pub fn rect_visible(left: i32, top: i32, right: i32, bottom: i32) -> bool {
+    let rect = RECT { left, top, right, bottom };
+    let monitor = unsafe { MonitorFromRect(&rect, MONITOR_DEFAULTTONULL) };
+    !monitor.is_invalid()
 }
 
 pub fn is_topmost(raw: isize) -> bool {
@@ -601,8 +610,14 @@ pub fn clear_border(raw: isize) {
     }
 }
 
-/// Move a window into a corner of its monitor's work area at a preset size.
-pub fn snap(raw: isize, corner: Corner, size: SizePreset, topmost: bool) -> Result<(), String> {
+/// Move a window into a corner of its monitor's work area, at a size given in
+/// logical pixels.
+pub fn snap(
+    raw: isize,
+    corner: Corner,
+    logical: (i32, i32),
+    topmost: bool,
+) -> Result<(), String> {
     let window = hwnd(raw);
     unsafe {
         // A maximised or minimised window has to become a normal one first,
@@ -626,7 +641,7 @@ pub fn snap(raw: isize, corner: Corner, size: SizePreset, topmost: bool) -> Resu
     }
 
     let margin = (16.0 * scale).round() as i32;
-    let (logical_w, logical_h) = size.logical();
+    let (logical_w, logical_h) = logical;
     let width = ((logical_w as f64 * scale).round() as i32).min(work.width() - margin * 2);
     let height = ((logical_h as f64 * scale).round() as i32).min(work.height() - margin * 2);
 
