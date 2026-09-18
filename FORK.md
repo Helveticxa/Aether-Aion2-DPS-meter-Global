@@ -383,9 +383,13 @@ passed on, because the browser would quietly create a new empty profile.
 Opacity and ghost mode rely on `WS_EX_LAYERED` (plus `WS_EX_TRANSPARENT` for
 click-through). Before building on it, this was checked against Chrome 153 and
 Edge 153 playing hardware-decoded H.264. The video kept playing and composited
-correctly at 55%. On Windows 11 the pinned window's border turns amber, or cyan
-in ghost mode, through `DWMWA_BORDER_COLOR`. Windows 10 has no such attribute,
-and the call fails harmlessly there.
+correctly at 55%.
+
+The browser's own window border is left alone. 0.1.14 coloured it amber
+(pinned) or cyan (ghost) through `DWMWA_BORDER_COLOR`, and players found it
+distracting on top of the browser. From 0.1.15 the state shows only inside
+Aether. The one remaining call resets the border to the system default during
+crash recovery, for windows 0.1.14 coloured before an abrupt exit.
 
 ### Game integration
 

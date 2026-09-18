@@ -5,6 +5,17 @@ numbering: this fork publishes to its own release channel, and the updater
 compares an installed build against these releases. Upstream's release history
 lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
 
+## [0.1.15]
+
+**Pinned windows look like themselves again.** 0.1.14 drew a yellow outline
+around every pinned window, and a blue one in ghost mode. That outline is gone:
+a pinned Chrome or Edge window keeps its normal border, so it sits over the
+game as cleanly as the browser itself. Pinned and ghost state still show on the
+Always on top page.
+
+Any window that 0.1.14 outlined before an unexpected exit gets its normal border
+back the next time Aether starts.
+
 ## [0.1.14]
 
 **New tab: Always on top.** It keeps your own Chrome or Edge above the game: a

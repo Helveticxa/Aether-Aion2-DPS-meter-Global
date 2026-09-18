@@ -577,19 +577,20 @@ fn percent_to_alpha(percent: u8) -> u8 {
 /// Put back everything [`capture_original`] recorded.
 pub fn restore_original(raw: isize, original: &Original) {
     let _ = apply_layering(raw, 100, false, original);
-    set_border(raw, None);
     if !original.topmost {
         let _ = set_topmost(raw, false);
     }
 }
 
-/// The Windows 11 window border, coloured to say "pinned" or "ghost". Windows
-/// 10 has no such attribute; the call fails there and nothing changes.
-pub fn set_border(raw: isize, rgb: Option<u32>) {
-    // COLORREF is 0x00BBGGRR.
-    let value = rgb.map_or(BORDER_DEFAULT, |rgb| {
-        ((rgb & 0xff) << 16) | (rgb & 0xff00) | ((rgb >> 16) & 0xff)
-    });
+/// Hand a window's Windows 11 border back to the system.
+///
+/// Pinned windows are no longer recoloured: the browser should look like
+/// itself. 0.1.14 did colour them amber or cyan, though, and a window it
+/// pinned before a crash can still be wearing that colour, so crash recovery
+/// clears it. Nothing else calls this. Windows 10 has no such attribute; the
+/// call fails there and nothing changes.
+pub fn clear_border(raw: isize) {
+    let value = BORDER_DEFAULT;
     unsafe {
         let _ = DwmSetWindowAttribute(
             hwnd(raw),

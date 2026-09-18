@@ -41,11 +41,6 @@ pub use browsers::{BrowserId, BrowserInfo};
 /// including from hotkeys and from windows being closed underneath us.
 const CHANGED_EVENT: &str = "on-top-changed";
 
-/// Windows 11 border colours: amber for pinned, cyan for ghost. The same two
-/// accents the app uses for "active" and "interactive".
-const PIN_BORDER: u32 = 0xfde68a;
-const GHOST_BORDER: u32 = 0x67e8f9;
-
 const MIN_OPACITY: u8 = 20;
 const WATCH_INTERVAL: Duration = Duration::from_millis(750);
 const LAUNCH_TIMEOUT: Duration = Duration::from_secs(12);
@@ -159,7 +154,6 @@ fn pin(raw: isize) -> Result<(), String> {
         platform::show_without_activating(raw);
     }
     platform::set_topmost(raw, true)?;
-    platform::set_border(raw, Some(PIN_BORDER));
 
     map.insert(
         raw,
@@ -232,7 +226,6 @@ fn set_opacity(raw: isize, opacity: u8) -> Result<(), String> {
 fn set_ghost(raw: isize, ghost: bool) -> Result<(), String> {
     update(raw, |entry| {
         platform::apply_layering(raw, entry.opacity, ghost, &entry.original)?;
-        platform::set_border(raw, Some(if ghost { GHOST_BORDER } else { PIN_BORDER }));
         entry.ghost = ghost;
         Ok(())
     })
@@ -417,6 +410,7 @@ fn recover_previous_session(path: &PathBuf) {
                 platform::show_without_activating(hwnd);
             }
             platform::restore_original(hwnd, &entry.managed.original);
+            platform::clear_border(hwnd);
         }
     }
     let _ = std::fs::remove_file(path);
@@ -831,7 +825,7 @@ mod platform {
         Err(UNSUPPORTED.into())
     }
     pub fn restore_original(_: isize, _: &Original) {}
-    pub fn set_border(_: isize, _: Option<u32>) {}
+    pub fn clear_border(_: isize) {}
     pub fn snap(_: isize, _: Corner, _: SizePreset, _: bool) -> Result<(), String> {
         Err(UNSUPPORTED.into())
     }
