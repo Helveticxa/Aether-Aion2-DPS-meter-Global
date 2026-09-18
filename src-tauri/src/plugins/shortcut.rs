@@ -10,7 +10,7 @@ use tauri::{
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, ShortcutState};
 
-use super::{aion2_focus, aion2_overlay};
+use super::{aion2_focus, aion2_overlay, on_top};
 use crate::dps_meter::engine::meter::DpsMeter;
 
 // =============================================================================
@@ -23,6 +23,12 @@ pub struct ShortcutConfig {
     pub show_dps_overlay: String,
     pub reset_dps_meter: String,
     pub toggle_lock: String,
+    #[serde(default)]
+    pub pin_active_window: String,
+    #[serde(default)]
+    pub toggle_ghost: String,
+    #[serde(default)]
+    pub hide_on_top: String,
 }
 
 // =============================================================================
@@ -34,6 +40,9 @@ enum Action {
     ShowDpsOverlay,
     ResetDpsMeter,
     ToggleLock,
+    PinActiveWindow,
+    ToggleGhost,
+    HideOnTop,
 }
 
 // =============================================================================
@@ -44,6 +53,9 @@ enum Action {
 struct Registry {
     /// shortcut_id (u32 from parsed Shortcut) → action
     actions: HashMap<u32, Action>,
+    /// Shortcuts that could not be registered, usually because another
+    /// program already holds them.
+    failures: Vec<String>,
 }
 
 pub struct ShortcutStore(Mutex<Registry>);
@@ -103,6 +115,18 @@ fn dispatch<R: Runtime>(app: &AppHandle<R>, action: Action) {
         Action::ShowDpsOverlay => toggle_dps_overlay(app),
         Action::ResetDpsMeter => exec_reset_dps_meter(app),
         Action::ToggleLock => toggle_lock(app),
+        // These touch another process's windows; keep them off the event loop.
+        Action::PinActiveWindow => {
+            tauri::async_runtime::spawn_blocking(on_top::toggle_pin_foreground);
+        }
+        Action::ToggleGhost => {
+            tauri::async_runtime::spawn_blocking(on_top::toggle_ghost_all);
+        }
+        Action::HideOnTop => {
+            tauri::async_runtime::spawn_blocking(|| {
+                on_top::set_all_hidden(None);
+            });
+        }
     }
 }
 
@@ -140,7 +164,7 @@ pub fn sync_shortcuts<R: Runtime>(
     state: State<'_, ShortcutStore>,
     cfg: ShortcutConfig,
 ) -> Result<(), String> {
-    let desired: [(Action, String); 3] = [
+    let desired: [(Action, String); 6] = [
         (
             Action::ShowDpsOverlay,
             cfg.show_dps_overlay.trim().to_string(),
@@ -150,6 +174,12 @@ pub fn sync_shortcuts<R: Runtime>(
             cfg.reset_dps_meter.trim().to_string(),
         ),
         (Action::ToggleLock, cfg.toggle_lock.trim().to_string()),
+        (
+            Action::PinActiveWindow,
+            cfg.pin_active_window.trim().to_string(),
+        ),
+        (Action::ToggleGhost, cfg.toggle_ghost.trim().to_string()),
+        (Action::HideOnTop, cfg.hide_on_top.trim().to_string()),
     ];
 
     eprintln!(
@@ -174,27 +204,53 @@ pub fn sync_shortcuts<R: Runtime>(
         .map_err(|e| e.to_string())?;
 
     let mut actions = HashMap::new();
+    let mut failures = Vec::new();
 
+    // One shortcut another program already holds must not cost the others:
+    // registration used to stop at the first failure, leaving every shortcut
+    // after it dead.
     for (action, sc) in &desired {
         if sc.is_empty() {
             continue;
         }
         eprintln!("[shortcut] registering: {} -> {:?}", sc, action);
-        app.global_shortcut()
-            .register(sc.as_str())
-            .map_err(|e| format!("register '{sc}' failed: {e}"))?;
-        let id = parse_id(sc)?;
-        eprintln!("[shortcut] registered id={}", id);
-        actions.insert(id, *action);
+        let registered = parse_id(sc).and_then(|id| {
+            app.global_shortcut()
+                .register(sc.as_str())
+                .map(|_| id)
+                .map_err(|e| e.to_string())
+        });
+        match registered {
+            Ok(id) => {
+                eprintln!("[shortcut] registered id={}", id);
+                actions.insert(id, *action);
+            }
+            Err(error) => {
+                eprintln!("[shortcut] register '{sc}' failed: {error}");
+                failures.push(sc.clone());
+            }
+        }
     }
 
     let mut reg = state.0.lock().map_err(|e| e.to_string())?;
     reg.actions = actions;
+    reg.failures = failures;
     eprintln!(
-        "[shortcut] sync complete, {} shortcuts active",
-        reg.actions.len()
+        "[shortcut] sync complete, {} shortcuts active, {} failed",
+        reg.actions.len(),
+        reg.failures.len()
     );
     Ok(())
+}
+
+/// Shortcuts from the last sync that could not be registered.
+#[tauri::command]
+pub fn get_shortcut_failures(state: State<'_, ShortcutStore>) -> Vec<String> {
+    state
+        .0
+        .lock()
+        .map(|reg| reg.failures.clone())
+        .unwrap_or_default()
 }
 
 // =============================================================================

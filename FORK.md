@@ -328,6 +328,81 @@ the clipboard can fail quietly and launch day happens once.
 It exists so a session can be handed over by pasting rather than described screen
 by screen.
 
+## Always on top
+
+A page of its own (`/aion2/on-top`) that keeps the player's **own** Chrome or
+Edge above the game: a guide, a stream, a video. Backend in
+`src-tauri/src/plugins/on_top/`, page in
+`src/games/aion2/pages/always-on-top.tsx`.
+
+### Why it drives the real browser instead of embedding one
+
+A webview would have its own cookie jar, so every site means signing in again.
+Google refuses sign-in inside embedded webviews outright, and Chrome's cookies
+are bound to Chrome itself, so they cannot be carried over either. The only way
+to keep someone's accounts, extensions, and YouTube Premium is to use the browser
+they already run, so this feature never opens a browser of its own. It does two
+things:
+
+- **Pins windows that are already open.** `SetWindowPos(HWND_TOPMOST)` from
+  outside the process, the same mechanism PowerToys' Always On Top uses.
+- **Opens compact app windows**: `chrome.exe --app=<url> --profile-directory=<dir>`.
+  The browser that is already running takes the request and opens the window in
+  that profile, signed in. It gets no tab strip and no address bar.
+
+Detection is automatic for any install. It checks the registry's App Paths
+(per user, per machine, and the 32-bit view) and then the standard install
+locations. Profiles, names, and account pictures come from the browser's
+`Local State`, which is only ever read. An unknown profile directory is never
+passed on, because the browser would quietly create a new empty profile.
+
+### Rules that keep other people's windows safe
+
+- **The browser is launched as the desktop user, never elevated.** Aether runs
+  as Administrator, and a child process inherits that token. An elevated browser
+  is a security problem, and it also breaks every later normal launch, because
+  those try to hand their URL to the elevated instance and UIPI refuses. When
+  elevated, the process is created with Explorer as its parent through
+  `PROC_THREAD_ATTRIBUTE_PARENT_PROCESS`, which makes it inherit Explorer's
+  ordinary token. If that fails, the launch is refused rather than falling back
+  to an elevated start.
+- **Nothing blocks on the browser.** Placement uses `SWP_ASYNCWINDOWPOS` and
+  `ShowWindowAsync`, and a window that `IsHungAppWindow` reports as hung is not
+  restyled. Nothing activates either: pinning never takes focus from the game.
+- **Everything is undone.** The window's own z-order and layering are recorded
+  at pin time and restored on unpin, on exit (`RunEvent::Exit`), and before an
+  update installs. A crash or a kill from Task Manager skips all of those, so
+  the pinned set is also written to `on-top-session.json` in app data, and the
+  next start restores whatever is still open. The pid check guards against a
+  reused window handle.
+- **A watcher runs only while something is pinned.** Every 750 ms it drops
+  windows that closed, notices a hidden window the player restored by hand, and
+  puts back a topmost flag or layering the browser dropped. It stops as soon as
+  nothing is pinned.
+
+Opacity and ghost mode rely on `WS_EX_LAYERED` (plus `WS_EX_TRANSPARENT` for
+click-through). Before building on it, this was checked against Chrome 153 and
+Edge 153 playing hardware-decoded H.264. The video kept playing and composited
+correctly at 55%. On Windows 11 the pinned window's border turns amber, or cyan
+in ghost mode, through `DWMWA_BORDER_COLOR`. Windows 10 has no such attribute,
+and the call fails harmlessly there.
+
+### Game integration
+
+`aion2_focus` hides the DPS overlays when the foreground window is not
+`Aion2.exe`, so clicking a pinned video to pause it used to hide the meter. It
+now asks `on_top::is_managed()` and treats a pinned window as part of the game
+session.
+
+Three global shortcuts, all configurable in Settings: `Ctrl+Alt+T` pins the
+browser window the player is in (browsers only, never a game or system window),
+`Ctrl+Alt+G` toggles ghost mode, and `Ctrl+Alt+H` hides or shows every pinned
+window. A ghost window cannot be clicked, so its shortcut is the way back.
+
+Shortcut registration used to stop at the first failure, which left every
+shortcut after it dead. One combination held by another program no longer costs
+the others. The failures are reported, and the page marks them.
+
 ## Repository cleanup
 
 The fork inherited a fair amount of scaffolding and dead weight. Removed:

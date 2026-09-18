@@ -23,6 +23,12 @@ interface ShortcutSettings {
   showDpsOverlay: string;
   resetDpsMeter: string;
   toggleLock: string;
+  /** Always on top: pin the browser window in front. */
+  pinActiveWindow: string;
+  /** Always on top: click-through on every pinned window. */
+  toggleGhost: string;
+  /** Always on top: minimise or restore every pinned window. */
+  hideOnTop: string;
 }
 
 interface BackendSettings {
@@ -108,6 +114,9 @@ const DEFAULTS: AppConfig = {
       showDpsOverlay: "Alt+E",
       resetDpsMeter: "Alt+Q",
       toggleLock: "Alt+CapsLock",
+      pinActiveWindow: "Ctrl+Alt+T",
+      toggleGhost: "Ctrl+Alt+G",
+      hideOnTop: "Ctrl+Alt+H",
     },
     backend: {
       dpsSnapshotIntervalMs: 200,
@@ -379,8 +388,13 @@ export function useSettings() {
           showDpsOverlay: cfg.aion2.shortcuts.showDpsOverlay,
           resetDpsMeter: cfg.aion2.shortcuts.resetDpsMeter,
           toggleLock: cfg.aion2.shortcuts.toggleLock,
+          pinActiveWindow: cfg.aion2.shortcuts.pinActiveWindow,
+          toggleGhost: cfg.aion2.shortcuts.toggleGhost,
+          hideOnTop: cfg.aion2.shortcuts.hideOnTop,
         },
       });
+      // Tell open pages which shortcuts another program is holding.
+      window.dispatchEvent(new Event("shortcuts-synced"));
     } catch (e) {
       console.error("[useSettings] syncShortcuts failed:", e);
     }

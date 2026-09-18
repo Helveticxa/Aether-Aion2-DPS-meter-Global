@@ -13,6 +13,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { Toaster } from "@/components/ui/sonner";
 import { MapCanvas, MarkerGlyph } from "@/games/aion2/components/map/map-canvas";
 import {
   countByCategory,
@@ -169,6 +170,8 @@ export default function InteractiveMapPage() {
 
   return (
     <div className="flex h-full w-full gap-4 overflow-hidden p-4 text-white">
+      {/* Without a Toaster on this route, the error toasts below never showed. */}
+      <Toaster position="bottom-right" />
       <aside className="flex w-[288px] shrink-0 flex-col gap-2.5 overflow-hidden">
         <header className="flex items-center gap-2">
           <MapIcon className="size-4 text-cyan-300" />

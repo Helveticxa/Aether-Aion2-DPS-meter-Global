@@ -5,6 +5,43 @@ numbering: this fork publishes to its own release channel, and the updater
 compares an installed build against these releases. Upstream's release history
 lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
 
+## [0.1.14]
+
+**New tab: Always on top.** It keeps your own Chrome or Edge above the game: a
+guide, a stream, a video. It uses the browser you already have, signed in as you
+already are, with your extensions and YouTube Premium intact. Nothing is
+embedded and there is nothing to log into again.
+
+- **Open mini window** opens YouTube, Twitch, Discord, AION2 Hub, or any address
+  as a compact window in your browser, with no tabs and no address bar. It lands
+  in the corner and at the size you pick. Choose which profile it opens in.
+- **Pin** any Chrome or Edge window that is already open. A window that fills
+  the screen is shrunk into a corner, so it cannot bury the game or this app.
+- Every pinned window gets its own **opacity**, **ghost mode** (clicks pass
+  through to the game), a corner, and a size. A small map shows where it really
+  sits.
+- **Shortcuts:** `Ctrl+Alt+T` pins or unpins the browser window you are in,
+  `Ctrl+Alt+G` toggles ghost mode, and `Ctrl+Alt+H` hides or shows every pinned
+  window. All three can be changed in Settings.
+- On Windows 11 a pinned window's border turns amber, or cyan while it is a
+  ghost.
+
+Clicking a pinned window no longer hides the DPS overlay as if you had left
+the game. Browsers are always started as you, never as Administrator. Every
+pinned window is released when Aether closes or updates, and on the next start
+if Aether ever crashes.
+
+Chrome and Edge are detected wherever they are installed. Brave support will
+follow once it can be tested.
+
+### Fixed
+
+- **One shortcut taken by another program disabled every shortcut after it.**
+  Each one is now registered on its own, and a taken shortcut is marked on the
+  page.
+- **Error messages on the Map page never appeared.** The page had nowhere to
+  show them.
+
 ## [0.1.13]
 
 **The equipment row on the Home card was showing broken images and Chinese

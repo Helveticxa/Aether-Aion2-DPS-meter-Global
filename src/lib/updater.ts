@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { check } from "@tauri-apps/plugin-updater";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -40,7 +41,7 @@ export async function downloadAndInstall(
   let downloaded = 0;
   let contentLength = 0;
 
-  await update.downloadAndInstall((event) => {
+  await update.download((event) => {
     switch (event.event) {
       case "Started":
         contentLength = event.data.contentLength ?? 0;
@@ -55,6 +56,12 @@ export async function downloadAndInstall(
         break;
     }
   });
+
+  // The installer ends this process without an orderly exit, so browser
+  // windows pinned by Always on top are released first. Failing to release
+  // them must not block the update: the next start undoes them anyway.
+  await invoke("on_top_unpin_all").catch(() => {});
+  await update.install();
 
   // On Windows the NSIS installer takes over here, so this often does not
   // return. It matters on the paths where it does.

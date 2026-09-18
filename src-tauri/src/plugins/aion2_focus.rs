@@ -150,9 +150,12 @@ mod windows_impl {
                     .as_deref()
                     .map(|name| name.eq_ignore_ascii_case(AION2_PROCESS_NAME))
                     .unwrap_or(false);
+                // A pinned browser window counts as part of the game session:
+                // clicking a video to pause it must not hide the meter.
                 let focused = aion2_focused
                     || is_overlay_related_window_focused(&app_for_processor)
-                    || foreground_belongs_to_current_app(hwnd_raw);
+                    || foreground_belongs_to_current_app(hwnd_raw)
+                    || crate::plugins::on_top::is_managed(hwnd_raw);
 
                 if last_focused == Some(focused) {
                     continue;
@@ -246,7 +249,8 @@ mod windows_impl {
                 .unwrap_or(false);
             let focused = aion2_focused
                 || is_overlay_related_window_focused(&app_for_poller)
-                || foreground_belongs_to_current_app(hwnd.0 as isize);
+                || foreground_belongs_to_current_app(hwnd.0 as isize)
+                || crate::plugins::on_top::is_managed(hwnd.0 as isize);
 
             let (dps_manual_hidden, auto_hide_enabled, dps_always_on_top) = app_for_poller
                 .try_state::<Aion2FocusState>()

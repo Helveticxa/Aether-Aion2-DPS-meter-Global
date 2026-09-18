@@ -61,6 +61,7 @@ pub fn run() {
         .plugin(plugins::aion2_overlay::init())
         .plugin(plugins::aion2_focus::init())
         .plugin(plugins::window_tracking::init())
+        .plugin(plugins::on_top::init())
         .invoke_handler(tauri::generate_handler![
             update_tray_menu,
             show_system_notification,
@@ -142,6 +143,17 @@ pub fn run() {
             plugins::aion2_focus::set_auto_hide_enabled,
             plugins::aion2_focus::set_dps_always_on_top,
             plugins::shortcut::sync_shortcuts,
+            plugins::shortcut::get_shortcut_failures,
+            plugins::on_top::on_top_detect,
+            plugins::on_top::on_top_windows,
+            plugins::on_top::on_top_pin,
+            plugins::on_top::on_top_set_opacity,
+            plugins::on_top::on_top_set_ghost,
+            plugins::on_top::on_top_snap,
+            plugins::on_top::on_top_focus,
+            plugins::on_top::on_top_set_hidden,
+            plugins::on_top::on_top_unpin_all,
+            plugins::on_top::on_top_launch,
         ])
         .setup(|app| {
             let logger = app
@@ -163,6 +175,12 @@ pub fn run() {
         .expect("error while building tauri application");
 
     app.run(|app_handle, event| {
+        // Browser windows we pinned belong to someone else's process; they
+        // must not stay on top, see-through, or unclickable once we are gone.
+        if let RunEvent::Exit = event {
+            plugins::on_top::restore_all();
+            return;
+        }
         if let RunEvent::ExitRequested { api, .. } = event {
             if let Some(state) = app_handle.try_state::<plugins::system_tray::AppLifecycleState>() {
                 if !plugins::system_tray::should_allow_exit(state) {

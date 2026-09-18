@@ -18,6 +18,7 @@ const PreflightGatePage = lazy(() => import("./pages/preflight-gate"));
 const SettingsViewPage = lazy(() => import("./pages/settings"));
 const Aion2HomePage = lazy(() => import("./games/aion2/pages/home"));
 const Aion2MapPage = lazy(() => import("./games/aion2/pages/interactive-map"));
+const Aion2OnTopPage = lazy(() => import("./games/aion2/pages/always-on-top"));
 
 const Aion2OverlaySettingPage = lazy(() => import("./games/aion2/overlay/setting/page"));
 
@@ -60,6 +61,7 @@ function AppWrapper() {
         <Route path="/aion2" element={<Aion2HomePage />} />
         <Route path="/aion2/settings" element={<Aion2HomePage />} />
         <Route path="/aion2/map" element={<Aion2MapPage />} />
+        <Route path="/aion2/on-top" element={<Aion2OnTopPage />} />
 
         {/* POE2 */}
       </Route>

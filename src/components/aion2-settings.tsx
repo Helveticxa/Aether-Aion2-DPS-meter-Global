@@ -478,6 +478,40 @@ export function Aion2Settings() {
         </SettingsGroup>
       )}
 
+      {tab === "shortcuts" && (
+        <SettingsGroup title={t("settings.aion2.shortcutsOnTop")}>
+          <SettingRow
+            title={t("settings.aion2.shortcutPinActiveWindow")}
+            description={t("settings.aion2.shortcutPinActiveWindowDesc")}
+          >
+            <ShortcutInput
+              value={config.aion2.shortcuts.pinActiveWindow}
+              onChange={(v) => updateSettings("aion2.shortcuts.pinActiveWindow", v)}
+            />
+          </SettingRow>
+
+          <SettingRow
+            title={t("settings.aion2.shortcutToggleGhost")}
+            description={t("settings.aion2.shortcutToggleGhostDesc")}
+          >
+            <ShortcutInput
+              value={config.aion2.shortcuts.toggleGhost}
+              onChange={(v) => updateSettings("aion2.shortcuts.toggleGhost", v)}
+            />
+          </SettingRow>
+
+          <SettingRow
+            title={t("settings.aion2.shortcutHideOnTop")}
+            description={t("settings.aion2.shortcutHideOnTopDesc")}
+          >
+            <ShortcutInput
+              value={config.aion2.shortcuts.hideOnTop}
+              onChange={(v) => updateSettings("aion2.shortcuts.hideOnTop", v)}
+            />
+          </SettingRow>
+        </SettingsGroup>
+      )}
+
       {/* Overlay tab */}
       {tab === "overlay" && (
         <SettingsGroup title={t("settings.aion2.overlay")}>
