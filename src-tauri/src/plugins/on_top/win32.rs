@@ -63,9 +63,10 @@ use windows::{
                 IsZoomed, SetForegroundWindow, SetLayeredWindowAttributes, SetWindowLongPtrW,
                 SetWindowPos, ShowWindowAsync, ASFW_ANY, GA_ROOT, GWL_EXSTYLE, GW_OWNER,
                 HWND_NOTOPMOST, HWND_TOPMOST, LAYERED_WINDOW_ATTRIBUTES_FLAGS, LWA_ALPHA,
-                SET_WINDOW_POS_FLAGS, SWP_ASYNCWINDOWPOS, SWP_NOACTIVATE, SWP_NOMOVE,
-                SWP_NOSIZE, SWP_NOZORDER, SW_RESTORE, SW_SHOWMINNOACTIVE, SW_SHOWNOACTIVATE,
-                WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
+                SET_WINDOW_POS_FLAGS, SWP_ASYNCWINDOWPOS, SWP_FRAMECHANGED, SWP_NOACTIVATE,
+                SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_RESTORE, SW_SHOWMINNOACTIVE,
+                SW_SHOWNOACTIVATE, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+                WS_EX_TRANSPARENT,
             },
         },
     },
@@ -692,6 +693,42 @@ pub fn minimize(raw: isize) {
 pub fn show_without_activating(raw: isize) {
     unsafe {
         let _ = ShowWindowAsync(hwnd(raw), SW_SHOWNOACTIVATE);
+    }
+}
+
+// Aether's own chat pop-ups. tao re-shows a visible window with `SW_SHOW` on
+// every style change it makes, and `SW_SHOW` activates it: toggling ghost or
+// showing a pop-up from a hotkey would take the keyboard away from the game.
+// These do the same things directly, without activating anything.
+
+/// Shows or hides one of our pop-ups, leaving the active window alone.
+pub fn set_shown(raw: isize, shown: bool) {
+    unsafe {
+        let _ = ShowWindowAsync(hwnd(raw), if shown { SW_SHOWNOACTIVATE } else { SW_HIDE });
+    }
+}
+
+/// Click-through for one of our pop-ups: the same two bits tao sets for
+/// `set_ignore_cursor_events`, and nothing else.
+pub fn set_click_through(raw: isize, on: bool) {
+    let before = ex_style(raw);
+    let mut after = before;
+    set_bit(&mut after, WS_EX_LAYERED.0 | WS_EX_TRANSPARENT.0, on);
+    if after == before {
+        return;
+    }
+    let window = hwnd(raw);
+    unsafe {
+        SetWindowLongPtrW(window, GWL_EXSTYLE, after as i32 as isize);
+        let _ = SetWindowPos(
+            window,
+            None,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        );
     }
 }
 

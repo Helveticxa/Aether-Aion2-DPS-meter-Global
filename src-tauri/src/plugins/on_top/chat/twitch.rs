@@ -7,7 +7,7 @@
 use std::{
     collections::HashMap,
     sync::{Arc, OnceLock},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use tokio::{
@@ -200,6 +200,7 @@ fn message(
         platform: Platform::Twitch,
         author_color: Some(name_color(&author, tags.get("color"))),
         author,
+        author_id: tags.get("user-id").filter(|id| !id.is_empty()).cloned(),
         avatar: None,
         role: role_of(tags.get("badges")),
         badges: Vec::new(),
@@ -256,8 +257,26 @@ pub fn parse_line(line: &str, source: &str) -> Option<ChatEvent> {
         "CLEARMSG" => tags
             .get("target-msg-id")
             .map(|id| ChatEvent::Remove(id.clone())),
+        // A ban or timeout names its target; without one the whole chat was
+        // cleared.
+        "CLEARCHAT" => Some(match tags.get("target-user-id") {
+            Some(user) if !user.is_empty() => ChatEvent::RemoveAuthor(user.clone()),
+            _ => ChatEvent::Clear,
+        }),
         _ => None,
     }
+}
+
+/// The IRC command of a line, past its tags and prefix.
+fn command_of(line: &str) -> &str {
+    let mut rest = line;
+    if rest.starts_with('@') {
+        rest = rest.split_once(' ').map_or("", |(_, r)| r);
+    }
+    if rest.starts_with(':') {
+        rest = rest.split_once(' ').map_or("", |(_, r)| r);
+    }
+    rest.split(' ').next().unwrap_or("")
 }
 
 // =============================================================================
@@ -277,7 +296,26 @@ enum Ended {
     Reconnect,
 }
 
-async fn session(login: &str, key: &str) -> Result<Ended, String> {
+/// Busy channels send dozens of lines a second. They are handed on in small
+/// batches, so each pop-up redraws a few times a second rather than per line.
+const FLUSH_EVERY: Duration = Duration::from_millis(150);
+const FLUSH_AT: usize = 50;
+/// Joining a channel that does not exist is met with silence, not an error.
+const JOIN_WAIT: Duration = Duration::from_secs(15);
+/// Twitch pings every five minutes; silence well past that means the
+/// connection is gone without having said so.
+const SILENCE: Duration = Duration::from_secs(400);
+
+fn flush(key: &str, pending: &mut Vec<ChatEvent>, since: &mut Option<Instant>) {
+    *since = None;
+    if !pending.is_empty() {
+        deliver(key, std::mem::take(pending));
+    }
+}
+
+/// One connection. `joined` tells the caller whether it got into the channel,
+/// which makes a later failure a fresh one rather than another in a row.
+async fn session(login: &str, key: &str, joined: &mut bool) -> Result<Ended, String> {
     let tcp = timeout(Duration::from_secs(10), TcpStream::connect((HOST, 6697)))
         .await
         .map_err(|_| "Twitch did not answer.".to_string())?
@@ -299,45 +337,91 @@ async fn session(login: &str, key: &str) -> Result<Ended, String> {
         .map_err(|e| e.to_string())?;
 
     let mut lines = BufReader::new(read).lines();
-    let started = std::time::Instant::now();
-    let mut joined = false;
-    loop {
-        // Twitch pings every five minutes; silence well past that means the
-        // connection is gone without having said so.
-        let line = match timeout(Duration::from_secs(400), lines.next_line()).await {
-            Err(_) => return Err("Twitch went quiet. Reconnecting.".into()),
-            Ok(Err(e)) => return Err(e.to_string()),
-            Ok(Ok(None)) => return Err("Twitch closed the connection.".into()),
-            Ok(Ok(Some(line))) => line,
-        };
+    let started = Instant::now();
+    let mut last_line = Instant::now();
+    let mut reported_missing = false;
+    let mut pending: Vec<ChatEvent> = Vec::new();
+    let mut pending_since: Option<Instant> = None;
 
-        if let Some(payload) = line.strip_prefix("PING") {
-            let _ = write
-                .write_all(format!("PONG{payload}\r\n").as_bytes())
-                .await;
-            continue;
+    loop {
+        // Wake for whichever comes first: a line, a batch to hand on, the
+        // join deadline, or the silence limit.
+        let mut wait = SILENCE.saturating_sub(last_line.elapsed());
+        if !*joined && !reported_missing {
+            wait = wait.min(JOIN_WAIT.saturating_sub(started.elapsed()));
         }
-        if line.contains(" RECONNECT") {
-            return Ok(Ended::Reconnect);
+        if let Some(since) = pending_since {
+            wait = wait.min(FLUSH_EVERY.saturating_sub(since.elapsed()));
         }
-        if !joined && (line.contains(" ROOMSTATE #") || line.contains(" 366 ")) {
-            joined = true;
-            set_state(key, SourceState::Live, None);
+        let next = timeout(wait, lines.next_line()).await;
+
+        if pending_since.is_some_and(|since| since.elapsed() >= FLUSH_EVERY) {
+            flush(key, &mut pending, &mut pending_since);
         }
-        if !joined && started.elapsed() > Duration::from_secs(15) {
-            // Joining a channel that does not exist is met with silence.
-            set_state(
-                key,
-                SourceState::Error,
-                Some(format!("Twitch has no channel called {login}.")),
-            );
-        }
-        if let Some(event) = parse_line(&line, key) {
-            if !joined {
-                joined = true;
+
+        let line = match next {
+            Ok(Ok(Some(line))) => line,
+            Ok(Ok(None)) => {
+                flush(key, &mut pending, &mut pending_since);
+                return Err("Twitch closed the connection.".into());
+            }
+            Ok(Err(e)) => {
+                flush(key, &mut pending, &mut pending_since);
+                return Err(e.to_string());
+            }
+            Err(_) => {
+                if !*joined && !reported_missing && started.elapsed() >= JOIN_WAIT {
+                    reported_missing = true;
+                    set_state(
+                        key,
+                        SourceState::Error,
+                        Some(format!("Twitch has no channel called {login}.")),
+                    );
+                }
+                if last_line.elapsed() >= SILENCE {
+                    return Err("Twitch went quiet. Reconnecting.".into());
+                }
+                continue;
+            }
+        };
+        last_line = Instant::now();
+
+        // Decided by the command itself: "RECONNECT" typed into chat is a
+        // PRIVMSG, and must not drop the connection.
+        match command_of(&line) {
+            "PING" => {
+                let payload = line.strip_prefix("PING").unwrap_or("");
+                let _ = write
+                    .write_all(format!("PONG{payload}\r\n").as_bytes())
+                    .await;
+                continue;
+            }
+            "RECONNECT" => {
+                flush(key, &mut pending, &mut pending_since);
+                return Ok(Ended::Reconnect);
+            }
+            "ROOMSTATE" | "366" if !*joined => {
+                *joined = true;
                 set_state(key, SourceState::Live, None);
             }
-            deliver(key, vec![event]);
+            // A suspended or banned channel answers the JOIN with a notice.
+            "NOTICE" if !*joined => {
+                let text = line.split_once(" :").map(|(_, text)| text.to_string());
+                return Err(text.unwrap_or_else(|| format!("Twitch refused #{login}.")));
+            }
+            _ => {}
+        }
+
+        if let Some(event) = parse_line(&line, key) {
+            if !*joined {
+                *joined = true;
+                set_state(key, SourceState::Live, None);
+            }
+            pending.push(event);
+            pending_since.get_or_insert_with(Instant::now);
+            if pending.len() >= FLUSH_AT {
+                flush(key, &mut pending, &mut pending_since);
+            }
         }
     }
 }
@@ -348,12 +432,16 @@ pub async fn run(spec: SourceSpec) {
     let mut failures = 0u32;
     loop {
         set_state(&key, SourceState::Connecting, None);
-        match session(&spec.id, &key).await {
-            Ok(Ended::Reconnect) => failures = 0,
-            Err(error) => {
-                failures += 1;
-                set_state(&key, SourceState::Error, Some(error));
-            }
+        let mut joined = false;
+        let result = session(&spec.id, &key, &mut joined).await;
+        // A connection that got in resets the count: hours of chat and one
+        // dropped connection should retry in seconds, not minutes.
+        if joined {
+            failures = 0;
+        }
+        if let Err(error) = result {
+            failures += 1;
+            set_state(&key, SourceState::Error, Some(error));
         }
         tokio::time::sleep(if failures == 0 {
             Duration::from_secs(1)
@@ -470,6 +558,42 @@ mod tests {
             None
         );
         assert_eq!(parse_line("PING :tmi.twitch.tv", "tw:c"), None);
+    }
+
+    #[test]
+    fn bans_take_the_authors_messages_and_clears_take_everything() {
+        let ban = "@ban-duration=600;room-id=1;target-user-id=42;tmi-sent-ts=1 :tmi.twitch.tv CLEARCHAT #c :spammer";
+        assert_eq!(
+            parse_line(ban, "tw:c"),
+            Some(ChatEvent::RemoveAuthor("42".into()))
+        );
+        let wipe = "@room-id=1;tmi-sent-ts=1 :tmi.twitch.tv CLEARCHAT #c";
+        assert_eq!(parse_line(wipe, "tw:c"), Some(ChatEvent::Clear));
+
+        let said = "@user-id=42;display-name=Spammer :spammer!spammer@spammer.tmi.twitch.tv PRIVMSG #c :hi";
+        let Some(ChatEvent::Message(m)) = parse_line(said, "tw:c") else {
+            panic!()
+        };
+        assert_eq!(m.author_id.as_deref(), Some("42"));
+    }
+
+    /// Chat text that happens to name a command must not act as one.
+    #[test]
+    fn commands_come_from_the_command_not_the_text() {
+        assert_eq!(command_of("PING :tmi.twitch.tv"), "PING");
+        assert_eq!(command_of(":tmi.twitch.tv RECONNECT"), "RECONNECT");
+        assert_eq!(
+            command_of("@id=1 :a!a@a.tmi.twitch.tv PRIVMSG #c :lol RECONNECT 366 ROOMSTATE"),
+            "PRIVMSG"
+        );
+        assert_eq!(
+            command_of("@room-id=1 :tmi.twitch.tv ROOMSTATE #c"),
+            "ROOMSTATE"
+        );
+        assert_eq!(
+            command_of(":justinfan1.tmi.twitch.tv 366 justinfan1 #c :End of /NAMES list"),
+            "366"
+        );
     }
 
     #[test]

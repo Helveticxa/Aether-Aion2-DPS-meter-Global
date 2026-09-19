@@ -4,7 +4,7 @@ import { installDevBrowserShim } from "@/lib/dev-browser-shim";
 installDevBrowserShim();
 
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 
 /**
  * The chat pop-up. The hub in `plugins/on_top/chat` reads YouTube and Twitch
@@ -21,6 +21,9 @@ const adjustHint = document.getElementById("adjust-hint");
 
 let sources = [];
 let style = { fontSize: 15, avatars: true, backdrop: false, fadeSecs: 0 };
+
+/** Rows on screen by "source|id", to skip repeats and remove by id. */
+const rows = new Map();
 
 const ROLE_COLORS = {
   owner: "#ffd600",
@@ -104,9 +107,20 @@ function avatarFor(message) {
   return initial;
 }
 
+function keyOf(message) {
+  return `${message.source}|${message.id}`;
+}
+
+function dropRow(row) {
+  if (rows.get(row.dataset.key) === row) rows.delete(row.dataset.key);
+  row.remove();
+}
+
 function renderMessage(message) {
   const row = make("div", `msg role-${message.role}`);
-  row.dataset.key = `${message.source}|${message.id}`;
+  row.dataset.key = keyOf(message);
+  row.dataset.source = message.source;
+  if (message.authorId) row.dataset.author = message.authorId;
   row.append(avatarFor(message));
 
   const body = make("div", "body");
@@ -150,7 +164,7 @@ function renderMessage(message) {
   if (style.fadeSecs > 0) {
     window.setTimeout(() => {
       row.classList.add("gone");
-      window.setTimeout(() => row.remove(), 700);
+      window.setTimeout(() => dropRow(row), 700);
     }, style.fadeSecs * 1000);
   }
   return row;
@@ -159,17 +173,35 @@ function renderMessage(message) {
 function addMessages(messages) {
   if (!messages || messages.length === 0) return;
   const fragment = document.createDocumentFragment();
-  for (const message of messages) fragment.append(renderMessage(message));
+  for (const message of messages) {
+    const key = keyOf(message);
+    if (rows.has(key)) continue;
+    const row = renderMessage(message);
+    rows.set(key, row);
+    fragment.append(row);
+  }
   list.append(fragment);
-  while (list.childElementCount > MAX_MESSAGES) list.firstElementChild.remove();
+  while (list.childElementCount > MAX_MESSAGES) dropRow(list.firstElementChild);
   if (!statusBox.hidden) renderStatus();
 }
 
-function removeMessages(source, ids) {
-  if (!ids || ids.length === 0) return;
-  const gone = new Set(ids.map((id) => `${source}|${id}`));
-  for (const row of [...list.children]) {
-    if (gone.has(row.dataset.key)) row.remove();
+/** Deletions, bans (every message by that author), and a cleared chat. */
+function removeMessages(source, ids, authors, cleared) {
+  if (cleared) {
+    for (const row of [...list.children]) {
+      if (row.dataset.source === source) dropRow(row);
+    }
+    return;
+  }
+  for (const id of ids || []) {
+    const row = rows.get(`${source}|${id}`);
+    if (row) dropRow(row);
+  }
+  if (authors && authors.length > 0) {
+    const banned = new Set(authors);
+    for (const row of [...list.children]) {
+      if (row.dataset.source === source && banned.has(row.dataset.author)) dropRow(row);
+    }
   }
 }
 
@@ -180,24 +212,44 @@ function applyConfig(config) {
   // A backlog means the chats changed: start again from it.
   if (Array.isArray(config.backlog)) {
     list.replaceChildren();
+    rows.clear();
     addMessages(config.backlog);
   }
   renderStatus();
 }
 
+function applyEvents(payload) {
+  const { source, messages, removed, removedAuthors, cleared } = payload || {};
+  // Only this pop-up's chats. The hub addresses each batch to the pop-ups
+  // showing that chat; this is the second lock on the same door.
+  if (!sources.some((s) => s.key === source)) return;
+  removeMessages(source, removed, removedAuthors, cleared);
+  addMessages(messages);
+}
+
 async function start() {
+  // Listen before asking for the backlog, so nothing sent in between is lost,
+  // and hold what arrives until the backlog is drawn.
+  //
+  // Listening on this window, not globally: a global listener hears events
+  // addressed to every window, and each pop-up would draw the others' chats.
+  const current = getCurrentWebviewWindow();
+  let ready = false;
+  const early = [];
+  await current.listen("chat-config", (event) => applyConfig(event.payload));
+  await current.listen("chat-events", (event) => {
+    if (ready) applyEvents(event.payload);
+    else early.push(event.payload);
+  });
+
   try {
     applyConfig(await invoke("chat_overlay_init"));
   } catch (error) {
     statusBox.hidden = false;
     statusBox.textContent = String(error);
   }
-  await listen("chat-config", (event) => applyConfig(event.payload));
-  await listen("chat-events", (event) => {
-    const { source, messages, removed } = event.payload || {};
-    removeMessages(source, removed);
-    addMessages(messages);
-  });
+  ready = true;
+  for (const payload of early.splice(0)) applyEvents(payload);
 }
 
 void start();

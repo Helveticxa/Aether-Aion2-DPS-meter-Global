@@ -264,14 +264,19 @@ fn push_config(hub: &Hub, id: u32, with_backlog: bool) {
 // Connectors report here
 // =============================================================================
 
+/// A connector's events, applied in order. A removal also takes down anything
+/// earlier in the same batch, so the pop-up never draws what it was told to
+/// drop.
 pub(super) fn deliver(key: &str, events: Vec<ChatEvent>) {
-    let (labels, messages, removed) = {
+    let (labels, messages, removed, removed_authors, cleared) = {
         let mut hub = hub();
         let Some(connector) = hub.connectors.get_mut(key) else {
             return;
         };
-        let mut messages = Vec::new();
+        let mut messages: Vec<ChatMessage> = Vec::new();
         let mut removed = Vec::new();
+        let mut removed_authors = Vec::new();
+        let mut cleared = false;
         for event in events {
             match event {
                 ChatEvent::Message(message) => {
@@ -283,7 +288,19 @@ pub(super) fn deliver(key: &str, events: Vec<ChatEvent>) {
                 }
                 ChatEvent::Remove(id) => {
                     connector.recent.retain(|m| m.id != id);
+                    messages.retain(|m| m.id != id);
                     removed.push(id);
+                }
+                ChatEvent::RemoveAuthor(author) => {
+                    let by = |m: &ChatMessage| m.author_id.as_deref() == Some(author.as_str());
+                    connector.recent.retain(|m| !by(m));
+                    messages.retain(|m| !by(m));
+                    removed_authors.push(author);
+                }
+                ChatEvent::Clear => {
+                    connector.recent.clear();
+                    messages.clear();
+                    cleared = true;
                 }
             }
         }
@@ -293,10 +310,16 @@ pub(super) fn deliver(key: &str, events: Vec<ChatEvent>) {
             .filter(|(_, o)| o.sources.iter().any(|s| s.key() == key))
             .map(|(id, _)| label(*id))
             .collect();
-        (labels, messages, removed)
+        (labels, messages, removed, removed_authors, cleared)
     };
 
-    let payload = json!({ "source": key, "messages": messages, "removed": removed });
+    let payload = json!({
+        "source": key,
+        "messages": messages,
+        "removed": removed,
+        "removedAuthors": removed_authors,
+        "cleared": cleared,
+    });
     for label in labels {
         emit(Some(&label), "chat-events", payload.clone());
     }
@@ -410,9 +433,27 @@ fn place<R: Runtime>(window: &WebviewWindow<R>, placement: &ChatPlacement) -> Re
     platform::snap(hwnd, placement.corner, chat_size(placement.size), true)
 }
 
+fn raw_handle<R: Runtime>(window: &WebviewWindow<R>) -> Option<isize> {
+    window.hwnd().ok().map(|handle| handle.0 as isize)
+}
+
+// Ghost and hide go around tao once a pop-up is up: tao re-shows a window with
+// `SW_SHOW` on every style change, and that activates it, taking the keyboard
+// away from the game (see `platform::set_click_through`). A style change also
+// waits on the window's own thread, so these are never called with the hub
+// locked.
+
 /// Ghost lets every click through to the game, except while it is moved.
-fn apply_click_through<R: Runtime>(window: &WebviewWindow<R>, overlay: &Overlay) {
-    let _ = window.set_ignore_cursor_events(overlay.ghost && !overlay.adjusting);
+fn set_click_through<R: Runtime>(window: &WebviewWindow<R>, on: bool) {
+    if let Some(raw) = raw_handle(window) {
+        platform::set_click_through(raw, on);
+    }
+}
+
+fn set_shown<R: Runtime>(window: &WebviewWindow<R>, shown: bool) {
+    if let Some(raw) = raw_handle(window) {
+        platform::set_shown(raw, shown);
+    }
 }
 
 /// A pop-up closed from its own title bar, or torn down with the app.
@@ -442,6 +483,9 @@ fn create_window<R: Runtime>(
         .maximizable(false)
         .minimizable(false)
         .focused(false)
+        // A click on a pop-up that is not a ghost still leaves the game with
+        // the keyboard. Moving mode makes it focusable for as long as it lasts.
+        .focusable(false)
         .visible(false)
         .inner_size(width as f64, height as f64)
         .min_inner_size(200.0, 160.0)
@@ -465,14 +509,19 @@ pub fn ghost_states() -> Vec<bool> {
 }
 
 pub fn set_all_ghost<R: Runtime>(app: &AppHandle<R>, ghost: bool) {
-    let mut hub = hub();
-    for (id, overlay) in hub.overlays.iter_mut() {
-        overlay.ghost = ghost;
-        if let Some(window) = window(app, *id) {
-            apply_click_through(&window, overlay);
+    let targets: Vec<(u32, bool)> = hub()
+        .overlays
+        .iter_mut()
+        .map(|(id, overlay)| {
+            overlay.ghost = ghost;
+            (*id, ghost && !overlay.adjusting)
+        })
+        .collect();
+    for (id, on) in targets {
+        if let Some(window) = window(app, id) {
+            set_click_through(&window, on);
         }
     }
-    drop(hub);
     announce();
 }
 
@@ -485,14 +534,19 @@ pub fn has_overlays() -> bool {
 }
 
 pub fn set_all_hidden<R: Runtime>(app: &AppHandle<R>, hidden: bool) {
-    let mut hub = hub();
-    for (id, overlay) in hub.overlays.iter_mut() {
-        overlay.hidden = hidden;
-        if let Some(window) = window(app, *id) {
-            let _ = if hidden { window.hide() } else { window.show() };
+    let ids: Vec<u32> = hub()
+        .overlays
+        .iter_mut()
+        .map(|(id, overlay)| {
+            overlay.hidden = hidden;
+            *id
+        })
+        .collect();
+    for id in ids {
+        if let Some(window) = window(app, id) {
+            set_shown(&window, !hidden);
         }
     }
-    drop(hub);
     announce();
 }
 
@@ -692,18 +746,22 @@ pub async fn chat_apply<R: Runtime>(
         forget(id);
     }
 
-    // Everyone gets the style; the new ones show themselves once placed.
-    {
+    // Everyone gets the style. New pop-ups are shown once placed, through tao:
+    // it shows a window built unfocused without activating it. Ghost is set
+    // through tao too, and first, so the style change of that show keeps it.
+    let first_ghost: Vec<bool> = {
         let hub = hub();
         for id in hub.overlays.keys() {
             push_config(&hub, *id, false);
         }
-        for (id, window) in &created {
-            if let Some(overlay) = hub.overlays.get(id) {
-                apply_click_through(window, overlay);
-            }
-            let _ = window.show();
-        }
+        created
+            .iter()
+            .map(|(id, _)| hub.overlays.get(id).is_some_and(|o| o.ghost))
+            .collect()
+    };
+    for ((_, window), ghost) in created.iter().zip(first_ghost) {
+        let _ = window.set_ignore_cursor_events(ghost);
+        let _ = window.show();
     }
     announce();
     Ok(ids)
@@ -749,27 +807,26 @@ pub fn chat_style(style: ChatStyle) {
 
 #[tauri::command]
 pub fn chat_set_ghost<R: Runtime>(app: AppHandle<R>, id: u32, ghost: bool) {
-    let mut hub = hub();
-    if let Some(overlay) = hub.overlays.get_mut(&id) {
+    let on = hub().overlays.get_mut(&id).map(|overlay| {
         overlay.ghost = ghost;
-        if let Some(window) = window(&app, id) {
-            apply_click_through(&window, overlay);
-        }
+        ghost && !overlay.adjusting
+    });
+    if let (Some(on), Some(window)) = (on, window(&app, id)) {
+        set_click_through(&window, on);
     }
-    drop(hub);
     announce();
 }
 
 #[tauri::command]
 pub fn chat_set_hidden<R: Runtime>(app: AppHandle<R>, id: u32, hidden: bool) {
-    let mut hub = hub();
-    if let Some(overlay) = hub.overlays.get_mut(&id) {
-        overlay.hidden = hidden;
-        if let Some(window) = window(&app, id) {
-            let _ = if hidden { window.hide() } else { window.show() };
-        }
+    let known = hub()
+        .overlays
+        .get_mut(&id)
+        .map(|overlay| overlay.hidden = hidden)
+        .is_some();
+    if let (true, Some(window)) = (known, window(&app, id)) {
+        set_shown(&window, !hidden);
     }
-    drop(hub);
     announce();
 }
 
@@ -783,25 +840,41 @@ pub fn chat_set_adjusting<R: Runtime>(
     adjusting: bool,
 ) -> Result<Option<PhysicalRect>, String> {
     let window = window(&app, id).ok_or("That chat pop-up is closed.")?;
-    let mut hub = hub();
-    let overlay = hub
-        .overlays
-        .get_mut(&id)
-        .ok_or("That chat pop-up is closed.")?;
-    overlay.adjusting = adjusting;
+    let ghost = {
+        let mut hub = hub();
+        let overlay = hub
+            .overlays
+            .get_mut(&id)
+            .ok_or("That chat pop-up is closed.")?;
+        overlay.adjusting = adjusting;
+        if adjusting {
+            overlay.hidden = false;
+        }
+        overlay.ghost
+    };
+
+    // This runs on the main thread, so tao applies each change before the next
+    // line. Its flags are brought back in line with the window here, since
+    // ghost and hide change it behind tao's back the rest of the time. Its
+    // style changes activate the pop-up, which moving it needs anyway.
     if adjusting {
-        overlay.hidden = false;
-        let _ = window.show();
-    }
-    window
-        .set_decorations(adjusting)
-        .map_err(|e| e.to_string())?;
-    apply_click_through(&window, overlay);
-    push_config(&hub, id, false);
-    drop(hub);
-    if adjusting {
+        set_shown(&window, true);
+        let _ = window.set_ignore_cursor_events(false);
+        let _ = window.set_focusable(true);
+        window.set_decorations(true).map_err(|e| e.to_string())?;
         let _ = window.set_focus();
+    } else {
+        window.set_decorations(false).map_err(|e| e.to_string())?;
+        let _ = window.set_ignore_cursor_events(ghost);
+        let _ = window.set_focusable(false);
+        // "Done" was clicked on the page: the keyboard goes back there, not to
+        // the pop-up those style changes just activated.
+        if let Some(main) = app.get_webview_window("main") {
+            let _ = main.set_focus();
+        }
     }
+    set_click_through(&window, ghost && !adjusting);
+    push_config(&hub(), id, false);
     announce();
     Ok(if adjusting {
         None

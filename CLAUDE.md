@@ -14,7 +14,7 @@ PowerShell 5.1 on the development machine has no `&&` — chain with `;`.
 ```
 pnpm install
 pnpm build                        # tsc + vite, ~6s
-cd src-tauri; cargo test --lib    # 82 tests
+cd src-tauri; cargo test --lib    # 85 tests
 pnpm tauri:dev                    # must be an ELEVATED terminal
 pnpm tauri:build                  # NSIS installer + updater bundle
 ```
@@ -95,6 +95,11 @@ runner cannot launch an executable that demands elevation.
   `plugins/on_top` so it is recorded and undone on unpin, exit, update, and the
   next start after a crash. Browsers are launched through Explorer, never
   elevated. See FORK.md.
+- **A global `listen()` hears events addressed to every window.** Tauri
+  registers it for target `Any`, and an `Any` listener receives `emit_to`
+  events meant for other windows too. A page that must only see its own
+  window's events listens with `getCurrentWebviewWindow().listen`. In 2.1.0
+  every chat pop-up drew the other pop-ups' chats because of this.
 - **Overlays are `.js`.** Two consequences, both of which have already caused
   bugs. `tsc` does not check them, so always run the full `pnpm build` rather
   than `tsc --noEmit`. And any repo-wide scan — renaming, translating, auditing —

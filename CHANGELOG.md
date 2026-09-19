@@ -9,6 +9,19 @@ lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
      and some players still update from there: so no hard wraps and no bold in
      2.0.0 and later. From 2.0.0 on the dialog renders Markdown. -->
 
+## [2.1.1]
+
+Fixes for the live chat pop-ups.
+
+- Separate pop-ups now show only their own chat. In 2.1.0 every pop-up also received the other pop-ups' messages, so a YouTube pop-up could fill up with Twitch chat.
+- Chat pop-ups leave the keyboard with your game: clicking one, turning Ghost on or off, or showing them again with Ctrl+Alt+H does not make them the active window.
+- When a moderator bans or times someone out, their messages leave the pop-up too, and a cleared Twitch chat clears it.
+- Busy Twitch chats are lighter: messages reach the pop-up in small batches instead of one at a time.
+- A Twitch channel that does not exist now says so after 15 seconds instead of staying on Connecting.
+- Someone typing RECONNECT in a Twitch chat no longer disconnects it.
+- A YouTube chat no longer stops for good after one odd answer from YouTube; it tries again.
+- After a dropped connection, Twitch reconnects within seconds, however long it had been running.
+
 ## [2.1.0]
 
 Live chat grows up: YouTube and Twitch, up to four chats at once, each in its own pop-up or merged into one.

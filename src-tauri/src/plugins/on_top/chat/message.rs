@@ -42,6 +42,10 @@ pub struct ChatMessage {
     pub source: String,
     pub platform: Platform,
     pub author: String,
+    /// The platform's id for the author, so a ban can take their messages
+    /// down with them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub author_id: Option<String>,
     /// `#rrggbb`: Twitch's chosen name colour.
     pub author_color: Option<String>,
     pub avatar: Option<String>,
@@ -60,6 +64,10 @@ pub enum ChatEvent {
     Message(ChatMessage),
     /// A moderator deleted it.
     Remove(String),
+    /// A moderator banned or timed out its author: everything they said goes.
+    RemoveAuthor(String),
+    /// The whole chat was cleared.
+    Clear,
 }
 
 /// Image hosts the platforms serve avatars, emoji, and emotes from. Anything

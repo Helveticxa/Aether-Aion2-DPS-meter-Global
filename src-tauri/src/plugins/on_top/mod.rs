@@ -860,6 +860,8 @@ mod platform {
     }
     pub fn minimize(_: isize) {}
     pub fn show_without_activating(_: isize) {}
+    pub fn set_shown(_: isize, _: bool) {}
+    pub fn set_click_through(_: isize, _: bool) {}
     pub fn focus(_: isize) {}
     pub fn launch(_: &Path, _: &[String]) -> Result<(), String> {
         Err(UNSUPPORTED.into())

@@ -269,6 +269,10 @@ pub fn message_from_item(item: &Value, source: &str) -> Option<ChatMessage> {
         } else {
             author
         },
+        author_id: renderer
+            .get("authorExternalChannelId")
+            .and_then(Value::as_str)
+            .map(str::to_string),
         author_color: None,
         avatar: thumbnail(renderer.get("authorPhoto")),
         role,
@@ -279,11 +283,16 @@ pub fn message_from_item(item: &Value, source: &str) -> Option<ChatMessage> {
     })
 }
 
-/// A `get_live_chat` answer: the events in it, and where to go next.
-pub fn parse_response(body: &Value, source: &str) -> (Vec<ChatEvent>, Option<(String, u64)>) {
-    let chat = body.pointer("/continuationContents/liveChatContinuation");
+/// A `get_live_chat` answer: the events in it, and where to go next. `None`
+/// when the answer is not a chat at all, which is a hiccup to retry, not the
+/// end of the stream.
+pub fn parse_response(
+    body: &Value,
+    source: &str,
+) -> Option<(Vec<ChatEvent>, Option<(String, u64)>)> {
+    let chat = body.pointer("/continuationContents/liveChatContinuation")?;
     let events = chat
-        .and_then(|c| c.get("actions"))
+        .get("actions")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
@@ -291,16 +300,20 @@ pub fn parse_response(body: &Value, source: &str) -> (Vec<ChatEvent>, Option<(St
             if let Some(item) = action.pointer("/addChatItemAction/item") {
                 return message_from_item(item, source).map(ChatEvent::Message);
             }
+            if let Some(author) = action
+                .pointer("/removeChatItemByAuthorAction/externalChannelId")
+                .and_then(Value::as_str)
+            {
+                return Some(ChatEvent::RemoveAuthor(author.to_string()));
+            }
             let removed = action
                 .pointer("/markChatItemAsDeletedAction/targetItemId")
                 .or_else(|| action.pointer("/removeChatItemAction/targetItemId"))?;
             removed.as_str().map(|id| ChatEvent::Remove(id.to_string()))
         })
         .collect();
-    let next = chat
-        .and_then(|c| c.pointer("/continuations/0"))
-        .and_then(continuation_of);
-    (events, next)
+    let next = chat.pointer("/continuations/0").and_then(continuation_of);
+    Some((events, next))
 }
 
 /// How long to wait before asking again. YouTube's own timeouts assume a push
@@ -366,10 +379,13 @@ pub async fn run(spec: SourceSpec) {
         };
 
         loop {
-            match fetch(&session).await {
-                Ok(body) => {
+            let answer = fetch(&session).await.and_then(|body| {
+                parse_response(&body, &key)
+                    .ok_or_else(|| "YouTube sent an answer without chat in it.".to_string())
+            });
+            match answer {
+                Ok((events, next)) => {
                     failures = 0;
-                    let (events, next) = parse_response(&body, &key);
                     let fresh: Vec<ChatEvent> = events
                         .into_iter()
                         .filter(|event| match event {
@@ -386,7 +402,7 @@ pub async fn run(spec: SourceSpec) {
                                 }
                                 true
                             }
-                            ChatEvent::Remove(_) => true,
+                            _ => true,
                         })
                         .collect();
                     set_state(&key, SourceState::Live, None);
@@ -461,7 +477,7 @@ mod tests {
         let body: Value = serde_json::from_str(r#"{"continuationContents":{"liveChatContinuation":{
           "continuations":[{"timedContinuationData":{"continuation":"NEXT","timeoutMs":4000}}],
           "actions":[
-            {"addChatItemAction":{"item":{"liveChatTextMessageRenderer":{"id":"m1","timestampUsec":"1700000000000000",
+            {"addChatItemAction":{"item":{"liveChatTextMessageRenderer":{"id":"m1","timestampUsec":"1700000000000000","authorExternalChannelId":"UCalice",
               "authorName":{"simpleText":"@alice"},
               "authorPhoto":{"thumbnails":[{"url":"https://yt4.ggpht.com/a=s32"},{"url":"https://yt4.ggpht.com/a=s64"}]},
               "authorBadges":[{"liveChatAuthorBadgeRenderer":{"icon":{"iconType":"MODERATOR"},"tooltip":"Moderator"}}],
@@ -473,17 +489,19 @@ mod tests {
               "headerSubtext":{"runs":[{"text":"Welcome to "},{"text":"Members"}]},
               "authorBadges":[{"liveChatAuthorBadgeRenderer":{"customThumbnail":{"thumbnails":[{"url":"https://yt3.ggpht.com/badge"}]},"tooltip":"New member"}}]}}}},
             {"addChatItemAction":{"item":{"liveChatViewerEngagementMessageRenderer":{"id":"sys"}}}},
-            {"markChatItemAsDeletedAction":{"targetItemId":"m0"}}
+            {"markChatItemAsDeletedAction":{"targetItemId":"m0"}},
+            {"removeChatItemByAuthorAction":{"externalChannelId":"UCspam"}}
           ]}}}"#).unwrap();
 
-        let (events, next) = parse_response(&body, "yt:X");
+        let (events, next) = parse_response(&body, "yt:X").unwrap();
         assert_eq!(next, Some(("NEXT".into(), 4000)));
-        assert_eq!(events.len(), 4, "engagement banners are skipped");
+        assert_eq!(events.len(), 5, "engagement banners are skipped");
 
         let ChatEvent::Message(first) = &events[0] else {
             panic!()
         };
         assert_eq!(first.author, "@alice");
+        assert_eq!(first.author_id.as_deref(), Some("UCalice"));
         assert_eq!(first.role, Role::Moderator);
         assert_eq!(first.avatar.as_deref(), Some("https://yt4.ggpht.com/a=s64"));
         assert_eq!(first.at, 1_700_000_000_000);
@@ -526,6 +544,22 @@ mod tests {
         );
 
         assert_eq!(events[3], ChatEvent::Remove("m0".into()));
+        assert_eq!(events[4], ChatEvent::RemoveAuthor("UCspam".into()));
+    }
+
+    /// An answer with no chat in it is retried; one whose chat has no next
+    /// page is the stream ending.
+    #[test]
+    fn tells_a_hiccup_from_the_end() {
+        let odd: Value = serde_json::from_str(r#"{"responseContext":{}}"#).unwrap();
+        assert!(parse_response(&odd, "yt:X").is_none());
+        let ended: Value = serde_json::from_str(
+            r#"{"continuationContents":{"liveChatContinuation":{"actions":[]}}}"#,
+        )
+        .unwrap();
+        let (events, next) = parse_response(&ended, "yt:X").unwrap();
+        assert!(events.is_empty());
+        assert_eq!(next, None);
     }
 
     #[test]

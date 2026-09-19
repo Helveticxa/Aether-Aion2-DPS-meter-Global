@@ -443,13 +443,30 @@ draws them in its own page (`overlay/chat/`):
   - **Twitch** (`twitch.rs`) uses anonymous chat: IRC over TLS to
     `irc.chat.twitch.tv:6697` as `justinfan<n>`, read-only by construction. It
     uses rustls with its own root store, not the system's. Emotes come from the
-    message tags, and subs and raids become highlighted lines.
+    message tags, and subs and raids become highlighted lines. Lines are
+    handed on in batches of up to 150 ms, so a busy channel redraws a pop-up a
+    few times a second rather than per message. Commands are read from the
+    command field: "RECONNECT" typed into chat is a PRIVMSG.
+  - Bans and timeouts (Twitch `CLEARCHAT`, YouTube
+    `removeChatItemByAuthorAction`) take the author's messages off the
+    pop-ups and out of the backlog; a cleared Twitch chat clears them.
   - Both reconnect with a backoff (3, 8, 20, 45 s) and report a state
     (connecting, live, ended, error) that the page and the pop-up show.
 - **Pop-ups** are transparent, undecorated windows labelled `aion2-chat-<n>`.
   Ids are never reused, so a new pop-up cannot collide with one still being torn
   down. Messages reach a pop-up as `chat-events` addressed to its label; style
-  and chat changes as `chat-config`.
+  and chat changes as `chat-config`. **The page must listen on its own
+  window** (`getCurrentWebviewWindow().listen`). A global `listen` is
+  registered for target `Any`, and Tauri hands an `Any` listener every event
+  whatever it was addressed to: in 2.1.0 each separate pop-up drew the other
+  pop-ups' chats. The page also drops batches for chats it does not show.
+- **Pop-ups never take the keyboard.** They are built unfocusable
+  (`WS_EX_NOACTIVATE`); moving mode makes them focusable for as long as it
+  lasts. Ghost and hide go through Win32 (`win32::set_click_through`,
+  `set_shown` with `SW_SHOWNOACTIVATE`), not tao: tao re-shows a visible
+  window with `SW_SHOW` on every style change it makes. tao's flags are
+  brought back in line when moving mode starts and ends. A style change waits
+  on the window's thread, so none of these is made with the hub locked.
 - **`chat_apply`** takes the whole layout at once. A pop-up already showing
   exactly the requested chats keeps them. The others are reused in order and
   keep their place on screen, and extra pop-ups close. So closing one pop-up
@@ -477,6 +494,11 @@ platforms' own hosts (`message::safe_image`) and loads with `no-referrer`. Ghost
 is `set_ignore_cursor_events`, and the ghost and hide shortcuts cover the
 pop-ups along with pinned windows. The pop-ups are excluded from the
 window-state plugin, which would otherwise restore a title bar left on mid-move.
+
+2.1.1 was checked with two real pop-ups (a non-elevated example build): a
+YouTube and a Twitch pop-up held 81 and 100 messages, each from its own chat
+only; ghost, hide, and show left both windows inactive; merging reused the first
+pop-up and closed the second.
 
 Checked against real streams through the hub, with no window: one YouTube and
 one Twitch chat gave 79 and 32 messages in 14 seconds, merged by time, and every
