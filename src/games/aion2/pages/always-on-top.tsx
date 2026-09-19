@@ -12,12 +12,14 @@ import {
   Globe,
   Info,
   Keyboard,
+  Link2,
   Loader2,
   Mail,
   MessageSquareText,
   Move,
   Pin,
   PinOff,
+  Plus,
   RefreshCw,
   Search,
   Swords,
@@ -26,7 +28,15 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { FaChrome, FaDiscord, FaEdge, FaSpotify, FaTwitch, FaYoutube } from "react-icons/fa6";
+import {
+  FaChrome,
+  FaDiscord,
+  FaEdge,
+  FaSpotify,
+  FaTiktok,
+  FaTwitch,
+  FaYoutube,
+} from "react-icons/fa6";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -34,18 +44,22 @@ import { Switch } from "@/components/ui/switch";
 import { Toaster } from "@/components/ui/sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  CHAT_CHANGED,
   CHAT_FRACTION,
   CHAT_SIZES,
   CORNERS,
-  LIVE_CHAT_CHANGED,
+  FADE_CHOICES,
+  MAX_CHATS,
   MIN_OPACITY,
   ON_TOP_CHANGED,
   QUICK_SITES,
   SIZE_FRACTION,
   SIZE_PRESETS,
+  TIKTOK_UNSUPPORTED,
+  chat,
+  cornerSequence,
   displayUrl,
   errorText,
-  liveChat,
   loadPrefs,
   nearestPreset,
   onTop,
@@ -53,16 +67,25 @@ import {
   savePrefs,
   siteFromTitle,
   siteFromUrl,
+  sourceAddress,
+  sourceKey,
   type BrowserId,
   type BrowserInfo,
   type BrowserProfile,
   type BrowserWindow,
-  type ChatStatus,
+  type ChatLayout,
+  type ChatPlacement,
+  type ChatPlatform,
   type ChatStyle,
   type Corner,
   type OnTopPrefs,
+  type OverlayStatus,
+  type PhysicalRect,
   type SiteKind,
   type SizePreset,
+  type SourceSpec,
+  type SourceState,
+  type SourceStatus,
 } from "@/games/aion2/lib/on-top";
 import { useSettings } from "@/hooks/use-settings";
 import { cn } from "@/lib/utils";
@@ -218,6 +241,41 @@ function cornerOf(item: BrowserWindow): Corner | null {
   return `${top ? "top" : "bottom"}-${left ? "left" : "right"}` as Corner;
 }
 
+type Frame = { left: number; top: number; right: number; bottom: number };
+
+/** Where a window of this size goes in that corner, as a share of the screen. */
+function cornerTarget(
+  at: Corner,
+  size: SizePreset,
+  fractions: Record<SizePreset, { w: number; h: number }> = SIZE_FRACTION
+): React.CSSProperties {
+  const fraction = fractions[size];
+  const pad = 0.035;
+  return {
+    width: `${fraction.w * 100}%`,
+    height: `${fraction.h * 100}%`,
+    left: at.endsWith("left") ? `${pad * 100}%` : `${(1 - pad - fraction.w) * 100}%`,
+    top: at.startsWith("top") ? `${pad * 100}%` : `${(1 - pad - fraction.h) * 100}%`,
+  };
+}
+
+/** A window's frame as a share of its monitor. */
+function frameBlock(frame: Frame, monitor: Frame): React.CSSProperties {
+  const mw = monitor.right - monitor.left;
+  const mh = monitor.bottom - monitor.top;
+  const clamp = (v: number) => Math.min(Math.max(v, 0), 1);
+  const x = clamp((frame.left - monitor.left) / mw);
+  const y = clamp((frame.top - monitor.top) / mh);
+  const w = clamp((frame.right - frame.left) / mw);
+  const h = clamp((frame.bottom - frame.top) / mh);
+  return {
+    left: `${x * 100}%`,
+    top: `${y * 100}%`,
+    width: `${Math.min(w, 1 - x) * 100}%`,
+    height: `${Math.min(h, 1 - y) * 100}%`,
+  };
+}
+
 /**
  * A little monitor. With a live window it draws where that window really is;
  * without one, where a new window will go. Each quadrant is a button that
@@ -231,6 +289,8 @@ function ScreenMap({
   onPick,
   width = 132,
   fractions = SIZE_FRACTION,
+  label,
+  others,
 }: {
   live?: Pick<BrowserWindow, "frame" | "monitor" | "minimized" | "hidden">;
   corner: Corner | null;
@@ -240,6 +300,10 @@ function ScreenMap({
   width?: number;
   /** Share of the screen each size takes; the chat is taller than a video. */
   fractions?: Record<SizePreset, { w: number; h: number }>;
+  /** A number in the window's block, when there are several. */
+  label?: string;
+  /** The other chat pop-ups, drawn faintly so none lands on another. */
+  others?: { style: React.CSSProperties; label: string }[];
 }) {
   const [hover, setHover] = useState<Corner | null>(null);
   const monitor = live?.monitor;
@@ -249,38 +313,19 @@ function ScreenMap({
       : 9 / 16;
   const height = Math.round(width * Math.min(Math.max(aspect, 0.4), 0.8));
 
-  const target = (at: Corner) => {
-    const fraction = fractions[size];
-    const pad = 0.035;
-    return {
-      width: `${fraction.w * 100}%`,
-      height: `${fraction.h * 100}%`,
-      left: at.endsWith("left") ? `${pad * 100}%` : `${(1 - pad - fraction.w) * 100}%`,
-      top: at.startsWith("top") ? `${pad * 100}%` : `${(1 - pad - fraction.h) * 100}%`,
-    };
-  };
+  const target = (at: Corner) => cornerTarget(at, size, fractions);
 
   let block: React.CSSProperties | null = null;
   if (live && monitor && !live.minimized && !live.hidden) {
-    const mw = monitor.right - monitor.left;
-    const mh = monitor.bottom - monitor.top;
-    const clamp = (v: number) => Math.min(Math.max(v, 0), 1);
-    const x = clamp((live.frame.left - monitor.left) / mw);
-    const y = clamp((live.frame.top - monitor.top) / mh);
-    const w = clamp((live.frame.right - live.frame.left) / mw);
-    const h = clamp((live.frame.bottom - live.frame.top) / mh);
-    block = {
-      left: `${x * 100}%`,
-      top: `${y * 100}%`,
-      width: `${Math.min(w, 1 - x) * 100}%`,
-      height: `${Math.min(h, 1 - y) * 100}%`,
-    };
+    block = frameBlock(live.frame, monitor);
   } else if (!live && corner) {
     block = target(corner);
   }
 
   const blockColor =
-    tone === "cyan" ? "border-cyan-300/80 bg-cyan-300/25" : "border-amber-200/80 bg-amber-200/30";
+    tone === "cyan"
+      ? "border-cyan-300/80 bg-cyan-300/25 text-cyan-50"
+      : "border-amber-200/80 bg-amber-200/30 text-amber-50";
 
   return (
     <div
@@ -292,6 +337,16 @@ function ScreenMap({
       <div className="absolute inset-x-[8%] top-[10%] h-[6%] rounded-sm bg-white/[0.04]" />
       <div className="absolute bottom-[8%] left-[8%] h-[18%] w-[22%] rounded-sm bg-white/[0.04]" />
 
+      {others?.map((other) => (
+        <div
+          key={other.label}
+          className="pointer-events-none absolute flex items-center justify-center rounded-[3px] border border-white/25 bg-white/[0.07] text-[9px] font-semibold text-white/45"
+          style={other.style}
+        >
+          {other.label}
+        </div>
+      ))}
+
       {hover && hover !== corner ? (
         <div
           className="pointer-events-none absolute rounded-[3px] border border-dashed border-white/45"
@@ -302,11 +357,13 @@ function ScreenMap({
       {block ? (
         <div
           className={cn(
-            "pointer-events-none absolute rounded-[3px] border transition-all duration-300 ease-out",
+            "pointer-events-none absolute flex items-center justify-center rounded-[3px] border text-[9px] font-semibold transition-all duration-300 ease-out",
             blockColor
           )}
           style={block}
-        />
+        >
+          {label}
+        </div>
       ) : (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-[10px] text-white/35">
           {live?.hidden ? "Hidden" : "Minimized"}
@@ -532,26 +589,133 @@ function PinnedCard({ item, onChanged }: { item: BrowserWindow; onChanged: () =>
 }
 
 // =============================================================================
-// The page
+// Live chat pop-ups
 // =============================================================================
 
-// =============================================================================
-// The live chat overlay
-// =============================================================================
-
-/** The outline the overlay draws around chat text, for the preview. */
+/** The outline the pop-up draws around chat text, for the preview. */
 const CHAT_OUTLINE =
   "0 0 2px #000, 0 0 3px #000, 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000";
 
-const PREVIEW_MESSAGES = [
-  { name: "@raidleader", text: "boss at 20%, save cooldowns", color: "#e57373" },
-  { name: "@healbot", text: "shields up in 3", color: "#64b5f6" },
-  { name: "@newbie_42", text: "gg that was clean", color: "#81c784" },
+const PREVIEW_MESSAGES: { name: string; text: string; color: string; platform: ChatPlatform }[] = [
+  {
+    name: "@raidleader",
+    text: "boss at 20%, save cooldowns",
+    color: "#e57373",
+    platform: "youtube",
+  },
+  { name: "healbot", text: "shields up in 3", color: "#64b5f6", platform: "twitch" },
+  { name: "@newbie_42", text: "gg that was clean", color: "#81c784", platform: "youtube" },
 ];
 
-/** What the overlay will look like, drawn over a bright scene: the case
- *  that matters most for a transparent chat. */
-function ChatPreview({ style }: { style: ChatStyle }) {
+const STATE_TEXT: Record<SourceState, string> = {
+  connecting: "Connecting",
+  live: "Live",
+  ended: "Stream ended",
+  error: "Unavailable",
+};
+
+const DEFAULT_PLACEMENT: ChatPlacement = { corner: "bottom-left", size: "medium", rect: null };
+
+function PlatformIcon({ platform, className }: { platform: ChatPlatform; className?: string }) {
+  return platform === "twitch" ? (
+    <FaTwitch className={cn("text-[#a970ff]", className)} aria-hidden />
+  ) : (
+    <FaYoutube className={cn("text-[#ff3040]", className)} aria-hidden />
+  );
+}
+
+function StateDot({ state }: { state: SourceState }) {
+  return (
+    <span
+      className={cn(
+        "size-1.5 shrink-0 rounded-full",
+        state === "live" && "bg-emerald-400",
+        state === "connecting" && "animate-pulse bg-cyan-300",
+        state === "ended" && "bg-white/30",
+        state === "error" && "bg-red-400"
+      )}
+    />
+  );
+}
+
+/** One key for a pop-up's chats, whatever order they are listed in. */
+function groupKey(sources: SourceSpec[]): string {
+  return sources.map(sourceKey).sort().join(",");
+}
+
+/** Where pop-up `index` goes: as placed, or the next free corner. */
+function placementAt(prefs: OnTopPrefs, index: number): ChatPlacement {
+  const stored = prefs.chatPlacements[index];
+  if (stored) return stored;
+  const first = prefs.chatPlacements[0] ?? DEFAULT_PLACEMENT;
+  return { corner: cornerSequence(first.corner)[index % 4], size: first.size, rect: null };
+}
+
+/** The pop-ups the list and layout ask for. */
+function plannedOverlays(prefs: OnTopPrefs): { sources: SourceSpec[]; placement: ChatPlacement }[] {
+  const sources = prefs.chatSources;
+  if (sources.length === 0) return [];
+  const groups = prefs.chatLayout === "merged" ? [sources] : sources.map((s) => [s]);
+  return groups.map((group, index) => ({ sources: group, placement: placementAt(prefs, index) }));
+}
+
+/** The primary screen in physical pixels, which is what pop-ups report. */
+function primaryScreen() {
+  const ratio = window.devicePixelRatio || 1;
+  return {
+    left: 0,
+    top: 0,
+    right: Math.round(window.screen.width * ratio),
+    bottom: Math.round(window.screen.height * ratio),
+  };
+}
+
+function rectFrame(rect: PhysicalRect) {
+  return {
+    left: rect.x,
+    top: rect.y,
+    right: rect.x + rect.width,
+    bottom: rect.y + rect.height,
+  };
+}
+
+/** Where a pop-up sits on the little monitor. */
+function placementBlock(placement: ChatPlacement): React.CSSProperties {
+  return placement.rect
+    ? frameBlock(rectFrame(placement.rect), primaryScreen())
+    : cornerTarget(placement.corner, placement.size, CHAT_FRACTION);
+}
+
+/** The corner a pop-up is nearest to, for one the page has no record of. */
+function cornerOfRect(rect: PhysicalRect | null): Corner {
+  if (!rect) return DEFAULT_PLACEMENT.corner;
+  const screen = primaryScreen();
+  const top = rect.y + rect.height / 2 < screen.bottom / 2;
+  const left = rect.x + rect.width / 2 < screen.right / 2;
+  return `${top ? "top" : "bottom"}-${left ? "left" : "right"}` as Corner;
+}
+
+/** The chat a link names, when that can be told without asking YouTube. */
+function linkedChat(text: string): { platform: ChatPlatform; id: string } | null {
+  const trimmed = text.trim();
+  const twitch = /twitch\.tv\/(?:popout\/|embed\/)?([a-z0-9_]{3,25})/i.exec(trimmed);
+  if (twitch) return { platform: "twitch", id: twitch[1].toLowerCase() };
+  const youtube = /(?:[?&]v=|youtu\.be\/|\/(?:live|shorts|embed|video)\/)([\w-]{11})/.exec(trimmed);
+  if (youtube) return { platform: "youtube", id: youtube[1] };
+  return /^[\w-]{11}$/.test(trimmed) ? { platform: "youtube", id: trimmed } : null;
+}
+
+function guessPlatform(text: string): ChatPlatform | "tiktok" | null {
+  const lower = text.trim().toLowerCase();
+  if (lower.includes("twitch.tv")) return "twitch";
+  if (lower.includes("tiktok.com")) return "tiktok";
+  if (lower.includes("youtu") || lower.startsWith("@")) return "youtube";
+  return null;
+}
+
+/** What the pop-up will look like, drawn over a bright scene: the case that
+ *  matters most for a transparent chat. */
+function ChatPreview({ style, platforms }: { style: ChatStyle; platforms: boolean }) {
   const size = Math.round(style.fontSize * 0.8);
   const avatar = Math.round(size * 1.75);
   return (
@@ -561,7 +725,7 @@ function ChatPreview({ style }: { style: ChatStyle }) {
         background:
           "linear-gradient(135deg, #e9d8a6 0%, #94d2bd 38%, #f4f1de 56%, #ee9b00 82%, #0a9396 100%)",
       }}
-      aria-label="Preview of the chat overlay"
+      aria-label="Preview of the chat pop-up"
     >
       <div className="flex flex-col gap-1">
         {PREVIEW_MESSAGES.map((message) => (
@@ -587,6 +751,12 @@ function ChatPreview({ style }: { style: ChatStyle }) {
               className="min-w-0 truncate font-semibold text-[#fff]"
               style={{ fontSize: size, textShadow: CHAT_OUTLINE }}
             >
+              {platforms ? (
+                <PlatformIcon
+                  platform={message.platform}
+                  className="mr-1 inline-block align-[-0.12em] drop-shadow-[0_0_1px_#000]"
+                />
+              ) : null}
               <span className="font-bold text-[#dcdcdc]">{message.name}</span> {message.text}
             </span>
           </div>
@@ -644,57 +814,331 @@ function FontSizeSlider({ value, onChange }: { value: number; onChange: (size: n
   );
 }
 
-/** The left column in live chat mode: which stream, how it looks, where. */
+/** A tiny screen: two pop-ups apart, or one pop-up with both chats in it. */
+function LayoutGlyph({ layout }: { layout: ChatLayout }) {
+  return (
+    <svg viewBox="0 0 36 24" className="h-6 w-9 shrink-0" aria-hidden>
+      <rect
+        x="0.5"
+        y="0.5"
+        width="35"
+        height="23"
+        rx="3"
+        fill="none"
+        stroke="currentColor"
+        strokeOpacity="0.3"
+      />
+      {layout === "separate" ? (
+        <>
+          <rect x="3" y="6" width="8" height="14" rx="1.5" fill="#ff3040" fillOpacity="0.8" />
+          <rect x="25" y="6" width="8" height="14" rx="1.5" fill="#a970ff" fillOpacity="0.8" />
+        </>
+      ) : (
+        <>
+          <rect
+            x="3"
+            y="4"
+            width="12"
+            height="16"
+            rx="1.5"
+            fill="currentColor"
+            fillOpacity="0.16"
+          />
+          <rect x="5" y="7" width="8" height="2" rx="1" fill="#ff3040" />
+          <rect x="5" y="11" width="6" height="2" rx="1" fill="#a970ff" />
+          <rect x="5" y="15" width="8" height="2" rx="1" fill="#ff3040" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+const LAYOUTS: { id: ChatLayout; label: string; hint: string }[] = [
+  { id: "separate", label: "Separate", hint: "A pop-up for each chat" },
+  { id: "merged", label: "Merged", hint: "Every chat in one pop-up" },
+];
+
+/** A chat in the list, with how it is doing if a pop-up is reading it. */
+function SourceRow({
+  spec,
+  status,
+  onRemove,
+  onTopChat,
+}: {
+  spec: SourceSpec;
+  status: SourceStatus | undefined;
+  onRemove: () => void;
+  onTopChat: (topChat: boolean) => void;
+}) {
+  return (
+    <motion.li
+      layout
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.97 }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
+      className="flex items-center gap-2 rounded-lg border border-white/8 bg-white/[0.03] py-1.5 pr-1 pl-1.5"
+    >
+      <SiteGlyph kind={spec.platform} size="sm" />
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate text-xs font-medium text-white" title={spec.name}>
+            {spec.name}
+          </span>
+          {status ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex p-0.5">
+                  <StateDot state={status.state} />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{status.detail ?? STATE_TEXT[status.state]}</TooltipContent>
+            </Tooltip>
+          ) : null}
+        </span>
+        <span className="block truncate text-[10px] text-white/35">{sourceAddress(spec)}</span>
+      </span>
+      {spec.platform === "youtube" ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-pressed={spec.topChat}
+              onClick={() => onTopChat(!spec.topChat)}
+              className={cn(
+                "h-6 shrink-0 rounded-md px-1.5 text-[10px] font-semibold transition",
+                spec.topChat
+                  ? "bg-amber-200/85 text-neutral-900"
+                  : "bg-white/6 text-white/50 hover:bg-white/12 hover:text-white"
+              )}
+            >
+              {spec.topChat ? "Top" : "All"}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {spec.topChat
+              ? "YouTube's filtered Top chat. Click for every message."
+              : "Every message. Click for YouTube's filtered Top chat."}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+      <IconButton label="Remove" tone="danger" onClick={onRemove}>
+        <X />
+      </IconButton>
+    </motion.li>
+  );
+}
+
+/** Shown instead of an error for a TikTok link: what works instead. */
+function TikTokNotice({
+  browserName,
+  onOpen,
+  onDismiss,
+}: {
+  browserName: string;
+  onOpen: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mt-2 rounded-lg border border-white/10 bg-white/[0.04] p-2.5"
+    >
+      <p className="flex items-center gap-1.5 text-xs font-medium text-white">
+        <FaTiktok className="size-3.5 shrink-0" aria-hidden />
+        TikTok chat can't be read here
+      </p>
+      <p className="mt-1 text-[10px] leading-snug text-white/45">
+        TikTok only shows live comments to viewers who are signed in. Pin the live as a mini window
+        instead: it opens in your own {browserName}, already signed in.
+      </p>
+      <div className="mt-2 flex gap-1.5">
+        <button
+          type="button"
+          onClick={onOpen}
+          className="flex h-7 items-center gap-1.5 rounded-lg bg-white/90 px-2.5 text-[11px] font-semibold text-black transition hover:bg-white"
+        >
+          <AppWindow className="size-3.5" /> Open as mini window
+        </button>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="h-7 rounded-lg px-2.5 text-[11px] text-white/55 transition hover:bg-white/8 hover:text-white"
+        >
+          Dismiss
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
+type ChatAction = "show" | "apply" | "close" | "none";
+
+/** The left column in live chat mode: which chats, how many pop-ups, how
+ *  they look, and where. */
 function ChatPanel({
   prefs,
-  status,
-  opening,
+  overlays,
+  action,
+  busy,
+  adding,
+  tiktok,
+  browserName,
   onPrefs,
   onStyle,
-  onOpen,
+  onAdd,
+  onRemove,
+  onTopChat,
+  onPlace,
+  onAction,
+  onTikTok,
+  onDismissTikTok,
 }: {
   prefs: OnTopPrefs;
-  status: ChatStatus | null;
-  opening: boolean;
+  overlays: OverlayStatus[];
+  action: ChatAction;
+  busy: boolean;
+  adding: boolean;
+  tiktok: string | null;
+  browserName: string;
   onPrefs: (change: Partial<OnTopPrefs>) => void;
   onStyle: (style: ChatStyle) => void;
-  onOpen: (source?: string) => void;
+  onAdd: (input?: string) => void;
+  onRemove: (key: string) => void;
+  onTopChat: (key: string, topChat: boolean) => void;
+  onPlace: (index: number, placement: ChatPlacement) => void;
+  onAction: () => void;
+  onTikTok: () => void;
+  onDismissTikTok: () => void;
 }) {
   const style = prefs.chatStyle;
+  const planned = plannedOverlays(prefs);
+  const count = Math.max(planned.length, 1);
+  const [selected, setSelected] = useState(0);
+  const index = Math.min(selected, count - 1);
+  const placement = placementAt(prefs, index);
+  const full = prefs.chatSources.length >= MAX_CHATS;
+  const typed = guessPlatform(prefs.chatSource);
+
+  const statusOf = (spec: SourceSpec) => {
+    const key = sourceKey(spec);
+    for (const overlay of overlays) {
+      const found = overlay.sources.find((s) => s.key === key);
+      if (found) return found;
+    }
+    return undefined;
+  };
+
+  const others = planned
+    .map((p, i) => ({ placement: p.placement, i }))
+    .filter(({ i }) => i !== index)
+    .map(({ placement: other, i }) => ({ style: placementBlock(other), label: String(i + 1) }));
+
+  const mixed = new Set(prefs.chatSources.map((s) => s.platform)).size > 1;
+  // A recent link for a chat already in the list would only say so.
+  const recent = prefs.chatRecent.filter((text) => {
+    const named = linkedChat(text);
+    return (
+      !named || !prefs.chatSources.some((s) => s.platform === named.platform && s.id === named.id)
+    );
+  });
+
   return (
     <>
       <div className="scrollbar-thumb-only -mr-1 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
         <section>
-          <SectionLabel>YouTube live chat</SectionLabel>
+          <SectionLabel
+            action={
+              prefs.chatSources.length > 0 ? (
+                <span className="font-mono text-[10px] text-white/35 tabular-nums">
+                  {prefs.chatSources.length}/{MAX_CHATS}
+                </span>
+              ) : undefined
+            }
+          >
+            Chats
+          </SectionLabel>
+
+          {prefs.chatSources.length > 0 ? (
+            <ul className="mb-2 flex flex-col gap-1">
+              <AnimatePresence initial={false}>
+                {prefs.chatSources.map((spec) => {
+                  const key = sourceKey(spec);
+                  return (
+                    <SourceRow
+                      key={key}
+                      spec={spec}
+                      status={statusOf(spec)}
+                      onRemove={() => onRemove(key)}
+                      onTopChat={(topChat) => onTopChat(key, topChat)}
+                    />
+                  );
+                })}
+              </AnimatePresence>
+            </ul>
+          ) : null}
+
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              onOpen();
+              onAdd();
             }}
             className="relative"
           >
-            <FaYoutube className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-red-400" />
+            <span className="pointer-events-none absolute top-1/2 left-2.5 flex -translate-y-1/2 [&_svg]:size-3.5">
+              {typed === "tiktok" ? (
+                <FaTiktok className="text-white/80" aria-hidden />
+              ) : typed ? (
+                <PlatformIcon platform={typed} />
+              ) : (
+                <Link2 className="text-white/35" />
+              )}
+            </span>
             <input
               value={prefs.chatSource}
               onChange={(event) => onPrefs({ chatSource: event.target.value })}
-              placeholder="Live link, video ID, or @channel"
+              placeholder={full ? `Up to ${MAX_CHATS} chats` : "YouTube or Twitch live link"}
+              disabled={full}
               spellCheck={false}
-              className="w-full rounded-lg border border-white/10 bg-white/5 py-1.5 pr-2.5 pl-8 text-xs text-white placeholder:text-white/35 focus:border-cyan-300/40 focus:outline-none"
+              aria-label="Live link to add"
+              className="w-full rounded-lg border border-white/10 bg-white/5 py-1.5 pr-[58px] pl-8 text-xs text-white placeholder:text-white/35 focus:border-cyan-300/40 focus:outline-none disabled:opacity-50"
             />
+            <button
+              type="submit"
+              disabled={full || adding}
+              className="absolute top-1/2 right-1 flex h-6 -translate-y-1/2 items-center gap-1 rounded-md bg-white/10 px-2 text-[10px] font-semibold text-white/85 transition hover:bg-white/18 hover:text-white disabled:opacity-40"
+            >
+              {adding ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
+              Add
+            </button>
           </form>
-          <p className="mt-1.5 text-[10px] leading-snug text-white/35">
-            Studio, watch, and youtu.be links all work. A @handle finds the channel's current
-            stream.
-          </p>
-          {prefs.chatRecent.length > 0 ? (
+
+          <AnimatePresence>
+            {tiktok ? (
+              <TikTokNotice
+                key="tiktok"
+                browserName={browserName}
+                onOpen={onTikTok}
+                onDismiss={onDismissTikTok}
+              />
+            ) : null}
+          </AnimatePresence>
+
+          {!tiktok ? (
+            <p className="mt-1.5 text-[10px] leading-snug text-white/35">
+              YouTube: a live link, video ID, or @channel. Twitch: twitch.tv/channel.
+            </p>
+          ) : null}
+
+          {recent.length > 0 && !full ? (
             <div className="mt-2 flex flex-wrap gap-1">
-              {prefs.chatRecent.map((source) => (
+              {recent.map((source) => (
                 <button
                   key={source}
                   type="button"
-                  onClick={() => onPrefs({ chatSource: source })}
-                  onDoubleClick={() => onOpen(source)}
-                  title="Double-click to show right away"
+                  onClick={() => onAdd(source)}
+                  title="Add again"
                   className="flex max-w-full items-center gap-1 rounded-md bg-white/6 px-1.5 py-0.5 text-[10px] text-white/55 transition hover:bg-white/12 hover:text-white"
                 >
                   <Clock3 className="size-2.5 shrink-0" />
@@ -705,10 +1149,44 @@ function ChatPanel({
           ) : null}
         </section>
 
+        {prefs.chatSources.length > 1 ? (
+          <section>
+            <SectionLabel>Pop-ups</SectionLabel>
+            <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Pop-ups">
+              {LAYOUTS.map((layout) => {
+                const active = prefs.chatLayout === layout.id;
+                return (
+                  <button
+                    key={layout.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => onPrefs({ chatLayout: layout.id })}
+                    className={cn(
+                      "flex items-center gap-2 rounded-lg border px-2 py-2 text-left transition",
+                      active
+                        ? "border-cyan-300/50 bg-cyan-300/[0.07] text-white"
+                        : "border-white/8 bg-white/[0.03] text-white/60 hover:border-white/15 hover:text-white"
+                    )}
+                  >
+                    <LayoutGlyph layout={layout.id} />
+                    <span className="min-w-0">
+                      <span className="block text-xs font-semibold">{layout.label}</span>
+                      <span className="block text-[10px] leading-tight text-white/40">
+                        {layout.hint}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
         <section>
           <SectionLabel>Look</SectionLabel>
           <div className="flex flex-col gap-2.5">
-            <ChatPreview style={style} />
+            <ChatPreview style={style} platforms={prefs.chatLayout === "merged" && mixed} />
             <FontSizeSlider
               value={style.fontSize}
               onChange={(fontSize) => onStyle({ ...style, fontSize })}
@@ -725,35 +1203,89 @@ function ChatPanel({
                 checked={style.backdrop}
                 onChange={(backdrop) => onStyle({ ...style, backdrop })}
               />
-              <ToggleRow
-                label="Every message"
-                hint="Live chat instead of YouTube's filtered Top chat"
-                checked={style.allMessages}
-                onChange={(allMessages) => onStyle({ ...style, allMessages })}
-              />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="min-w-0">
+                <span className="block text-xs text-white/80">Fade old messages</span>
+                <span className="block text-[10px] leading-snug text-white/35">
+                  A quiet chat leaves the screen clear
+                </span>
+              </span>
+              <div className="flex shrink-0 gap-1">
+                {FADE_CHOICES.map((choice) => (
+                  <button
+                    key={choice.secs}
+                    type="button"
+                    onClick={() => onStyle({ ...style, fadeSecs: choice.secs })}
+                    className={cn(
+                      "h-6 rounded-md px-1.5 text-[10px] font-semibold transition",
+                      style.fadeSecs === choice.secs
+                        ? "bg-amber-200/85 text-neutral-900"
+                        : "bg-white/6 text-white/55 hover:bg-white/12 hover:text-white"
+                    )}
+                  >
+                    {choice.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </section>
 
         <section>
           <SectionLabel>Place it</SectionLabel>
+          {count > 1 ? (
+            <div className="mb-2 flex flex-wrap gap-1" role="tablist" aria-label="Pop-up to place">
+              {planned.map((p, i) => (
+                <button
+                  key={groupKey(p.sources)}
+                  type="button"
+                  role="tab"
+                  aria-selected={i === index}
+                  onClick={() => setSelected(i)}
+                  className={cn(
+                    "flex h-6 max-w-[132px] items-center gap-1 rounded-md px-1.5 text-[10px] font-semibold transition",
+                    i === index
+                      ? "bg-cyan-300/15 text-white ring-1 ring-cyan-300/40"
+                      : "bg-white/[0.04] text-white/50 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  <span className="font-mono">{i + 1}</span>
+                  <PlatformIcon platform={p.sources[0].platform} className="size-3 shrink-0" />
+                  <span className="truncate font-medium">{p.sources[0].name}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="flex items-center gap-3">
             <ScreenMap
-              corner={prefs.chatCorner}
-              size={prefs.chatSize}
+              live={
+                placement.rect
+                  ? {
+                      frame: rectFrame(placement.rect),
+                      monitor: primaryScreen(),
+                      minimized: false,
+                      hidden: false,
+                    }
+                  : undefined
+              }
+              corner={placement.corner}
+              size={placement.size}
               tone={prefs.chatGhost ? "cyan" : "amber"}
               fractions={CHAT_FRACTION}
-              onPick={(chatCorner) => onPrefs({ chatCorner, chatRect: null })}
+              label={count > 1 ? String(index + 1) : undefined}
+              others={others}
+              onPick={(corner) => onPlace(index, { corner, size: placement.size, rect: null })}
               width={128}
             />
             <div className="flex flex-col gap-2">
               <SizeChips
-                value={prefs.chatSize}
+                value={placement.rect ? null : placement.size}
                 presets={CHAT_SIZES}
-                onChange={(chatSize) => onPrefs({ chatSize, chatRect: null })}
+                onChange={(size) => onPlace(index, { corner: placement.corner, size, rect: null })}
               />
               <p className="text-[10px] leading-snug text-white/40">
-                {prefs.chatRect ? "Where you last moved it" : CORNER_LABEL[prefs.chatCorner]}
+                {placement.rect ? "Where you last moved it" : CORNER_LABEL[placement.corner]}
                 <br />
                 Click a corner to move it
               </p>
@@ -771,19 +1303,46 @@ function ChatPanel({
       </div>
 
       <div className="flex shrink-0 flex-col gap-2 border-t border-white/8 pt-3">
-        <button
-          type="button"
-          onClick={() => onOpen()}
-          disabled={opening}
-          className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-white/90 text-xs font-semibold text-black transition hover:bg-white disabled:opacity-60"
-        >
-          {opening ? <Loader2 className="size-4 animate-spin" /> : <FaYoutube className="size-4" />}
-          {opening
-            ? "Finding the stream"
-            : status?.open
-              ? "Switch to this stream"
-              : "Show live chat"}
-        </button>
+        {action === "close" ? (
+          <button
+            type="button"
+            onClick={onAction}
+            disabled={busy}
+            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/12 bg-white/[0.04] text-xs font-semibold text-white/80 transition hover:border-red-300/40 hover:bg-red-400/10 hover:text-red-200 disabled:opacity-60"
+          >
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <X className="size-4" />}
+            {overlays.length === 1 ? "Close the pop-up" : `Close ${overlays.length} pop-ups`}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onAction}
+            disabled={busy || action === "none"}
+            className={cn(
+              "flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-white/90 text-xs font-semibold text-black transition hover:bg-white disabled:opacity-60",
+              action === "apply" && "ring-2 ring-cyan-300/60"
+            )}
+          >
+            {busy ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : action === "apply" ? (
+              <RefreshCw className="size-4" />
+            ) : (
+              <MessageSquareText className="size-4" />
+            )}
+            {busy
+              ? "Connecting"
+              : action === "apply"
+                ? "Update pop-ups"
+                : action === "none"
+                  ? "Add a chat first"
+                  : planned.length > 1
+                    ? `Show ${planned.length} pop-ups`
+                    : prefs.chatSources.length > 1
+                      ? `Show ${prefs.chatSources.length} chats together`
+                      : "Show live chat"}
+          </button>
+        )}
         <p className="text-center text-[10px] leading-snug text-white/35">
           Read-only: no sign-in, and nothing is sent. Chat appears over the game with no background.
         </p>
@@ -792,18 +1351,19 @@ function ChatPanel({
   );
 }
 
-/** A live chat overlay that is showing, in the Pinned list. */
+/** A chat pop-up that is showing, in the Pinned list. */
 function ChatCard({
   status,
-  prefs,
-  onStyle,
-  onPrefs,
+  number,
+  placement,
+  onPlace,
   onChanged,
 }: {
-  status: ChatStatus;
-  prefs: OnTopPrefs;
-  onStyle: (style: ChatStyle) => void;
-  onPrefs: (change: Partial<OnTopPrefs>) => void;
+  status: OverlayStatus;
+  /** Its place in the list, when the page has more than one. */
+  number: number | null;
+  placement: ChatPlacement;
+  onPlace: (placement: ChatPlacement) => void;
   onChanged: () => void;
 }) {
   const run = (action: Promise<unknown>, failure: string) => {
@@ -813,33 +1373,24 @@ function ChatCard({
     });
   };
 
-  // The chat window reports physical pixels; the primary screen in the same
-  // units is what the little monitor is drawn against.
-  const ratio = window.devicePixelRatio || 1;
+  // Moving it is the page's job: it remembers the place, and keeps other
+  // pop-ups out of that corner.
   const live = status.rect
     ? {
-        frame: {
-          left: status.rect.x,
-          top: status.rect.y,
-          right: status.rect.x + status.rect.width,
-          bottom: status.rect.y + status.rect.height,
-        },
-        monitor: {
-          left: 0,
-          top: 0,
-          right: Math.round(window.screen.width * ratio),
-          bottom: Math.round(window.screen.height * ratio),
-        },
+        frame: rectFrame(status.rect),
+        monitor: primaryScreen(),
         minimized: false,
         hidden: status.hidden,
       }
     : undefined;
+  const platforms = [...new Set(status.sources.map((s) => s.platform))];
+  const title = status.sources.map((s) => s.name).join(" + ") || "Live chat";
 
   const finishMoving = () => {
-    liveChat
-      .setAdjusting(false)
+    chat
+      .setAdjusting(status.id, false)
       .then((rect) => {
-        if (rect) onPrefs({ chatRect: rect });
+        if (rect) onPlace({ ...placement, rect });
         onChanged();
       })
       .catch((error) => toast.error("Could not finish moving", { description: errorText(error) }));
@@ -863,12 +1414,25 @@ function ChatCard({
       )}
     >
       <header className="mb-3 flex items-start gap-2.5">
-        <SiteGlyph kind="youtube" size="lg" />
+        {platforms.length > 1 ? (
+          <span className="flex size-9 shrink-0 items-center justify-center gap-0.5 rounded-lg bg-white/6">
+            {platforms.map((platform) => (
+              <PlatformIcon key={platform} platform={platform} className="size-3.5" />
+            ))}
+          </span>
+        ) : (
+          <SiteGlyph kind={platforms[0] ?? "youtube"} size="lg" />
+        )}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-white">YouTube live chat</p>
+          <p className="truncate text-sm font-medium text-white" title={title}>
+            {title}
+          </p>
           <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-white/40">
-            <MessageSquareText className="size-3" />
-            <span className="truncate">Overlay · {status.videoId}</span>
+            <MessageSquareText className="size-3 shrink-0" />
+            <span className="truncate">
+              {platforms.length > 1 ? "Merged chat" : "Live chat"}
+              {number !== null ? ` · pop-up ${number}` : ""}
+            </span>
             {status.ghost && !status.adjusting ? (
               <span className="flex items-center gap-1 rounded-md bg-cyan-300/12 px-1.5 text-cyan-200">
                 <Ghost className="size-3" /> Ghost
@@ -882,14 +1446,14 @@ function ChatCard({
         <div className="-mt-0.5 -mr-1 flex items-center">
           <IconButton
             label={status.hidden ? "Show" : "Hide"}
-            onClick={() => run(liveChat.setHidden(!status.hidden), "Could not change that")}
+            onClick={() => run(chat.setHidden(status.id, !status.hidden), "Could not change that")}
           >
             {status.hidden ? <Eye /> : <EyeOff />}
           </IconButton>
           <IconButton
-            label="Close the chat"
+            label="Close this pop-up"
             tone="danger"
-            onClick={() => run(liveChat.close(), "Could not close the chat")}
+            onClick={() => run(chat.close(status.id), "Could not close the pop-up")}
           >
             <X />
           </IconButton>
@@ -900,30 +1464,47 @@ function ChatCard({
         <ScreenMap
           live={live}
           corner={null}
-          size={prefs.chatSize}
+          size={placement.size}
           tone={status.ghost ? "cyan" : "amber"}
           fractions={CHAT_FRACTION}
-          onPick={(corner) => {
-            onPrefs({ chatCorner: corner, chatRect: null });
-            run(liveChat.snap(corner, prefs.chatSize), "Could not move the chat");
-          }}
+          onPick={(corner) => onPlace({ corner, size: placement.size, rect: null })}
         />
 
         <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
-          <FontSizeSlider
-            value={prefs.chatStyle.fontSize}
-            onChange={(fontSize) => onStyle({ ...prefs.chatStyle, fontSize })}
-          />
+          <ul className="flex flex-col gap-1">
+            {status.sources.map((source) => (
+              <li key={source.key} className="text-[11px]">
+                <span className="flex items-center gap-1.5">
+                  <StateDot state={source.state} />
+                  <PlatformIcon platform={source.platform} className="size-3 shrink-0" />
+                  <span className="min-w-0 truncate text-white/75">{source.name}</span>
+                  <span
+                    className={cn(
+                      "ml-auto shrink-0 pl-1 text-[10px]",
+                      source.state === "error" ? "text-red-300/90" : "text-white/35"
+                    )}
+                  >
+                    {STATE_TEXT[source.state]}
+                  </span>
+                </span>
+                {/* Why a chat is not coming through, where it can be read. */}
+                {source.detail && source.state !== "live" && source.state !== "connecting" ? (
+                  <span className="mt-0.5 block pl-3 text-[10px] leading-snug text-white/40">
+                    {source.detail}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
 
           <div className="flex items-center justify-between gap-2">
             <label className="flex cursor-pointer items-center gap-2 text-xs text-white/70">
               <Switch
                 size="sm"
                 checked={status.ghost}
-                onCheckedChange={(ghost) => {
-                  onPrefs({ chatGhost: ghost });
-                  run(liveChat.setGhost(ghost), "Could not change ghost mode");
-                }}
+                onCheckedChange={(ghost) =>
+                  run(chat.setGhost(status.id, ghost), "Could not change ghost mode")
+                }
                 className="data-[state=checked]:bg-cyan-400"
               />
               <span className="flex items-center gap-1">
@@ -931,13 +1512,9 @@ function ChatCard({
               </span>
             </label>
             <SizeChips
-              value={prefs.chatRect ? null : prefs.chatSize}
+              value={placement.rect ? null : placement.size}
               presets={CHAT_SIZES}
-              onChange={(size) => {
-                const corner = prefs.chatCorner;
-                onPrefs({ chatSize: size, chatRect: null });
-                run(liveChat.snap(corner, size), "Could not resize the chat");
-              }}
+              onChange={(size) => onPlace({ corner: placement.corner, size, rect: null })}
             />
           </div>
 
@@ -957,7 +1534,9 @@ function ChatCard({
           ) : (
             <button
               type="button"
-              onClick={() => run(liveChat.setAdjusting(true), "Could not start moving the chat")}
+              onClick={() =>
+                run(chat.setAdjusting(status.id, true), "Could not start moving the chat")
+              }
               className="flex h-7 items-center justify-center gap-1.5 rounded-lg bg-white/8 text-xs text-white/75 transition hover:bg-white/14 hover:text-white"
             >
               <Move className="size-3.5" /> Move or resize freely
@@ -969,6 +1548,10 @@ function ChatCard({
   );
 }
 
+// =============================================================================
+// The page
+// =============================================================================
+
 export default function AlwaysOnTopPage() {
   const navigate = useNavigate();
   const { config } = useSettings();
@@ -979,9 +1562,16 @@ export default function AlwaysOnTopPage() {
   const [launching, setLaunching] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [failures, setFailures] = useState<string[]>([]);
-  const [chat, setChat] = useState<ChatStatus | null>(null);
-  const [chatOpening, setChatOpening] = useState(false);
+  const [chats, setChats] = useState<OverlayStatus[]>([]);
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatAdding, setChatAdding] = useState(false);
+  const [tiktok, setTikTok] = useState<string | null>(null);
   const styleTimer = useRef<number | undefined>(undefined);
+  // Adding a chat waits on the network; by then the list may have changed.
+  const prefsRef = useRef(prefs);
+  useEffect(() => {
+    prefsRef.current = prefs;
+  }, [prefs]);
 
   const updatePrefs = useCallback((change: Partial<OnTopPrefs>) => {
     setPrefs((current) => {
@@ -1008,7 +1598,7 @@ export default function AlwaysOnTopPage() {
       /* the next tick tries again */
     }
     try {
-      setChat(await liveChat.status());
+      setChats(await chat.status());
     } catch {
       /* likewise */
     }
@@ -1025,7 +1615,7 @@ export default function AlwaysOnTopPage() {
   useEffect(() => {
     let alive = true;
     const unlistens: (() => void)[] = [];
-    for (const event of [ON_TOP_CHANGED, LIVE_CHAT_CHANGED]) {
+    for (const event of [ON_TOP_CHANGED, CHAT_CHANGED]) {
       void listen(event, () => void refresh())
         .then((fn) => {
           if (alive) unlistens.push(fn);
@@ -1082,18 +1672,32 @@ export default function AlwaysOnTopPage() {
 
   const pinned = windows.filter((w) => w.pinned);
   const open = windows.filter((w) => !w.pinned);
-  const chatOpen = Boolean(chat?.open);
-  const onTopCount = pinned.length + (chatOpen ? 1 : 0);
-  const anyVisible = pinned.some((w) => !w.hidden) || (chatOpen && !chat?.hidden);
+  const onTopCount = pinned.length + chats.length;
+  const anyVisible = pinned.some((w) => !w.hidden) || chats.some((c) => !c.hidden);
 
-  // Restyling is cheap, but a slider sends many values; the overlay takes the
+  const planned = useMemo(() => plannedOverlays(prefs), [prefs]);
+  const overlayOf = (sources: SourceSpec[]) => {
+    const key = groupKey(sources);
+    return chats.find((overlay) => groupKey(overlay.sources) === key);
+  };
+  const inSync = chats.length === planned.length && planned.every((p) => overlayOf(p.sources));
+  const chatAction: ChatAction =
+    chats.length === 0
+      ? planned.length > 0
+        ? "show"
+        : "none"
+      : inSync || planned.length === 0
+        ? "close"
+        : "apply";
+
+  // Restyling is cheap, but a slider sends many values; the pop-ups take the
   // last one.
   const changeChatStyle = (style: ChatStyle) => {
     updatePrefs({ chatStyle: style });
-    if (!chatOpen) return;
+    if (chats.length === 0) return;
     window.clearTimeout(styleTimer.current);
     styleTimer.current = window.setTimeout(() => {
-      liveChat
+      chat
         .style(style)
         .catch((error) =>
           toast.error("Could not restyle the chat", { description: errorText(error) })
@@ -1101,50 +1705,150 @@ export default function AlwaysOnTopPage() {
     }, 60);
   };
 
-  // Placement and ghost chosen in the panel apply to an overlay already showing.
+  // Ghost chosen in the panel reaches every pop-up already showing. The list
+  // and layout wait for "Update pop-ups", so nothing jumps while editing.
   const changeChatPrefs = (change: Partial<OnTopPrefs>) => {
     updatePrefs(change);
-    if (!chatOpen) return;
     if (change.chatGhost !== undefined) {
-      void liveChat
-        .setGhost(change.chatGhost)
-        .then(refresh)
-        .catch(() => {});
-    }
-    if (change.chatCorner || change.chatSize) {
-      void liveChat
-        .snap(change.chatCorner ?? prefs.chatCorner, change.chatSize ?? prefs.chatSize)
+      const ghost = change.chatGhost;
+      void Promise.all(chats.map((overlay) => chat.setGhost(overlay.id, ghost)))
         .then(refresh)
         .catch(() => {});
     }
   };
 
-  const openChat = async (source = prefs.chatSource) => {
-    if (chatOpening) return;
-    if (!source.trim()) {
-      toast.error("Paste a YouTube live link or a channel's @handle");
+  /** Place pop-up `index`, and move it if it is showing. */
+  const placeChat = (index: number, next: ChatPlacement) => {
+    const current = prefsRef.current;
+    const length = Math.min(
+      MAX_CHATS,
+      Math.max(current.chatPlacements.length, planned.length, index + 1)
+    );
+    const all = Array.from({ length }, (_, i) => placementAt(current, i));
+    const previous = all[index];
+    all[index] = next;
+    // Two pop-ups in one corner would cover each other: the other one takes
+    // this one's old corner.
+    const clash = next.rect
+      ? -1
+      : all.findIndex((p, i) => i !== index && !p.rect && p.corner === next.corner);
+    if (clash >= 0) all[clash] = { ...all[clash], corner: previous.corner };
+    updatePrefs({ chatPlacements: all });
+
+    for (const i of clash >= 0 ? [index, clash] : [index]) {
+      const overlay = planned[i] && overlayOf(planned[i].sources);
+      if (!overlay || all[i].rect) continue;
+      chat
+        .snap(overlay.id, all[i].corner, all[i].size)
+        .then(refresh)
+        .catch((error) =>
+          toast.error("Could not move the chat", { description: errorText(error) })
+        );
+    }
+  };
+
+  /** A card asked to move its pop-up. One no longer in the list just moves. */
+  const placeFromCard = (overlay: OverlayStatus, next: ChatPlacement) => {
+    const key = groupKey(overlay.sources);
+    const index = planned.findIndex((p) => groupKey(p.sources) === key);
+    if (index >= 0) placeChat(index, next);
+    else if (!next.rect)
+      act(chat.snap(overlay.id, next.corner, next.size), "Could not move the chat");
+  };
+
+  const addChat = async (input?: string) => {
+    const text = (input ?? prefsRef.current.chatSource).trim();
+    if (chatAdding) return;
+    if (!text) {
+      toast.error("Paste a YouTube or Twitch live link");
       return;
     }
-    setChatOpening(true);
+    if (prefsRef.current.chatSources.length >= MAX_CHATS) {
+      toast.error(`Up to ${MAX_CHATS} chats at once`);
+      return;
+    }
+    setTikTok(null);
+    setChatAdding(true);
     try {
-      const videoId = await liveChat.resolve(source);
-      await liveChat.open({
-        videoId,
-        style: prefs.chatStyle,
-        ghost: prefs.chatGhost,
-        placement: { corner: prefs.chatCorner, size: prefs.chatSize, rect: prefs.chatRect },
+      const spec = await chat.resolve(text);
+      const latest = prefsRef.current;
+      if (latest.chatSources.some((s) => s.platform === spec.platform && s.id === spec.id)) {
+        toast.info(`${spec.name} is already in the list`);
+        updatePrefs({ chatSource: "" });
+        return;
+      }
+      if (latest.chatSources.length >= MAX_CHATS) {
+        toast.error(`Up to ${MAX_CHATS} chats at once`);
+        return;
+      }
+      updatePrefs({
+        chatSources: [...latest.chatSources, spec],
+        chatSource: "",
+        chatRecent: rememberUrl(latest.chatRecent, text),
       });
-      updatePrefs({ chatSource: source, chatRecent: rememberUrl(prefs.chatRecent, source) });
-      toast.success("Live chat is on top", {
-        description: prefs.chatGhost
-          ? "Clicks pass through it to the game."
-          : "Turn on Ghost to click through it.",
-      });
-      void refresh();
     } catch (error) {
-      toast.error("Could not show the live chat", { description: errorText(error) });
+      const message = errorText(error);
+      if (message === TIKTOK_UNSUPPORTED) setTikTok(text);
+      else toast.error("Could not add that chat", { description: message });
     } finally {
-      setChatOpening(false);
+      setChatAdding(false);
+    }
+  };
+
+  const removeChat = (key: string) => {
+    const index = prefs.chatSources.findIndex((s) => sourceKey(s) === key);
+    if (index < 0) return;
+    const change: Partial<OnTopPrefs> = {
+      chatSources: prefs.chatSources.filter((_, i) => i !== index),
+    };
+    // Separate pop-ups: the chats after it keep the places they are in.
+    if (prefs.chatLayout === "separate" && prefs.chatSources.length > 1) {
+      const length = Math.max(prefs.chatPlacements.length, planned.length);
+      change.chatPlacements = Array.from({ length }, (_, i) => placementAt(prefs, i)).filter(
+        (_, i) => i !== index
+      );
+    }
+    updatePrefs(change);
+  };
+
+  const setTopChat = (key: string, topChat: boolean) => {
+    updatePrefs({
+      chatSources: prefs.chatSources.map((s) => (sourceKey(s) === key ? { ...s, topChat } : s)),
+    });
+  };
+
+  const runChatAction = async () => {
+    if (chatBusy || chatAction === "none") return;
+    const closing = chatAction === "close";
+    const first = chats.length === 0;
+    setChatBusy(true);
+    try {
+      if (closing) {
+        await chat.closeAll();
+      } else {
+        await chat.apply({ overlays: planned, style: prefs.chatStyle, ghost: prefs.chatGhost });
+        if (first) {
+          toast.success(
+            planned.length > 1
+              ? `${planned.length} chat pop-ups are on top`
+              : "Live chat is on top",
+            {
+              description: prefs.chatGhost
+                ? "Clicks pass through to the game."
+                : "Turn on Ghost to click through.",
+            }
+          );
+        } else {
+          toast.success("Pop-ups updated");
+        }
+      }
+    } catch (error) {
+      toast.error(closing ? "Could not close the pop-ups" : "Could not show the live chat", {
+        description: errorText(error),
+      });
+    } finally {
+      setChatBusy(false);
+      void refresh();
     }
   };
 
@@ -1182,6 +1886,15 @@ export default function AlwaysOnTopPage() {
     });
   };
 
+  // TikTok's comments need a signed-in viewer: the player's own browser.
+  const openTikTok = () => {
+    if (!tiktok) return;
+    const url = tiktok;
+    setTikTok(null);
+    updatePrefs({ mode: "browser", url, chatSource: "" });
+    void launch(url);
+  };
+
   const shortcuts = config.aion2.shortcuts;
   const hotkeys = [
     { combo: shortcuts.pinActiveWindow, label: "Pin the browser window you're in" },
@@ -1195,7 +1908,9 @@ export default function AlwaysOnTopPage() {
       <Toaster position="bottom-right" />
 
       {/* ───────────── Left: where and what to open ───────────── */}
-      <aside className="flex w-[300px] shrink-0 flex-col gap-3 overflow-hidden">
+      {/* Clip, not hidden: a hidden box can still be scrolled sideways by
+          focusing something near its edge, which shifted the whole column. */}
+      <aside className="flex w-[300px] shrink-0 flex-col gap-3 overflow-clip">
         <header className="flex items-center gap-2">
           <Pin className="size-4 text-cyan-300" />
           <h1 className="text-sm font-semibold tracking-wide">Always on top</h1>
@@ -1230,11 +1945,21 @@ export default function AlwaysOnTopPage() {
         {prefs.mode === "chat" ? (
           <ChatPanel
             prefs={prefs}
-            status={chat}
-            opening={chatOpening}
+            overlays={chats}
+            action={chatAction}
+            busy={chatBusy}
+            adding={chatAdding}
+            tiktok={tiktok}
+            browserName={browser?.name ?? "browser"}
             onPrefs={changeChatPrefs}
             onStyle={changeChatStyle}
-            onOpen={(source) => void openChat(source)}
+            onAdd={(input) => void addChat(input)}
+            onRemove={removeChat}
+            onTopChat={setTopChat}
+            onPlace={placeChat}
+            onAction={() => void runChatAction()}
+            onTikTok={openTikTok}
+            onDismissTikTok={() => setTikTok(null)}
           />
         ) : browsers === null ? (
           <div className="flex items-center gap-2 text-xs text-white/45">
@@ -1516,18 +2241,30 @@ export default function AlwaysOnTopPage() {
               </p>
             </div>
           ) : (
-            <div className="grid [grid-template-columns:repeat(auto-fill,minmax(360px,1fr))] gap-3">
+            <div className="grid [grid-template-columns:repeat(auto-fill,minmax(min(360px,100%),1fr))] gap-3">
               <AnimatePresence initial={false} mode="popLayout">
-                {chat?.open ? (
-                  <ChatCard
-                    key="live-chat"
-                    status={chat}
-                    prefs={prefs}
-                    onStyle={changeChatStyle}
-                    onPrefs={updatePrefs}
-                    onChanged={() => void refresh()}
-                  />
-                ) : null}
+                {chats.map((overlay) => {
+                  const key = groupKey(overlay.sources);
+                  const index = planned.findIndex((p) => groupKey(p.sources) === key);
+                  return (
+                    <ChatCard
+                      key={`chat-${overlay.id}`}
+                      status={overlay}
+                      number={index >= 0 && planned.length > 1 ? index + 1 : null}
+                      placement={
+                        index >= 0
+                          ? placementAt(prefs, index)
+                          : {
+                              corner: cornerOfRect(overlay.rect),
+                              size: "medium",
+                              rect: overlay.rect,
+                            }
+                      }
+                      onPlace={(next) => placeFromCard(overlay, next)}
+                      onChanged={() => void refresh()}
+                    />
+                  );
+                })}
                 {pinned.map((w) => (
                   <PinnedCard key={w.hwnd} item={w} onChanged={() => void refresh()} />
                 ))}

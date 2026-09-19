@@ -51,18 +51,39 @@ export interface BrowserWindow {
 
 /** Emitted by the backend whenever pinned windows change, from anywhere. */
 export const ON_TOP_CHANGED = "on-top-changed";
-/** Emitted whenever the live chat overlay opens, closes, or changes. */
-export const LIVE_CHAT_CHANGED = "live-chat-changed";
+/** Emitted whenever a chat pop-up opens, closes, or a chat changes state. */
+export const CHAT_CHANGED = "chat-changed";
 
 // =============================================================================
-// Live chat overlay
+// Live chat pop-ups
 // =============================================================================
+
+export type ChatPlatform = "youtube" | "twitch";
+
+/** A chat Aether can follow: a YouTube live video, or a Twitch channel. */
+export interface SourceSpec {
+  platform: ChatPlatform;
+  /** YouTube video id, or Twitch channel login. */
+  id: string;
+  name: string;
+  /** YouTube only: its filtered "Top chat" instead of every message. */
+  topChat: boolean;
+}
+
+export type SourceState = "connecting" | "live" | "ended" | "error";
+
+export interface SourceStatus extends SourceSpec {
+  key: string;
+  state: SourceState;
+  detail: string | null;
+}
 
 export interface ChatStyle {
   fontSize: number;
   avatars: boolean;
   backdrop: boolean;
-  allMessages: boolean;
+  /** Fade messages out this many seconds after they arrive; 0 keeps them. */
+  fadeSecs: number;
 }
 
 /** Physical pixels. */
@@ -73,14 +94,29 @@ export interface PhysicalRect {
   height: number;
 }
 
-export interface ChatStatus {
-  open: boolean;
-  videoId: string | null;
+export interface ChatPlacement {
+  corner: Corner;
+  size: SizePreset;
+  /** Where the player last put it by hand; cleared by picking a corner. */
+  rect: PhysicalRect | null;
+}
+
+export interface OverlayStatus {
+  id: number;
+  sources: SourceStatus[];
   ghost: boolean;
   adjusting: boolean;
   hidden: boolean;
   rect: PhysicalRect | null;
 }
+
+/** Several chats: one pop-up each, or all in one. */
+export type ChatLayout = "separate" | "merged";
+
+export const MAX_CHATS = 4;
+
+/** What `chat_resolve` answers for a TikTok link. */
+export const TIKTOK_UNSUPPORTED = "unsupported:tiktok";
 
 export const CHAT_SIZES: { id: SizePreset; label: string; hint: string }[] = [
   { id: "small", label: "S", hint: "320 × 420" },
@@ -95,25 +131,59 @@ export const CHAT_FRACTION: Record<SizePreset, { w: number; h: number }> = {
   large: { w: 440 / 1920, h: 680 / 1080 },
 };
 
-export const liveChat = {
-  /** A link, a video id, or a channel (@handle) -> the live video id. */
-  resolve: (input: string) => invoke<string>("live_chat_resolve", { input }),
-  open: (args: {
-    videoId: string;
+export const FADE_CHOICES: { secs: number; label: string }[] = [
+  { secs: 0, label: "Keep" },
+  { secs: 15, label: "15s" },
+  { secs: 30, label: "30s" },
+  { secs: 60, label: "60s" },
+];
+
+export const chat = {
+  /** A link, an id, or a channel -> a chat to follow. */
+  resolve: (input: string) => invoke<SourceSpec>("chat_resolve", { input }),
+  apply: (args: {
+    overlays: { sources: SourceSpec[]; placement: ChatPlacement }[];
     style: ChatStyle;
     ghost: boolean;
-    placement: { corner: Corner; size: SizePreset; rect: PhysicalRect | null };
-  }) => invoke<void>("live_chat_open", args),
-  close: () => invoke<void>("live_chat_close"),
-  style: (style: ChatStyle) => invoke<void>("live_chat_style", { style }),
-  setGhost: (ghost: boolean) => invoke<void>("live_chat_set_ghost", { ghost }),
-  setHidden: (hidden: boolean) => invoke<void>("live_chat_set_hidden", { hidden }),
+  }) => invoke<number[]>("chat_apply", args),
+  close: (id: number) => invoke<void>("chat_close", { id }),
+  closeAll: () => invoke<void>("chat_close_all"),
+  style: (style: ChatStyle) => invoke<void>("chat_style", { style }),
+  setGhost: (id: number, ghost: boolean) => invoke<void>("chat_set_ghost", { id, ghost }),
+  setHidden: (id: number, hidden: boolean) => invoke<void>("chat_set_hidden", { id, hidden }),
   /** Leaving moving mode returns where the window ended up. */
-  setAdjusting: (adjusting: boolean) =>
-    invoke<PhysicalRect | null>("live_chat_set_adjusting", { adjusting }),
-  snap: (corner: Corner, size: SizePreset) => invoke<void>("live_chat_snap", { corner, size }),
-  status: () => invoke<ChatStatus>("live_chat_status"),
+  setAdjusting: (id: number, adjusting: boolean) =>
+    invoke<PhysicalRect | null>("chat_set_adjusting", { id, adjusting }),
+  snap: (id: number, corner: Corner, size: SizePreset) =>
+    invoke<void>("chat_snap", { id, corner, size }),
+  status: () => invoke<OverlayStatus[]>("chat_status"),
 };
+
+export function sourceKey(spec: SourceSpec): string {
+  if (spec.platform === "twitch") return `tw:${spec.id}`;
+  return spec.topChat ? `yt:${spec.id}:top` : `yt:${spec.id}`;
+}
+
+export function sourceAddress(spec: SourceSpec): string {
+  return spec.platform === "twitch" ? `twitch.tv/${spec.id}` : `youtube.com/watch?v=${spec.id}`;
+}
+
+/**
+ * The corners pop-ups take in turn, starting from the one the player chose.
+ * Side by side first: chat is tall, and two large pop-ups stacked in one
+ * column would overlap on a 1080p screen.
+ */
+export function cornerSequence(first: Corner): Corner[] {
+  const [row, side] = first.split("-") as ["top" | "bottom", "left" | "right"];
+  const otherSide = side === "left" ? "right" : "left";
+  const otherRow = row === "top" ? "bottom" : "top";
+  return [
+    first,
+    `${row}-${otherSide}`,
+    `${otherRow}-${side}`,
+    `${otherRow}-${otherSide}`,
+  ] as Corner[];
+}
 
 export const MIN_OPACITY = 20;
 
@@ -250,12 +320,12 @@ export interface OnTopPrefs {
   recent: string[];
   chatSource: string;
   chatRecent: string[];
+  chatSources: SourceSpec[];
+  chatLayout: ChatLayout;
   chatStyle: ChatStyle;
   chatGhost: boolean;
-  chatCorner: Corner;
-  chatSize: SizePreset;
-  /** Where the player last put the chat by hand; cleared by picking a corner. */
-  chatRect: PhysicalRect | null;
+  /** One per pop-up, in order. */
+  chatPlacements: ChatPlacement[];
 }
 
 const PREFS_KEY = "aether-on-top";
@@ -264,7 +334,7 @@ const DEFAULT_CHAT_STYLE: ChatStyle = {
   fontSize: 15,
   avatars: true,
   backdrop: false,
-  allMessages: true,
+  fadeSecs: 0,
 };
 
 const DEFAULT_PREFS: OnTopPrefs = {
@@ -277,25 +347,46 @@ const DEFAULT_PREFS: OnTopPrefs = {
   recent: [],
   chatSource: "",
   chatRecent: [],
+  chatSources: [],
+  chatLayout: "separate",
   chatStyle: DEFAULT_CHAT_STYLE,
   chatGhost: true,
-  chatCorner: "bottom-left",
-  chatSize: "medium",
-  chatRect: null,
+  chatPlacements: [{ corner: "bottom-left", size: "medium", rect: null }],
 };
 
 export function loadPrefs(): OnTopPrefs {
   try {
     const raw = localStorage.getItem(PREFS_KEY);
     if (!raw) return { ...DEFAULT_PREFS };
-    const stored = JSON.parse(raw) as Partial<OnTopPrefs>;
+    const stored = JSON.parse(raw) as Partial<OnTopPrefs> & {
+      // 2.0.0 kept one chat's placement in three fields.
+      chatCorner?: Corner;
+      chatSize?: SizePreset;
+      chatRect?: PhysicalRect | null;
+    };
+    const placements = Array.isArray(stored.chatPlacements)
+      ? stored.chatPlacements.slice(0, MAX_CHATS)
+      : [
+          {
+            corner: stored.chatCorner ?? "bottom-left",
+            size: stored.chatSize ?? "medium",
+            rect: stored.chatRect ?? null,
+          },
+        ];
+    const { chatCorner: _c, chatSize: _s, chatRect: _r, ...rest } = stored;
+    void _c;
+    void _s;
+    void _r;
     return {
       ...DEFAULT_PREFS,
-      ...stored,
+      ...rest,
       profiles: { ...(stored.profiles ?? {}) },
       recent: Array.isArray(stored.recent) ? stored.recent.slice(0, 5) : [],
       chatRecent: Array.isArray(stored.chatRecent) ? stored.chatRecent.slice(0, 5) : [],
+      chatSources: Array.isArray(stored.chatSources) ? stored.chatSources.slice(0, MAX_CHATS) : [],
+      chatLayout: stored.chatLayout === "merged" ? "merged" : "separate",
       chatStyle: { ...DEFAULT_CHAT_STYLE, ...(stored.chatStyle ?? {}) },
+      chatPlacements: placements.length ? placements : DEFAULT_PREFS.chatPlacements,
     };
   } catch {
     return { ...DEFAULT_PREFS };

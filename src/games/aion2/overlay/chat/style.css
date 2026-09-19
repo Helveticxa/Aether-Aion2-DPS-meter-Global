@@ -1,0 +1,226 @@
+/* The chat pop-up: messages with no background behind them, drawn to read
+   over any game scene. Everything is sized from --size, the chosen text size. */
+
+:root {
+  --size: 15px;
+  --avatar: 26px;
+  --outline:
+    0 0 2px #000, 0 0 3px #000, 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000,
+    0 2px 4px rgba(0, 0, 0, 0.7);
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: "Segoe UI", "Roboto", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+#messages {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 6px 0;
+  overflow: hidden;
+}
+
+.msg {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(var(--size) * 0.6);
+  padding: 3px 12px;
+  color: #fff;
+  font-size: var(--size);
+  font-weight: 600;
+  line-height: 1.4;
+  text-shadow: var(--outline);
+  overflow-wrap: anywhere;
+  animation: enter 0.25s ease-out;
+  transition: opacity 0.6s ease;
+}
+
+.msg.gone {
+  opacity: 0;
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+body.backdrop .msg {
+  margin: 0 6px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.3) 65%, transparent);
+}
+
+.avatar {
+  flex: none;
+  width: var(--avatar);
+  height: var(--avatar);
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.avatar.initial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(var(--size) * 0.8);
+  font-weight: 700;
+  text-shadow: none;
+  color: #fff;
+}
+
+body.no-avatars .avatar {
+  display: none;
+}
+
+.body {
+  min-width: 0;
+  flex: 1;
+}
+
+.platform {
+  display: inline-block;
+  width: calc(var(--size) * 0.95);
+  height: calc(var(--size) * 0.95);
+  margin-right: 5px;
+  vertical-align: -0.12em;
+  filter: drop-shadow(0 0 1px #000) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7));
+}
+
+.name {
+  margin-right: 6px;
+  font-weight: 700;
+  color: #dcdcdc;
+}
+
+.role {
+  display: inline-block;
+  margin-right: 5px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: calc(var(--size) * 0.62);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  vertical-align: 0.14em;
+  text-shadow: none;
+}
+
+.role.owner {
+  background: #ffd600;
+  color: #1a1400;
+}
+.role.moderator {
+  background: #5e84f1;
+  color: #fff;
+}
+.role.vip {
+  background: #e005b9;
+  color: #fff;
+}
+
+.badge {
+  width: calc(var(--size) * 1.05);
+  height: calc(var(--size) * 1.05);
+  margin-right: 4px;
+  vertical-align: -0.2em;
+}
+
+.emote {
+  height: calc(var(--size) * 1.6);
+  vertical-align: middle;
+  margin: -2px 1px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+}
+
+.highlight {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 2px;
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-size: calc(var(--size) * 0.8);
+  font-weight: 700;
+  text-shadow: none;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+#status {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 10px;
+  color: #fff;
+  font-size: calc(var(--size) * 0.85);
+  font-weight: 600;
+  line-height: 1.45;
+  text-shadow: var(--outline);
+}
+
+#status .line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#status .dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #67e8f9;
+  box-shadow: 0 0 0 1px #000;
+}
+
+#status .dot.error {
+  background: #f87171;
+}
+
+#status .dot.connecting {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* Moving mode: bounds made visible, and a word on how to move it. */
+body.adjusting {
+  background: rgba(8, 12, 16, 0.45);
+  outline: 2px dashed rgba(103, 232, 249, 0.85);
+  outline-offset: -2px;
+}
+
+#adjust-hint {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 24px);
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: rgba(8, 12, 16, 0.8);
+  color: #cffafe;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}

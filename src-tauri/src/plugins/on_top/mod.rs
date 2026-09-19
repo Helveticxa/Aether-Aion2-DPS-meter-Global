@@ -13,7 +13,7 @@
 //! or unclickable because Aether went away.
 
 mod browsers;
-pub mod live_chat;
+pub mod chat;
 #[cfg(windows)]
 mod win32;
 
@@ -269,11 +269,9 @@ pub fn toggle_pin_foreground() {
 /// is the way back.
 pub fn toggle_ghost_everything<R: Runtime>(app: &AppHandle<R>) {
     let handles: Vec<(isize, bool)> = managed().iter().map(|(raw, m)| (*raw, m.ghost)).collect();
-    let chat_open = live_chat::is_open(app);
+    let chat_states = chat::ghost_states();
     let mut states: Vec<bool> = handles.iter().map(|(_, ghost)| *ghost).collect();
-    if chat_open {
-        states.push(live_chat::ghost());
-    }
+    states.extend(&chat_states);
     if states.is_empty() {
         return;
     }
@@ -283,8 +281,8 @@ pub fn toggle_ghost_everything<R: Runtime>(app: &AppHandle<R>) {
             eprintln!("[on-top] ghost toggle skipped a window: {error}");
         }
     }
-    if chat_open {
-        live_chat::set_ghost(app, target);
+    if !chat_states.is_empty() {
+        chat::set_all_ghost(app, target);
     }
     notify();
 }
@@ -292,13 +290,12 @@ pub fn toggle_ghost_everything<R: Runtime>(app: &AppHandle<R>) {
 /// Tuck away every pinned window and the live chat overlay, or bring them
 /// all back.
 pub fn set_everything_hidden<R: Runtime>(app: &AppHandle<R>, target: Option<bool>) -> bool {
-    let chat_open = live_chat::is_open(app);
-    let hide = target.unwrap_or_else(|| {
-        managed().values().any(|m| !m.hidden) || (chat_open && !live_chat::is_hidden())
-    });
+    let chat_open = chat::has_overlays();
+    let hide = target
+        .unwrap_or_else(|| managed().values().any(|m| !m.hidden) || chat::any_visible());
     set_all_hidden(Some(hide));
     if chat_open {
-        live_chat::set_hidden(app, hide);
+        chat::set_all_hidden(app, hide);
     }
     hide
 }
@@ -768,6 +765,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                 recover_previous_session(&path);
                 let _ = SESSION_FILE.set(path);
             }
+
+            chat::install(app);
 
             let handle = app.clone();
             let _ = NOTIFY.set(Box::new(move || {

@@ -417,43 +417,72 @@ Shortcut registration used to stop at the first failure, which left every
 shortcut after it dead. One combination held by another program no longer costs
 the others. The failures are reported, and the page marks them.
 
-### YouTube live chat overlay
+### Live chat pop-ups (YouTube and Twitch)
 
-The page's second mode shows a YouTube live chat on its own, over the game,
-with no background: the look stream overlays use. A pinned browser cannot do
-this. A browser page's background cannot be made see-through while its text
-stays solid, and lowering a window's opacity fades the words with everything
-else. So this is Aether's own transparent window (`on_top/live_chat.rs`),
-loading YouTube's popout chat and restyled by `on_top/live_chat.js`. It hides the
-header, input, ticker, banners and scrollbars, and draws the text white with a
-dark outline so it reads over any scene. It picks "Live chat" (every message)
-over YouTube's filtered "Top chat". Reading a public chat needs no sign-in,
-which is why the browser's session does not matter here.
+The page's second mode shows live chats on their own, over the game, with no
+background: the look stream overlays use. A pinned browser cannot do this. A
+browser page's background cannot be made see-through while its text stays
+solid, and lowering a window's opacity fades the words with everything else.
 
-- **Input** is a watch, live, Studio, or youtu.be link, a bare video id, or a
-  channel (`@handle`, a channel link). A channel is resolved to its current
-  stream through the canonical link of `/<channel>/live`.
-- **Settings travel in the URL fragment** (`#aether={...}`), which YouTube
-  ignores, so the page is styled from its first paint and switching streams is a
-  `navigate()`. Recreating a window under the same label while the old one is
-  still being torn down is a race, and this avoids it. Live changes go through
-  `window.__aetherChat.apply()`.
-- **The page gets nothing of Aether's.** It is a remote origin with no
-  capability, navigation is held to `/live_chat` (and YouTube's consent step),
-  and popups are refused (`NewWindowResponse::Deny`). Without that, WebView2
-  opens a popup window for any link clicked in the chat.
-- **Ghost** is `set_ignore_cursor_events` on our own window, and the ghost and
-  hide shortcuts cover it along with pinned windows. **Moving it** turns on its
-  title bar and a dashed outline. When the player is done, the position is
-  returned and remembered. The window is excluded from the window-state plugin,
-  which would otherwise restore a title bar left on mid-move.
+Up to four chats, from YouTube and Twitch, each in its own pop-up or all merged
+into one. 2.0.0 restyled YouTube's popout chat page inside the pop-up. That
+could not merge two platforms into one list, and ran a whole web application
+per pop-up. So since 2.1.0 Aether reads the chats itself (`on_top/chat/`) and
+draws them in its own page (`overlay/chat/`):
 
-`live_chat.js` has no backslashes: Tailwind scans it as a source file, and a
-backslash followed by hex digits breaks the CSS build.
+- **Connectors**, one per chat, run as tasks in the backend and are shared by
+  every pop-up showing that chat. The hub starts one when a pop-up needs it and
+  stops it when none does, and keeps each chat's last 60 messages so a new or
+  changed pop-up does not start empty.
+  - **YouTube** (`youtube.rs`) uses the same requests as youtube.com's own chat
+    frame, with no sign-in: the `live_chat` page gives the API key, client
+    version, and the "Live chat" or "Top chat" continuation, and
+    `youtubei/v1/live_chat/get_live_chat` returns messages and the next
+    continuation, polled every 1.5 to 2.5 seconds. Paid messages and stickers,
+    memberships, and removals are handled.
+  - **Twitch** (`twitch.rs`) uses anonymous chat: IRC over TLS to
+    `irc.chat.twitch.tv:6697` as `justinfan<n>`, read-only by construction. It
+    uses rustls with its own root store, not the system's. Emotes come from the
+    message tags, and subs and raids become highlighted lines.
+  - Both reconnect with a backoff (3, 8, 20, 45 s) and report a state
+    (connecting, live, ended, error) that the page and the pop-up show.
+- **Pop-ups** are transparent, undecorated windows labelled `aion2-chat-<n>`.
+  Ids are never reused, so a new pop-up cannot collide with one still being torn
+  down. Messages reach a pop-up as `chat-events` addressed to its label; style
+  and chat changes as `chat-config`.
+- **`chat_apply`** takes the whole layout at once. A pop-up already showing
+  exactly the requested chats keeps them. The others are reused in order and
+  keep their place on screen, and extra pop-ups close. So closing one pop-up
+  and applying again does not shuffle chats between windows
+  (`match_overlays`, tested).
+- **Input** is parsed in Rust (`source.rs`): watch, live, Studio, youtu.be, and
+  embed links, a bare video id, a channel (`@handle`, `/channel/`, `/c/`), and
+  twitch.tv links including popout and embed paths. A YouTube channel resolves
+  to its current stream through the canonical link of `/<channel>/live`.
+- **TikTok is recognised and refused.** It has no public chat API, its web
+  requests are signed, and live comments are hidden from viewers who are not
+  signed in: checked on streams with 900 and 1,700 viewers. The page explains
+  this and offers the TikTok live as a pinned mini window instead, in the
+  player's own signed-in browser.
 
-Checked in a real transparent WebView2 window against a live stream: the
-background composited through to a bright window behind it, and the moving mode
-and live restyling (size, shadow band, avatars off) behaved.
+Placement: pop-ups go side by side before they stack (`cornerSequence`),
+because two large chats in one column overlap on a 1080p screen. Moving one
+into another's corner swaps them. A pop-up moved by hand remembers its
+rectangle, and a saved rectangle that is no longer on any monitor falls back to
+the corner.
+
+Safety of what is drawn: every piece of chat text goes in through
+`textContent`. Every image (avatars, badges, emotes) must be https on the
+platforms' own hosts (`message::safe_image`) and loads with `no-referrer`. Ghost
+is `set_ignore_cursor_events`, and the ghost and hide shortcuts cover the
+pop-ups along with pinned windows. The pop-ups are excluded from the
+window-state plugin, which would otherwise restore a title bar left on mid-move.
+
+Checked against real streams through the hub, with no window: one YouTube and
+one Twitch chat gave 79 and 32 messages in 14 seconds, merged by time, and every
+connector stopped once the pop-ups were gone. The page and the pop-up renderer
+were checked in a browser with the backend mocked: separate and merged layouts,
+swapping corners, an unknown Twitch channel, a TikTok link, and both themes.
 
 ## Light theme
 

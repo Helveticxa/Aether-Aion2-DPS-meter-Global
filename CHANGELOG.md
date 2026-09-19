@@ -5,9 +5,21 @@ numbering: this fork publishes to its own release channel, and the updater
 compares an installed build against these releases. Upstream's release history
 lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
 
-<!-- 2.0.0's notes are shown by the update dialog of 0.1.15 and earlier, which
-     prints them verbatim: so no hard wraps and no bold here. From 2.0.0 on the
-     dialog renders Markdown. -->
+<!-- The update dialog of 0.1.15 and earlier prints the newest notes verbatim,
+     and some players still update from there: so no hard wraps and no bold in
+     2.0.0 and later. From 2.0.0 on the dialog renders Markdown. -->
+
+## [2.1.0]
+
+Live chat grows up: YouTube and Twitch, up to four chats at once, each in its own pop-up or merged into one.
+
+Add chats in Always on top, Live chat: a YouTube live link or @channel, or a Twitch channel link. With two or more, choose Separate (a pop-up for each, placed side by side) or Merged (every chat in one pop-up, with a small YouTube or Twitch mark on each line). Every pop-up gets its own card showing whether its chats are live, with Ghost, size, and free moving.
+
+- Twitch chat, with emotes, mod and VIP tags, and subs and raids highlighted. Read-only, no sign-in.
+- YouTube chat is now read by Aether itself instead of an embedded chat page, which is lighter on your PC. Super Chats and memberships stand out, deleted messages disappear, and each YouTube chat can show every message or only Top chat.
+- New: fade old messages after 15, 30, or 60 seconds, so a quiet chat leaves the screen clear.
+- TikTok links are recognised. TikTok only shows live comments to viewers who are signed in, so Aether offers to open the live as a mini window in your own signed-in browser instead.
+- Your chat position, size, and look from 2.0.0 carry over.
 
 ## [2.0.0]
 

@@ -16,7 +16,8 @@
     "dps-settings",
     "dps-log",
     "aion2-event-timer",
-    "aion2-event-timer-boss"
+    "aion2-event-timer-boss",
+    "aion2-chat-*"
   ],
   "permissions": [
     "core:default",

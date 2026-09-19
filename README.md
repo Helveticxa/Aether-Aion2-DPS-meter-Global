@@ -33,7 +33,7 @@ searchable history and broken down by skill, buff uptime, and damage type.
 - Floating overlay in two styles, with click-through and opacity control
 - Interactive map — 8 zones, 4,799 markers, with an always-on-top minimap overlay
 - Always on top — keep your own signed-in Chrome or Edge above the game, with opacity and click-through
-- YouTube live chat overlay — the chat alone over the game, transparent, outlined for any scene
+- Live chat overlay — YouTube and Twitch chat over the game, transparent and outlined, one pop-up per chat or merged into one
 - Light and dark themes
 - Live ping, CPU, and memory footer
 - Battle history with per-skill and per-player breakdowns
