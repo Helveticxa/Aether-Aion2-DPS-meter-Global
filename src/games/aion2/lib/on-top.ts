@@ -187,6 +187,49 @@ export function cornerSequence(first: Corner): Corner[] {
 
 export const MIN_OPACITY = 20;
 
+// =============================================================================
+// Fullscreen games
+// =============================================================================
+
+export const GAME_DISPLAY_CHANGED = "game-display-changed";
+
+/** How the last fullscreen app seen in front filled the screen. */
+export type DisplayMode = "none" | "borderless" | "fullscreen";
+
+export type GameDisplayStatus = {
+  mode: DisplayMode;
+  /** Executable name, e.g. `TslGame.exe`. */
+  app: string | null;
+  inFront: boolean;
+  isAion2: boolean;
+  /** "Disable fullscreen optimizations" ticked in the exe's Compatibility tab. */
+  fullscreenOptimizationsDisabled: boolean;
+  /** Windows 11 "Optimizations for windowed games"; null when never set. */
+  windowedGameOptimizations: boolean | null;
+};
+
+export const gameDisplay = {
+  status: () => invoke<GameDisplayStatus>("get_game_display_status"),
+  openGraphicsSettings: () => invoke<void>("open_graphics_settings"),
+};
+
+const GAME_NAMES: Record<string, string> = {
+  "aion2.exe": "AION 2",
+  "tslgame.exe": "PUBG",
+  "cs2.exe": "Counter-Strike 2",
+  "r5apex.exe": "Apex Legends",
+  "r5apex_dx12.exe": "Apex Legends",
+  "valorant-win64-shipping.exe": "VALORANT",
+  "fortniteclient-win64-shipping.exe": "Fortnite",
+  "dota2.exe": "Dota 2",
+  "leagueoflegends.exe": "League of Legends",
+};
+
+/** A readable name for a game's executable. */
+export function gameName(exe: string): string {
+  return GAME_NAMES[exe.toLowerCase()] ?? exe.replace(/\.exe$/i, "");
+}
+
 export const onTop = {
   detect: () => invoke<BrowserInfo[]>("on_top_detect"),
   windows: () => invoke<BrowserWindow[]>("on_top_windows"),

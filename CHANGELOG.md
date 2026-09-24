@@ -9,6 +9,17 @@ lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
      and some players still update from there: so no hard wraps and no bold in
      2.0.0 and later. From 2.0.0 on the dialog renders Markdown. -->
 
+## [2.4.0]
+
+Safer next to anti-cheat, and a straight answer about fullscreen games.
+
+- Aether no longer touches a game's process at all. Earlier versions opened every running program when the meter started, the game included, with the right to read its memory, and held on to those handles; they also opened the program in front to read its name. Now the meter looks only at itself, and which program is in front comes from the system's process list, the way Task Manager sees it. Nothing was ever read from or written to a game, but anti-cheat watches for exactly these handles, so they are gone.
+- The WinDivert driver is loaded only if Npcap cannot capture, and unloaded again when Aether is done with it. Before, Aether loaded it on every start just to check it, and it stayed loaded until the PC restarted. A WinDivert that another program loaded is left alone.
+- Pinned windows, chat pop-ups, and the meter now stay above any fullscreen game, PUBG included, not only AION 2. When a game comes to the front, Aether lifts its windows back over it without taking the keyboard.
+- Always on top shows how the game in front runs: Borderless, where everything shows, or Fullscreen, with what to do if nothing appears. True exclusive fullscreen cannot be drawn over by any app, Discord and Steam included, without injecting into the game, which is what gets accounts banned. So Aether points you to borderless instead: in PUBG, Settings › Graphics › Display Mode › Fullscreen (Windowed).
+- It warns when "Disable fullscreen optimizations" is ticked for the game, which forces exclusive fullscreen, and shows whether Windows 11's "Optimizations for windowed games" is on, which makes borderless as smooth as fullscreen, with a button to that settings page.
+- The first time a game runs fullscreen while something of yours is on top, a Windows notification says what to do if it does not show.
+
 ## [2.3.0]
 
 Boss fights get their own story: English names, your personal best, a summary when the boss dies, and a one-line capsule mode.

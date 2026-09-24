@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ffi::{c_void, CString};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc, Mutex,
 };
 use std::thread::{self, JoinHandle};
@@ -24,6 +24,19 @@ const IPV4_MIN_HEADER_LEN: usize = 20;
 const TCP_MIN_HEADER_LEN: usize = 20;
 const CANDIDATE_STALE_AFTER: Duration = Duration::from_secs(30);
 const CANDIDATE_CLEANUP_INTERVAL: Duration = Duration::from_secs(1);
+
+/// Set when Aether's own open loaded the WinDivert driver.
+///
+/// WinDivert is a kernel driver, and once loaded it stays loaded until reboot
+/// unless its service is stopped. Some anti-cheats treat a loaded WinDivert as
+/// a warning sign, because lag switches are built on it -- even though Aether
+/// only ever opens it read-only. So the driver is unloaded as soon as Aether is
+/// done with it, but only when Aether is the one that loaded it: a VPN or
+/// another tool relying on WinDivert keeps its driver.
+static LOADED_BY_US: AtomicBool = AtomicBool::new(false);
+/// Handles Aether holds; the driver is only unloaded once none is left, so a
+/// status probe never pulls it out from under a running capture.
+static OPEN_HANDLES: AtomicUsize = AtomicUsize::new(0);
 
 struct CandidateConnections {
     last_magic_at: HashMap<(u16, u16), Instant>,
@@ -173,9 +186,7 @@ impl WinDivertCapturer {
         }
 
         if let Some(raw_handle) = raw_handle {
-            unsafe {
-                let _ = WinDivertClose(HANDLE(raw_handle));
-            }
+            close_handle(HANDLE(raw_handle));
         }
     }
 
@@ -203,9 +214,9 @@ pub fn check_windivert_status() -> WinDivertStatus {
         }
     };
 
-    unsafe {
-        WinDivertClose(handle);
-    }
+    // A probe only asks; closing its handle unloads the driver again unless
+    // a capture is using it.
+    close_handle(handle);
     WinDivertStatus {
         available: true,
         error_code: None,
@@ -213,15 +224,81 @@ pub fn check_windivert_status() -> WinDivertStatus {
     }
 }
 
+/// Sniff and receive-only: WinDivert hands Aether copies of packets and can
+/// neither drop, delay, alter, nor inject any. The game's traffic is untouched.
 fn open_handle() -> std::io::Result<HANDLE> {
     let filter = CString::new(FILTER).expect("static WinDivert filter");
     let flags = WinDivertFlags::new().set_sniff().set_recv_only();
+    let was_loaded = service::is_running();
     let handle = unsafe { WinDivertOpen(filter.as_ptr(), WinDivertLayer::Network, 0, flags) };
 
     if handle.is_invalid() {
         Err(std::io::Error::last_os_error())
     } else {
+        if !was_loaded {
+            LOADED_BY_US.store(true, Ordering::SeqCst);
+        }
+        OPEN_HANDLES.fetch_add(1, Ordering::SeqCst);
         Ok(handle)
+    }
+}
+
+fn close_handle(handle: HANDLE) {
+    unsafe {
+        let _ = WinDivertClose(handle);
+    }
+    if OPEN_HANDLES.fetch_sub(1, Ordering::SeqCst) == 1 {
+        unload_driver();
+    }
+}
+
+/// Unload the WinDivert driver if Aether loaded it and holds no handle to it.
+/// Runs when Aether's last handle closes, and on exit.
+pub fn unload_driver() {
+    if OPEN_HANDLES.load(Ordering::SeqCst) == 0 && LOADED_BY_US.swap(false, Ordering::SeqCst) {
+        service::stop();
+    }
+}
+
+/// The driver's service, which WinDivert installs as `WinDivert` on first open
+/// and marks for deletion, so stopping it also removes it.
+mod service {
+    use windows::{
+        core::w,
+        Win32::System::Services::{
+            CloseServiceHandle, ControlService, OpenSCManagerW, OpenServiceW, QueryServiceStatus,
+            SC_HANDLE, SC_MANAGER_CONNECT, SERVICE_CONTROL_STOP, SERVICE_QUERY_STATUS,
+            SERVICE_RUNNING, SERVICE_STATUS, SERVICE_STOP,
+        },
+    };
+
+    fn with_service<T>(access: u32, act: impl FnOnce(SC_HANDLE) -> T) -> Option<T> {
+        unsafe {
+            let manager = OpenSCManagerW(None, None, SC_MANAGER_CONNECT).ok()?;
+            let result = OpenServiceW(manager, w!("WinDivert"), access).ok().map(|service| {
+                let result = act(service);
+                let _ = CloseServiceHandle(service);
+                result
+            });
+            let _ = CloseServiceHandle(manager);
+            result
+        }
+    }
+
+    pub fn is_running() -> bool {
+        with_service(SERVICE_QUERY_STATUS, |service| {
+            let mut status = SERVICE_STATUS::default();
+            unsafe { QueryServiceStatus(service, &mut status) }.is_ok()
+                && status.dwCurrentState == SERVICE_RUNNING
+        })
+        .unwrap_or(false)
+    }
+
+    pub fn stop() {
+        with_service(SERVICE_STOP, |service| {
+            let mut status = SERVICE_STATUS::default();
+            unsafe { ControlService(service, SERVICE_CONTROL_STOP, &mut status) }.is_ok()
+        });
     }
 }
 
@@ -302,11 +379,12 @@ mod tests {
     use std::time::Duration;
 
     use windivert_sys::address::WINDIVERT_ADDRESS;
-    use windivert_sys::{
-        WinDivertClose, WinDivertRecv, WinDivertShutdown, WinDivertShutdownMode, WINDIVERT_MTU_MAX,
-    };
+    use windivert_sys::{WinDivertRecv, WinDivertShutdown, WinDivertShutdownMode, WINDIVERT_MTU_MAX};
 
-    use super::{normalized_connection, open_handle, parse_network_packet, CandidateConnections};
+    use super::{
+        close_handle, normalized_connection, open_handle, parse_network_packet,
+        CandidateConnections,
+    };
 
     #[test]
     fn keeps_candidate_with_recent_magic() {
@@ -355,9 +433,7 @@ mod tests {
             let _ = WinDivertShutdown(handle, WinDivertShutdownMode::Recv);
         }
         receiver.join().expect("capture receiver stops");
-        unsafe {
-            let _ = WinDivertClose(handle);
-        }
+        close_handle(handle);
     }
 
     #[test]

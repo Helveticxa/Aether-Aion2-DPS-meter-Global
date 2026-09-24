@@ -434,6 +434,41 @@ place, and time, expanded while the pointer is on the card or a summary is
 up. The collapse waits 350 ms so crossing the card's edge does not make the
 window jump.
 
+## Staying clear of anti-cheat (2.4.0)
+
+Anti-cheat judges a program by what it does to the game's process, not by
+what it shows. An audit in 2.4.0 found no injection, memory access, input, or
+hooks anywhere, but three things a strict anti-cheat could still count against
+the player. All three are gone.
+
+- **`System::new_all()` in the memory snapshot loop.** It was only after
+  Aether's own CPU and memory, but on Windows `sysinfo` loads every process:
+  `OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ)` on each one, the
+  game included, handles held for the life of the `System`, and
+  `ReadProcessMemory` on each PEB for command lines. The loop now builds a
+  `System` with machine totals only and refreshes Aether's own pid with
+  memory and CPU only. **Never use `System::new_all()` or refresh all
+  processes with `sysinfo`.**
+- **`OpenProcess` on the foreground window's process**, to learn its name, in
+  `aion2_focus`, `game_display`, and `on_top`. The foreground window is
+  usually the game. `plugins/process_names.rs` answers from a Toolhelp
+  process snapshot instead (the kernel's process list, no handle), cached
+  for five seconds. The one remaining `OpenProcess` is on Explorer, to launch
+  browsers unelevated.
+- **Loading the WinDivert driver just to ask.** The startup gate, the Connection
+  status, and `check_state` each opened WinDivert, which installs and starts
+  its kernel service and leaves it loaded until reboot. Some anti-cheats treat
+  a loaded WinDivert as a warning sign, because lag switches use it. Npcap is
+  asked first everywhere now; WinDivert is opened only when Npcap fails, or
+  when Settings puts it first. `windivert_capturer` counts its handles and,
+  when the last closes, stops the `WinDivert` service if Aether was the one
+  that started it. WinDivert marks its service for deletion on start, so
+  stopping it also removes it.
+
+Capture itself was already passive: Npcap copies packets, and WinDivert is
+opened with `SNIFF | RECV_ONLY`, so it can neither drop, delay, alter, nor
+inject anything.
+
 ## Always on top
 
 A page of its own (`/aion2/on-top`) that keeps the player's **own** Chrome or
@@ -512,6 +547,30 @@ window. A ghost window cannot be clicked, so its shortcut is the way back.
 Shortcut registration used to stop at the first failure, which left every
 shortcut after it dead. One combination held by another program no longer costs
 the others. The failures are reported, and the page marks them.
+
+### Over fullscreen games (2.4.0)
+
+`plugins/game_display.rs` looks at the window in front on every foreground
+change and on a 1.5 s tick while anything of ours is on screen, for any game,
+not only AION 2. A window covering its monitor is **Borderless** without a
+frame, or **Fullscreen** when `SHQueryUserNotificationState` reports
+`QUNS_RUNNING_D3D_FULL_SCREEN`.
+
+- Borderless and fullscreen-with-optimizations are composed by DWM, so topmost
+  windows show. A game can sit in the topmost band itself and rise over ours
+  when activated, so `on_top::raise_all_over` re-asserts `HWND_TOPMOST`
+  with `SWP_NOACTIVATE` on each of our windows that is below it. Only our
+  windows and pinned browsers are moved; the game's is never touched.
+- True exclusive fullscreen bypasses DWM. Nothing another process draws can
+  appear, Discord's, Steam's, and NVIDIA's overlays included, short of
+  injecting into the game, which is exactly what anti-cheat bans. Windows
+  cannot tell exclusive from optimized fullscreen, so Aether keeps raising and
+  explains once, per game per run, in a Windows notification.
+- The page reads, never writes, two settings: the exe's Compatibility flag
+  `DISABLEDXMAXIMIZEDWINDOWEDMODE` (matched by exe name, since the full path
+  would mean opening the game's process) and Windows 11's
+  `SwapEffectUpgradeEnable` ("Optimizations for windowed games"), with a
+  button to `ms-settings:display-advancedgraphics`.
 
 ### Live chat pop-ups (YouTube and Twitch)
 

@@ -46,10 +46,9 @@ use windows::{
             Threading::{
                 CreateProcessW, DeleteProcThreadAttributeList, GetCurrentProcess,
                 InitializeProcThreadAttributeList, OpenProcess, OpenProcessToken,
-                QueryFullProcessImageNameW, UpdateProcThreadAttribute, CREATE_UNICODE_ENVIRONMENT,
+                UpdateProcThreadAttribute, CREATE_UNICODE_ENVIRONMENT,
                 EXTENDED_STARTUPINFO_PRESENT, LPPROC_THREAD_ATTRIBUTE_LIST,
-                PROCESS_CREATE_PROCESS, PROCESS_INFORMATION, PROCESS_NAME_WIN32,
-                PROCESS_QUERY_LIMITED_INFORMATION, PROC_THREAD_ATTRIBUTE_PARENT_PROCESS,
+                PROCESS_CREATE_PROCESS, PROCESS_INFORMATION, PROC_THREAD_ATTRIBUTE_PARENT_PROCESS,
                 STARTUPINFOEXW,
             },
         },
@@ -61,7 +60,7 @@ use windows::{
                 GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
                 GetLayeredWindowAttributes, IsHungAppWindow, IsIconic, IsWindow, IsWindowVisible,
                 IsZoomed, SetForegroundWindow, SetLayeredWindowAttributes, SetWindowLongPtrW,
-                SetWindowPos, ShowWindowAsync, ASFW_ANY, GA_ROOT, GWL_EXSTYLE, GW_OWNER,
+                SetWindowPos, ShowWindowAsync, ASFW_ANY, GA_ROOT, GWL_EXSTYLE, GW_HWNDPREV, GW_OWNER,
                 HWND_NOTOPMOST, HWND_TOPMOST, LAYERED_WINDOW_ATTRIBUTES_FLAGS, LWA_ALPHA,
                 SET_WINDOW_POS_FLAGS, SWP_ASYNCWINDOWPOS, SWP_FRAMECHANGED, SWP_NOACTIVATE,
                 SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_RESTORE, SW_SHOWMINNOACTIVE,
@@ -260,6 +259,28 @@ pub fn is_topmost(raw: isize) -> bool {
     ex_style(raw) & WS_EX_TOPMOST.0 != 0
 }
 
+pub fn is_visible(raw: isize) -> bool {
+    unsafe { IsWindowVisible(hwnd(raw)).as_bool() }
+}
+
+/// Whether `other` is anywhere above `raw` in the z-order: the walk goes up
+/// from `raw` towards the top. Bounded, since the z-order can change under us.
+pub fn is_below(raw: isize, other: isize) -> bool {
+    let mut current = hwnd(raw);
+    for _ in 0..4096 {
+        match unsafe { GetWindow(current, GW_HWNDPREV) } {
+            Ok(previous) if !previous.0.is_null() => {
+                if previous.0 as isize == other {
+                    return true;
+                }
+                current = previous;
+            }
+            _ => return false,
+        }
+    }
+    false
+}
+
 pub fn has_layering(raw: isize, click_through: bool) -> bool {
     let ex = ex_style(raw);
     ex & WS_EX_LAYERED.0 != 0 && (!click_through || ex & WS_EX_TRANSPARENT.0 != 0)
@@ -363,24 +384,10 @@ fn monitor_rects(raw: isize) -> (Rect, Rect) {
     }
 }
 
+/// From a process snapshot, never by opening the process: the window in
+/// question may well be a game's.
 fn process_name(pid: u32) -> Option<String> {
-    unsafe {
-        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
-        let mut buffer = vec![0u16; 1024];
-        let mut len = buffer.len() as u32;
-        let result = QueryFullProcessImageNameW(
-            process,
-            PROCESS_NAME_WIN32,
-            PWSTR(buffer.as_mut_ptr()),
-            &mut len,
-        );
-        let _ = CloseHandle(process);
-        result.ok()?;
-        let path = String::from_utf16_lossy(&buffer[..len as usize]);
-        Path::new(&path)
-            .file_name()
-            .map(|name| name.to_string_lossy().to_string())
-    }
+    crate::plugins::process_names::exe_name(pid)
 }
 
 /// The default value of `App Paths\<exe>`: per user, per machine, then the

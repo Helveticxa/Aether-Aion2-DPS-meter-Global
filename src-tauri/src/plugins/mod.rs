@@ -1,7 +1,9 @@
 pub mod aion2_focus;
 pub mod aion2_overlay;
+pub mod game_display;
 pub mod logger;
 pub mod on_top;
+pub mod process_names;
 pub mod shortcut;
 pub mod system_tray;
 pub mod window_tracking;

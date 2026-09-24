@@ -7,7 +7,10 @@ use std::sync::{
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use sysinfo::{get_current_pid, ProcessesToUpdate, System};
+use sysinfo::{
+    get_current_pid, CpuRefreshKind, MemoryRefreshKind, ProcessRefreshKind, ProcessesToUpdate,
+    RefreshKind, System,
+};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::dps_meter::capture::capturer::{check_npcap_available, CapturedPacket, PcapCapturer};
@@ -452,22 +455,22 @@ impl DpsMeter {
         let capture_backend_active = self.active_capture_backend.lock().unwrap().is_some();
         let mut capture_available = capture_backend_active;
         let mut capture_error = None;
+        // Npcap first: WinDivert is a driver Aether would load just to ask,
+        // so it is only asked when Npcap cannot do the job.
         if !capture_backend_active {
-            let windivert_status = check_windivert_status();
-            capture_available = windivert_status.available;
-            capture_error = windivert_status.error;
-            if !capture_available {
-                match check_npcap_available() {
-                    Ok(()) => {
-                        capture_available = true;
-                        capture_error = None;
-                    }
-                    Err(npcap_error) => {
-                        capture_error = Some(format!(
+            match check_npcap_available() {
+                Ok(()) => capture_available = true,
+                Err(npcap_error) => {
+                    let windivert_status = check_windivert_status();
+                    capture_available = windivert_status.available;
+                    capture_error = (!capture_available).then(|| {
+                        format!(
                             "{}; Npcap: {npcap_error}",
-                            capture_error.unwrap_or_else(|| "WinDivert unavailable".to_string())
-                        ));
-                    }
+                            windivert_status
+                                .error
+                                .unwrap_or_else(|| "WinDivert unavailable".to_string())
+                        )
+                    });
                 }
             }
         }
@@ -628,7 +631,16 @@ impl DpsMeter {
                     return;
                 }
             };
-            let mut system = System::new_all();
+            // Only machine totals up front, and later only Aether's own
+            // process. `System::new_all()` would load every process, which on
+            // Windows opens each one -- a running game included -- with
+            // PROCESS_VM_READ, holds the handles, and reads their memory for
+            // command lines. Anti-cheat treats that as an attack on the game.
+            let mut system = System::new_with_specifics(
+                RefreshKind::nothing()
+                    .with_memory(MemoryRefreshKind::everything())
+                    .with_cpu(CpuRefreshKind::everything()),
+            );
 
             while memory_snapshot_running.load(Ordering::SeqCst) {
                 let removed_ports = dispatcher
@@ -909,7 +921,11 @@ fn build_memory_snapshot(
 ) -> Option<MemorySnapshot> {
     system.refresh_memory();
     system.refresh_cpu_usage();
-    let _ = system.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
+    let _ = system.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&[pid]),
+        true,
+        ProcessRefreshKind::nothing().with_memory().with_cpu(),
+    );
     let process = system.process(pid)?;
 
     let total_memory = system.total_memory().max(1) as f64;

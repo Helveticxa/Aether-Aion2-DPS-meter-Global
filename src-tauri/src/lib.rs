@@ -76,6 +76,7 @@ pub fn run() {
         .plugin(plugins::aion2_focus::init())
         .plugin(plugins::window_tracking::init())
         .plugin(plugins::on_top::init())
+        .plugin(plugins::game_display::init())
         .invoke_handler(tauri::generate_handler![
             update_tray_menu,
             show_system_notification,
@@ -165,6 +166,8 @@ pub fn run() {
             plugins::on_top::chat::chat_set_adjusting,
             plugins::on_top::chat::chat_snap,
             plugins::on_top::chat::chat_status,
+            plugins::game_display::get_game_display_status,
+            plugins::game_display::open_graphics_settings,
         ])
         .setup(|app| {
             let logger = app
@@ -190,6 +193,9 @@ pub fn run() {
         // must not stay on top, see-through, or unclickable once we are gone.
         if let RunEvent::Exit = event {
             plugins::on_top::restore_all();
+            // The meter stops on ExitRequested; this covers any other way out.
+            #[cfg(windows)]
+            dps_meter::capture::windivert_capturer::unload_driver();
             return;
         }
         if let RunEvent::ExitRequested { api, .. } = event {

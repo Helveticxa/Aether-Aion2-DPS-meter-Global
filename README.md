@@ -33,7 +33,8 @@ buff uptime, and damage type.
   your first hit, stays for the whole fight, and after five quiet minutes saves
   the fight to History, starts clean, and hides again (configurable)
 - **Always on top** — keep your own signed-in Chrome or Edge above the game, with
-  opacity and click-through
+  opacity and click-through. Works over any borderless game, and tells you when a
+  game's exclusive fullscreen blocks every overlay
 - **Live chat** — YouTube and Twitch chat over the game, transparent and
   outlined, one pop-up per chat or merged into one
 - **Boss fights** — your pace against your personal best while you fight, and a
@@ -45,6 +46,26 @@ buff uptime, and damage type.
 - Finds the game, your character, and the server on its own — nothing to set up
 - Global shortcuts, tray integration, light and dark themes, English and Korean
 - Runs fully offline — nothing is uploaded
+
+## What Aether never does
+
+Anti-cheat (BattlEye in PUBG, AION 2's own) watches what other programs do to
+the game. Aether is built so there is nothing to find:
+
+- It never injects code into a game, loads anything into it, or hooks its
+  graphics. That is also why nothing can appear over exclusive fullscreen:
+  switch the game to borderless.
+- It never opens a game's process, not even to read its name. Which program is
+  in front comes from the system's process list, the way Task Manager sees it.
+- It never reads or writes game memory, sends input, or automates anything.
+- Packets are copied, never touched: Npcap, or WinDivert in sniff and
+  receive-only mode. The WinDivert driver is loaded only when Npcap cannot
+  capture, and unloaded when Aether is done with it.
+- Always on top moves only Aether's windows and the browser windows you pin. A
+  game's window is only looked at: its size and its style.
+
+None of this is a promise about terms of service. Whether a publisher allows a
+third-party tool is its call.
 
 ## Install
 

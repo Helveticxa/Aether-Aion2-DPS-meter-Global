@@ -363,23 +363,25 @@ pub fn delete_history_records(
 
 #[tauri::command]
 pub fn check_npcap_available() -> Result<WinDivertStatus, String> {
+    // Npcap first, so the WinDivert driver is not loaded just to answer.
+    let npcap_error = match crate::dps_meter::capture::capturer::check_npcap_available() {
+        Ok(()) => {
+            return Ok(WinDivertStatus {
+                available: true,
+                error_code: None,
+                error: None,
+            })
+        }
+        Err(error) => error,
+    };
     let mut status = crate::dps_meter::capture::windivert_capturer::check_windivert_status();
     if !status.available {
-        match crate::dps_meter::capture::capturer::check_npcap_available() {
-            Ok(()) => {
-                status.available = true;
-                status.error_code = None;
-                status.error = None;
-            }
-            Err(npcap_error) => {
-                status.error = Some(format!(
-                    "{}; Npcap: {npcap_error}",
-                    status
-                        .error
-                        .unwrap_or_else(|| "WinDivert unavailable".to_string())
-                ));
-            }
-        }
+        status.error = Some(format!(
+            "{}; Npcap: {npcap_error}",
+            status
+                .error
+                .unwrap_or_else(|| "WinDivert unavailable".to_string())
+        ));
     }
     Ok(status)
 }

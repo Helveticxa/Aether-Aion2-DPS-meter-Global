@@ -10,18 +10,20 @@ import {
   Film,
   Ghost,
   Globe,
-  Info,
   Keyboard,
   Link2,
   Loader2,
   Mail,
   MessageSquareText,
+  Monitor,
+  MonitorCheck,
   Move,
   Pin,
   PinOff,
   Plus,
   RefreshCw,
   Search,
+  ShieldCheck,
   Swords,
   TriangleAlert,
   UserRound,
@@ -49,6 +51,7 @@ import {
   CHAT_SIZES,
   CORNERS,
   FADE_CHOICES,
+  GAME_DISPLAY_CHANGED,
   MAX_CHATS,
   MIN_OPACITY,
   ON_TOP_CHANGED,
@@ -60,6 +63,8 @@ import {
   cornerSequence,
   displayUrl,
   errorText,
+  gameDisplay,
+  gameName,
   loadPrefs,
   nearestPreset,
   onTop,
@@ -78,6 +83,7 @@ import {
   type ChatPlatform,
   type ChatStyle,
   type Corner,
+  type GameDisplayStatus,
   type OnTopPrefs,
   type OverlayStatus,
   type PhysicalRect,
@@ -2336,6 +2342,8 @@ export default function AlwaysOnTopPage() {
           )}
         </section>
 
+        <GameDisplayCard />
+
         <section className="mt-auto grid gap-3 border-t border-white/8 pt-3 lg:grid-cols-[1fr_auto]">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <Keyboard className="size-3.5 text-white/30" />
@@ -2364,15 +2372,168 @@ export default function AlwaysOnTopPage() {
               </>
             ) : (
               <>
-                <Info className="mt-px size-3.5 shrink-0" />
-                Run AION 2 borderless or windowed. Exclusive fullscreen covers everything on top,
-                the meter included.
+                <ShieldCheck className="mt-px size-3.5 shrink-0 text-emerald-300/70" />
+                Aether only moves its own windows and the browser windows you pin. It never
+                injects into a game, reads its memory, or opens its process.
               </>
             )}
           </p>
         </section>
       </main>
     </div>
+  );
+}
+
+// =============================================================================
+// Over a fullscreen game
+// =============================================================================
+
+/** Where to find borderless in games people ask about; others get the
+ *  general wording. */
+const BORDERLESS_HOW: Record<string, string> = {
+  PUBG: "in PUBG, Settings › Graphics › Display Mode › Fullscreen (Windowed).",
+};
+
+/**
+ * How the game in front fills the screen, and what that means for everything
+ * on this page. Exclusive fullscreen cannot be drawn over without injecting
+ * into the game, which is what gets accounts banned, so the answer to it is a
+ * setting, never a workaround.
+ */
+function GameDisplayCard() {
+  const [status, setStatus] = useState<GameDisplayStatus | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      void gameDisplay
+        .status()
+        .then((next) => {
+          if (alive) setStatus(next);
+        })
+        .catch(() => {});
+    load();
+
+    let unlisten: (() => void) | undefined;
+    void listen<GameDisplayStatus>(GAME_DISPLAY_CHANGED, (event) => setStatus(event.payload))
+      .then((fn) => {
+        if (alive) unlisten = fn;
+        else fn();
+      })
+      .catch(() => {});
+    // The Windows setting can change while this page is open.
+    const timer = globalThis.setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 5000);
+
+    return () => {
+      alive = false;
+      unlisten?.();
+      globalThis.clearInterval(timer);
+    };
+  }, []);
+
+  if (!status) return null;
+
+  const name = status.app ? gameName(status.app) : null;
+  const fullscreen = status.mode === "fullscreen";
+  const borderless = status.mode === "borderless";
+  const how = name ? BORDERLESS_HOW[name] : undefined;
+  const windowed = status.windowedGameOptimizations;
+
+  return (
+    <section
+      className={cn(
+        "rounded-xl border px-3.5 py-3",
+        fullscreen || status.fullscreenOptimizationsDisabled
+          ? "border-amber-200/20 bg-amber-200/[0.04]"
+          : "border-white/8 bg-white/[0.025]"
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          className={cn(
+            "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg",
+            borderless
+              ? "bg-emerald-300/12 text-emerald-300"
+              : fullscreen
+                ? "bg-amber-200/12 text-amber-200"
+                : "bg-white/6 text-white/45"
+          )}
+        >
+          {borderless ? <MonitorCheck className="size-4" /> : <Monitor className="size-4" />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="flex flex-wrap items-center gap-x-2 text-[13px] font-medium">
+            {name && status.mode !== "none" ? (
+              <>
+                {name}
+                <span
+                  className={cn(
+                    "rounded-md px-1.5 py-px text-[10px] font-semibold tracking-wide uppercase",
+                    borderless
+                      ? "bg-emerald-300/12 text-emerald-200"
+                      : "bg-amber-200/12 text-amber-100"
+                  )}
+                >
+                  {borderless ? "Borderless" : "Fullscreen"}
+                </span>
+                {!status.inFront ? (
+                  <span className="text-[11px] font-normal text-white/35">last seen</span>
+                ) : null}
+              </>
+            ) : (
+              "Over fullscreen games"
+            )}
+          </p>
+          <p className="mt-0.5 text-xs leading-relaxed text-white/50">
+            {borderless
+              ? "Everything on this page shows over it."
+              : fullscreen
+                ? `Aether lifts your windows over it. If they don't show, the game is in exclusive fullscreen, which nothing can draw over without injecting into the game. Switch it to borderless: ${how ?? "look for Borderless or Fullscreen (Windowed) in its display settings."}`
+                : "Borderless or Fullscreen (Windowed) always works, in any game. Aether checks each game as it comes to the front."}
+          </p>
+          {status.fullscreenOptimizationsDisabled && status.app ? (
+            <p className="mt-2 flex items-start gap-1.5 text-xs leading-relaxed text-amber-100/85">
+              <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-amber-300" />
+              <span>
+                "Disable fullscreen optimizations" is ticked for {status.app} (right-click it,
+                Properties, Compatibility). That forces exclusive fullscreen: untick it.
+              </span>
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-white/6 pt-2.5">
+        <span className="flex min-w-0 flex-1 items-center gap-2 text-[11px] text-white/45">
+          <span
+            className={cn(
+              "size-1.5 shrink-0 rounded-full",
+              windowed === true ? "bg-emerald-300" : "bg-white/25"
+            )}
+          />
+          <span className="min-w-0">
+            Optimizations for windowed games:{" "}
+            <span className={windowed === true ? "text-emerald-200" : "text-white/70"}>
+              {windowed === true ? "On" : windowed === false ? "Off" : "Windows default"}
+            </span>
+            <span className="text-white/30"> · makes borderless as smooth as fullscreen (Windows 11)</span>
+          </span>
+        </span>
+        <button
+          type="button"
+          onClick={() =>
+            void gameDisplay
+              .openGraphicsSettings()
+              .catch((error) => toast.error("Could not open Windows settings", { description: errorText(error) }))
+          }
+          className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg bg-white/8 px-2.5 text-[11px] text-white/75 transition hover:bg-white/14 hover:text-white"
+        >
+          Graphics settings
+        </button>
+      </div>
+    </section>
   );
 }
 

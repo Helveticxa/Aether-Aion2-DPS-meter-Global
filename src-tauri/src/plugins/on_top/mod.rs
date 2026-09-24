@@ -135,6 +135,38 @@ fn notify() {
 pub fn is_managed(hwnd: isize) -> bool {
     managed().contains_key(&hwnd)
 }
+
+pub fn has_pinned() -> bool {
+    !managed().is_empty()
+}
+
+/// Put every window of ours that `game` covers back above it: pinned browser
+/// windows, chat pop-ups, and the meter. A fullscreen game can sit in the
+/// topmost band too, and coming to the front lifts it over them. Only a
+/// z-order change, never an activation, and only for windows actually below
+/// the game, so a game already under everything is left untouched.
+pub fn raise_all_over<R: Runtime>(app: &AppHandle<R>, game: isize) {
+    let mut ours: Vec<isize> = managed()
+        .iter()
+        .filter(|(_, entry)| !entry.hidden)
+        .map(|(raw, _)| *raw)
+        .collect();
+    for (label, window) in app.webview_windows() {
+        let overlay = label == "dps-overlay"
+            || label == "dps-overlay-pvp"
+            || label.starts_with(chat::LABEL_PREFIX);
+        if overlay {
+            if let Ok(handle) = window.hwnd() {
+                ours.push(handle.0 as isize);
+            }
+        }
+    }
+    for raw in ours {
+        if raw != game && platform::is_visible(raw) && platform::is_below(raw, game) {
+            let _ = platform::set_topmost(raw, true);
+        }
+    }
+}
 // =============================================================================
 // Pinning
 // =============================================================================
@@ -823,6 +855,12 @@ mod platform {
         false
     }
     pub fn is_minimized(_: isize) -> bool {
+        false
+    }
+    pub fn is_visible(_: isize) -> bool {
+        false
+    }
+    pub fn is_below(_: isize, _: isize) -> bool {
         false
     }
     pub fn is_topmost(_: isize) -> bool {

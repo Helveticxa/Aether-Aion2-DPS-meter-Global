@@ -14,7 +14,7 @@ PowerShell 5.1 on the development machine has no `&&` — chain with `;`.
 ```
 pnpm install
 pnpm build                        # tsc + vite, ~6s
-cd src-tauri; cargo test --lib    # 101 tests
+cd src-tauri; cargo test --lib    # 108 tests
 pnpm tauri:dev                    # must be an ELEVATED terminal
 pnpm tauri:build                  # NSIS installer + updater bundle
 ```
@@ -99,6 +99,12 @@ runner cannot launch an executable that demands elevation.
 - **Tailwind v4 scans `.rs` files too.** A Windows path in a Rust string, like
   `"C:\...\2c40..."`, reads as a CSS hex escape and fails `vite build` with
   `Invalid code point`. Use forward slashes in paths inside Rust sources.
+- **Never touch a game's process.** No `OpenProcess` on another program
+  (names come from `plugins::process_names`, a Toolhelp snapshot), no
+  `sysinfo` refresh of all processes (`System::new_all()` opens every
+  process with `PROCESS_VM_READ` and reads its memory), no injection, input,
+  or hooks. WinDivert is opened only when Npcap cannot capture, and unloaded
+  when the last handle closes. See FORK.md, *Staying clear of anti-cheat*.
 - **Always on top touches other programs' windows.** Every change goes through
   `plugins/on_top` so it is recorded and undone on unpin, exit, update, and the
   next start after a crash. Browsers are launched through Explorer, never

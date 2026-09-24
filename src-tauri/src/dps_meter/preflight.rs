@@ -180,7 +180,10 @@ fn assemble(
         id: CheckId::Windivert,
         label: "WinDivert",
         detail: match &windivert {
-            None => "Bundled driver loaded, available as a fallback.".to_string(),
+            None if npcap_ok => "Bundled as a fallback. Its driver is loaded only if Npcap cannot \
+                                 capture, and unloaded again when Aether is done with it."
+                .to_string(),
+            None => "Bundled driver answering, and used for capture.".to_string(),
             Some(error) if windivert_file_missing => format!(
                 "{error}. The bundled driver file is missing from the install folder, which \
                  usually means antivirus quarantined it."
@@ -258,24 +261,25 @@ fn is_elevated() -> bool {
 }
 
 /// Run every check and weigh the results.
+///
+/// WinDivert is only opened when Npcap fails. Opening it loads a kernel
+/// driver, and a loaded WinDivert is something some anti-cheats frown on, so
+/// with Npcap working the fallback is judged by its file alone.
 pub fn run() -> Report {
-    let status = windivert_capturer::check_windivert_status();
-    let windivert = if status.available {
-        None
+    let npcap = capturer::probe_npcap();
+    let file_missing = windivert_file_missing();
+    let windivert = if npcap.is_ok() {
+        file_missing.then(|| "WinDivert64.sys was not found".to_string())
     } else {
-        Some(
+        let status = windivert_capturer::check_windivert_status();
+        (!status.available).then(|| {
             status
                 .error
-                .unwrap_or_else(|| "WinDivert could not be opened".to_string()),
-        )
+                .unwrap_or_else(|| "WinDivert could not be opened".to_string())
+        })
     };
 
-    assemble(
-        is_elevated(),
-        capturer::probe_npcap(),
-        windivert,
-        windivert_file_missing(),
-    )
+    assemble(is_elevated(), npcap, windivert, file_missing)
 }
 
 #[cfg(test)]
@@ -330,6 +334,16 @@ mod tests {
         let report = assemble(true, Err("wpcap.dll not found".into()), None, false);
 
         assert!(report.ready, "one working backend is the whole requirement");
+    }
+
+    #[test]
+    fn a_standby_windivert_says_it_is_not_loaded() {
+        let report = assemble(true, Ok(2), None, false);
+        assert!(report.checks[2].ok);
+        assert!(report.checks[2].detail.contains("only if Npcap"));
+
+        let fallback = assemble(true, Err("gone".into()), None, false);
+        assert!(fallback.checks[2].detail.contains("used for capture"));
     }
 
     #[test]

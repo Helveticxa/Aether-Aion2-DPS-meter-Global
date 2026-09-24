@@ -180,7 +180,6 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
 #[cfg(windows)]
 mod windows_impl {
     use std::{
-        path::Path,
         sync::{
             atomic::Ordering,
             mpsc::{self, Sender},
@@ -190,13 +189,8 @@ mod windows_impl {
 
     use tauri::{AppHandle, Emitter, Manager, Runtime};
     use windows::{
-        core::PWSTR,
         Win32::{
-            Foundation::{CloseHandle, HWND},
-            System::Threading::{
-                OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
-                PROCESS_QUERY_LIMITED_INFORMATION,
-            },
+            Foundation::HWND,
             UI::{
                 Accessibility::{SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK},
                 WindowsAndMessaging::{
@@ -250,6 +244,10 @@ mod windows_impl {
 
             while let Ok(hwnd_raw) = rx.recv() {
                 let (focused, process_name) = is_game_session(hwnd_raw);
+
+                // Any game in front, AION 2 or not, may cover what we keep
+                // on top.
+                crate::plugins::game_display::check(&app_for_processor);
 
                 if last_focused == Some(focused) {
                     continue;
@@ -372,33 +370,14 @@ mod windows_impl {
         }
     }
 
+    /// The executable in front, read from a process snapshot: the game's
+    /// process is never opened, since anti-cheat watches for exactly that.
     fn process_name_for_hwnd(hwnd_raw: isize) -> Option<String> {
+        let mut process_id = 0u32;
         unsafe {
-            let hwnd = HWND(hwnd_raw as *mut _);
-            let mut process_id = 0u32;
-            GetWindowThreadProcessId(hwnd, Some(&mut process_id));
-            if process_id == 0 {
-                return None;
-            }
-
-            let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id).ok()?;
-            let mut path_buffer = vec![0u16; 32_768];
-            let mut path_len = path_buffer.len() as u32;
-
-            let result = QueryFullProcessImageNameW(
-                process,
-                PROCESS_NAME_WIN32,
-                PWSTR(path_buffer.as_mut_ptr()),
-                &mut path_len,
-            );
-            let _ = CloseHandle(process);
-            result.ok()?;
-
-            let path = String::from_utf16_lossy(&path_buffer[..path_len as usize]);
-            Path::new(&path)
-                .file_name()
-                .map(|name| name.to_string_lossy().to_string())
+            GetWindowThreadProcessId(HWND(hwnd_raw as *mut _), Some(&mut process_id));
         }
+        crate::plugins::process_names::exe_name(process_id)
     }
 }
 
