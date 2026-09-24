@@ -14,6 +14,8 @@
       <header class="head" id="drag-handle">
         <span class="head__dot" id="live-dot" aria-hidden="true"></span>
         <span class="head__title" id="head-title">Aether</span>
+        <!-- Capsule mode: your own figures, in the one line that is left. -->
+        <span class="head__you" id="head-you"></span>
 
         <span class="head__meta">
           <span class="head__idle">Waiting for a fight</span>
@@ -44,6 +46,12 @@
               />
             </svg>
           </button>
+          <button class="icon-btn" id="compact-btn" title="Capsule mode" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m7 20 5-5 5 5" />
+              <path d="m7 4 5 5 5-5" />
+            </svg>
+          </button>
           <button class="icon-btn" id="pin-btn" title="Always on top" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 17v5" />
@@ -67,11 +75,15 @@
 
       <main class="body" id="scaled-overlay">
         <div class="diag-message" id="diag-message"></div>
+        <!-- After a boss: how the fight went. Built by main.js; takes the
+             list's place until dismissed or the next boss. -->
+        <section class="summary" id="summary" hidden></section>
         <div class="player-list" id="player-list"></div>
       </main>
 
       <footer class="foot" id="status-bar">
         <span class="foot__party" id="party-dps"></span>
+        <span class="foot__pb" id="pb-chip" title="Your DPS against your best on this boss"></span>
         <span class="foot__tools">
           <button class="text-btn" id="copy-report-btn" title="Copy combat report">Copy</button>
           <button class="text-btn" id="pvp-btn" title="Open PVP meter">PvP</button>

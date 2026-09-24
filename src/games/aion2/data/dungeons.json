@@ -2,177 +2,110 @@
   {
     "dungeon_id": "00002",
     "name": {
-      "zh-CN": "青息之岛",
-      "zh-TW": "青息之島",
-      "en": "Azure Breath Island",
-      "ko": "Azure Breath Island"
+      "en": "Azure Breath Island"
     },
     "difficulty": {
-      "zh-CN": "困难",
-      "zh-TW": "困難",
-      "en": "Hard",
-      "ko": "Hard"
+      "en": "Hard"
     },
     "boss_ids": [2300243, 2300244, 2300245]
   },
-
   {
     "dungeon_id": "00004",
     "name": {
-      "zh-CN": "幻影回廊",
-      "zh-TW": "幻影迴廊",
-      "en": "Phantoms Hall",
-      "ko": "Phantoms Hall"
+      "en": "Phantoms Hall"
     },
     "difficulty": {
-      "zh-CN": "困难",
-      "zh-TW": "困难",
-      "en": "Hard",
-      "ko": "Hard"
+      "en": "Hard"
     },
     "boss_ids": [2321402, 2321401, 2321403]
   },
   {
     "dungeon_id": "00010",
     "name": {
-      "zh-CN": "墮落守護者之城",
-      "zh-TW": "墮落守護者之城",
-      "en": "Fallen Guardian's City",
-      "ko": "Fallen Guardian's City"
+      "en": "Fallen Guardian's City"
     },
     "difficulty": {
-      "zh-CN": "困难",
-      "zh-TW": "困难",
-      "en": "Hard",
-      "ko": "Hard"
+      "en": "Hard"
     },
     "boss_ids": [2301721, 2301722, 2301723]
   },
   {
     "dungeon_id": "00020",
     "name": {
-      "zh-CN": "被叠食的德烏斯研究基地",
-      "zh-TW": "被叠食的德烏斯研究基地",
-      "en": "Devourer's Research Base",
-      "ko": "Devourer's Research Base"
+      "en": "Devourer's Research Base"
     },
     "difficulty": {
-      "zh-CN": "困难",
-      "zh-TW": "困难",
-      "en": "Hard",
-      "ko": "Hard"
+      "en": "Hard"
     },
     "boss_ids": [2300555, 2300556, 2300481]
   },
   {
     "dungeon_id": "10014",
     "name": {
-      "zh-CN": "绯红羁绊之镜",
-      "zh-TW": "緋紅羈絆之鏡",
-      "en": "绯红羁绊之镜",
-      "ko": "绯红羁绊之镜"
+      "en": ""
     },
     "difficulty": {
-      "zh-CN": "4阶段",
-      "zh-TW": "4階段",
-      "en": "Phase 4",
-      "ko": "Phase 4"
+      "en": "Phase 4"
     },
     "boss_ids": [2300353, 2300354, 2300355]
   },
   {
     "dungeon_id": "10024",
     "name": {
-      "zh-CN": "深淵角巖窟",
-      "zh-TW": "深淵角巖窟",
-      "en": "Abyssal Rock Grotto",
-      "ko": "Abyssal Rock Grotto"
+      "en": "Abyssal Rock Grotto"
     },
     "difficulty": {
-      "zh-CN": "4阶段",
-      "zh-TW": "4階段",
-      "en": "Phase 4",
-      "ko": "Phase 4"
+      "en": "Phase 4"
     },
     "boss_ids": [2300544, 2300545, 2300546]
   },
   {
     "dungeon_id": "10034",
     "name": {
-      "zh-CN": "诺伊阑隐藏的遗产",
-      "zh-TW": "诺伊阑隐藏的遗产",
-      "en": "Hidden Legacy of Noi Lan",
-      "ko": "Hidden Legacy of Noi Lan"
+      "en": "Hidden Legacy of Noi Lan"
     },
     "difficulty": {
-      "zh-CN": "4阶段",
-      "zh-TW": "4階段",
-      "en": "Phase 4",
-      "ko": "Phase 4"
+      "en": "Phase 4"
     },
     "boss_ids": [2300446, 2300447, 2300445]
   },
   {
     "dungeon_id": "20001",
     "name": {
-      "zh-CN": "深淵重鑄·盧德萊",
-      "zh-TW": "深淵重鑄·盧德萊",
-      "en": "Reforged Abyss ",
-      "ko": "Reforged Abyss"
+      "en": "Reforged Abyss"
     },
     "difficulty": {
-      "zh-CN": "赛季1",
-      "zh-TW": "赛季1",
-      "en": "赛季1",
-      "ko": "赛季1"
+      "en": "Season 1"
     },
     "boss_ids": [2301006, 2301007, 2301014]
   },
   {
     "dungeon_id": "20002",
     "name": {
-      "zh-CN": "侵蚀·净化所",
-      "zh-TW": "侵蚀·净化所",
-      "en": "侵蚀·净化所",
-      "ko": "侵蚀·净化所"
+      "en": ""
     },
     "difficulty": {
-      "zh-CN": "赛季2",
-      "zh-TW": "赛季2",
-      "en": "赛季2",
-      "ko": "赛季2"
+      "en": "Season 2"
     },
     "boss_ids": [2301209, 2301207, 2301208]
   },
   {
     "dungeon_id": "20003",
     "name": {
-      "zh-CN": "穆斯费尔圣杯（困难）",
-      "zh-TW": "穆斯费尔圣杯（困难）",
-      "en": "穆斯费尔圣杯",
-      "ko": "穆斯费尔圣杯"
+      "en": ""
     },
     "difficulty": {
-      "zh-CN": "赛季3",
-      "zh-TW": "赛季3",
-      "en": "赛季3",
-      "ko": "赛季3"
+      "en": "Season 3"
     },
     "boss_ids": [2301059, 2301060]
   },
   {
     "dungeon_id": "20004",
     "name": {
-      "zh-CN": "穆斯费尔圣杯 （普通）",
-      "zh-TW": "穆斯费尔圣杯（普通）",
-      "en": "穆斯费尔圣杯",
-      "ko": "穆斯费尔圣杯"
+      "en": ""
     },
     "difficulty": {
-      "zh-CN": "赛季3",
-      "zh-TW": "赛季3",
-      "en": "赛季3",
-      "ko": "赛季3"
+      "en": "Season 3"
     },
     "boss_ids": [2301089, 2301090]
   }

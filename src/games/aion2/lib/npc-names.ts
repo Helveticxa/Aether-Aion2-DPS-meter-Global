@@ -1,13 +1,7 @@
-import npcNamesData from "@/games/aion2/data/npc_names_zh.json";
+// The same English catalogue the backend names targets from, so History and
+// the live overlay always agree on what a mob is called.
+import npcNamesData from "../../../../src-tauri/data/npc_names_en.json";
 import dungeonsData from "@/games/aion2/data/dungeons.json";
-
-type NpcNameEntry = {
-  name?: string;
-  level?: number;
-  npcType?: string;
-  npcSubType?: string;
-  mainCategory?: string;
-};
 
 type LocalizedText = Record<string, string | undefined>;
 
@@ -18,7 +12,7 @@ type DungeonEntry = {
   boss_ids: number[];
 };
 
-const npcNames = npcNamesData as Record<string, NpcNameEntry>;
+const npcNames = npcNamesData as Record<string, string>;
 const dungeons = dungeonsData as DungeonEntry[];
 const dungeonByMobCode = new Map<string, DungeonEntry>();
 
@@ -29,15 +23,11 @@ for (const dungeon of dungeons) {
 }
 
 export function getNpcName(npcId: number | string): string | undefined {
-  return npcNames[String(npcId)]?.name;
+  return npcNames[String(npcId)];
 }
 
 export function getNpcDisplayName(npcId: number | string): string {
   return getNpcName(npcId) ?? `Boss ${String(npcId)}`;
-}
-
-export function getNpcById(npcId: number | string): NpcNameEntry | undefined {
-  return npcNames[String(npcId)];
 }
 
 export function getDungeonByMobCode(mobCode: number | string): DungeonEntry | undefined {

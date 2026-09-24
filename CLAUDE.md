@@ -14,7 +14,7 @@ PowerShell 5.1 on the development machine has no `&&` — chain with `;`.
 ```
 pnpm install
 pnpm build                        # tsc + vite, ~6s
-cd src-tauri; cargo test --lib    # 98 tests
+cd src-tauri; cargo test --lib    # 101 tests
 pnpm tauri:dev                    # must be an ELEVATED terminal
 pnpm tauri:build                  # NSIS installer + updater bundle
 ```
@@ -79,6 +79,10 @@ runner cannot launch an executable that demands elevation.
   waits on the main thread. Post window work with `run_on_main_thread`, as
   `aion2_focus::set_dps_idle_hidden_for_app` does. See FORK.md, *The meter
   between fights*.
+- **English only.** Bundled data carries no Chinese: `npc_names_en.json` is
+  built by `scripts/build-npc-names.mjs` from Kuroukihime's GPL data, and a
+  test fails if a Han character appears in it. Regenerate rather than edit by
+  hand when names change.
 - **Overlays carry their own defaults.** They are separate HTML+JS entry points
   with their own config fallbacks and their own tiny i18n module. Changing an
   app-level default does not reach them.

@@ -67,7 +67,12 @@ interface OverlaySettings {
   contentScale: number;
   detailWindowMode: "follow" | "center";
   autoResizeHeight: boolean;
-  damageFormat: "万/亿" | "K/M/B";
+  /** "full" card, or a one-line "compact" capsule that opens on hover. */
+  layout: "full" | "compact";
+  /** A summary card after each boss fight. */
+  showFightSummary: boolean;
+  /** Pace against your personal best during a boss fight. */
+  showPersonalBest: boolean;
 }
 
 interface Aion2Settings {
@@ -138,7 +143,9 @@ const DEFAULTS: AppConfig = {
       contentScale: 1,
       detailWindowMode: "follow",
       autoResizeHeight: true,
-      damageFormat: "K/M/B",
+      layout: "full",
+      showFightSummary: true,
+      showPersonalBest: true,
     },
     autoHideEnabled: true,
     autoCloseMain: true,
@@ -269,6 +276,9 @@ function loadConfig(): AppConfig {
         // Bar colours: the overlay draws every row in its class colour.
         delete parsed.aion2.overlay?.mainPlayerColor;
         delete parsed.aion2.overlay?.otherPlayerColor;
+        // Damage is always K/M/B: the Chinese wan/yi units went with the
+        // Chinese data.
+        delete parsed.aion2.overlay?.damageFormat;
       }
       // Deep merge with defaults to fill missing keys from newer versions
       const merged = deepMerge(DEFAULTS, parsed);

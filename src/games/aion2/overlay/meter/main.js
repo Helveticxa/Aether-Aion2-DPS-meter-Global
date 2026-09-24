@@ -8,8 +8,26 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
 import { listen, emit } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { t, setLanguage } from "../../i18n.js";
+import { t, setLanguage, getLanguage } from "../../i18n.js";
 import serversData from "../../data/servers.json";
+import dungeonsData from "../../data/dungeons.json";
+import { loadSkillNames, skillName } from "../../lib/skill-names.js";
+
+// Which dungeon a boss belongs to, for the fight summary.
+const _dungeonByMob = new Map();
+for (const dungeon of dungeonsData) {
+  for (const bossId of dungeon.boss_ids || []) {
+    _dungeonByMob.set(Number(bossId), dungeon);
+  }
+}
+function getDungeonName(mobCode) {
+  const dungeon = _dungeonByMob.get(Number(mobCode));
+  if (!dungeon) return "";
+  const name = dungeon.name?.en || "";
+  const difficulty = dungeon.difficulty?.en || "";
+  if (!name) return "";
+  return difficulty ? `${name} · ${difficulty}` : name;
+}
 
 // Server name lookup
 const _serverMap = new Map(serversData.map((s) => [s.serverId, s.serverShortName]));
@@ -33,6 +51,10 @@ const $partyDps = document.getElementById("party-dps");
 const $pinBtn = document.getElementById("pin-btn");
 const $bossRow = document.getElementById("boss-row");
 const $bossRowBar = document.getElementById("boss-row-bar");
+const $headYou = document.getElementById("head-you");
+const $pbChip = document.getElementById("pb-chip");
+const $summary = document.getElementById("summary");
+const $compactBtn = document.getElementById("compact-btn");
 
 const DEFAULT_TITLE = "Aether";
 
@@ -54,8 +76,10 @@ const DEFAULT_OVERLAY_CONFIG = {
   contentScale: 1,
   detailWindowMode: "follow",
   autoResizeHeight: true,
-  damageFormat: "K/M/B",
   fontFamily: "Segoe UI Variable",
+  layout: "full",
+  showFightSummary: true,
+  showPersonalBest: true,
 };
 
 let mainActorName = null;
@@ -153,20 +177,72 @@ async function enablePvpMode() {
   }
 }
 
-async function setAlwaysOnTop(enabled) {
+// A setting changed from the overlay itself: applied here, saved where the
+// main window reads it, and relayed to every other window.
+async function patchOverlayConfig(patch) {
   const nextConfig = {
     ...DEFAULT_OVERLAY_CONFIG,
     ...(overlayConfig || {}),
-    alwaysOnTop: enabled,
+    ...patch,
   };
   applyOverlayConfig(nextConfig);
   persistOverlayConfigToLocalStorage(nextConfig);
   try {
     await invoke("set_overlay_config", { value: nextConfig });
   } catch (err) {
-    console.error("[dps-overlay] set always-on-top failed:", err);
+    console.error("[dps-overlay] set overlay config failed:", err);
   }
 }
+
+function setAlwaysOnTop(enabled) {
+  return patchOverlayConfig({ alwaysOnTop: enabled });
+}
+
+// =============================================================================
+// Capsule mode
+// =============================================================================
+// One line while you play; the whole card while the pointer is on it or a
+// fight summary is up. The collapse waits a moment, so crossing the edge of
+// the card does not make the window jump.
+const COLLAPSE_DELAY_MS = 350;
+let collapseTimer = 0;
+let pointerInside = false;
+
+function isCompact() {
+  return overlayConfig?.layout === "compact";
+}
+
+function syncExpanded() {
+  const expanded = isCompact() && (pointerInside || summaryVisible());
+  if (document.body.classList.contains("is-expanded") === expanded) return;
+  document.body.classList.toggle("is-expanded", expanded);
+  scheduleAutoHeightReconcile();
+}
+
+$card.addEventListener("mouseenter", () => {
+  clearTimeout(collapseTimer);
+  pointerInside = true;
+  syncExpanded();
+});
+
+$card.addEventListener("mouseleave", () => {
+  clearTimeout(collapseTimer);
+  collapseTimer = setTimeout(() => {
+    pointerInside = false;
+    syncExpanded();
+  }, COLLAPSE_DELAY_MS);
+});
+
+function updateCompactButton() {
+  const on = isCompact();
+  $compactBtn.classList.toggle("is-active", on);
+  $compactBtn.setAttribute("aria-pressed", on ? "true" : "false");
+  $compactBtn.title = on ? "Full view" : "Capsule mode";
+}
+
+$compactBtn.addEventListener("click", () => {
+  void patchOverlayConfig({ layout: isCompact() ? "full" : "compact" });
+});
 
 function applyOverlayConfig(cfg) {
   overlayConfig = { ...DEFAULT_OVERLAY_CONFIG, ...(cfg || {}) };
@@ -179,6 +255,12 @@ function applyOverlayConfig(cfg) {
   );
   const autoResize = overlayConfig.autoResizeHeight !== false;
   document.body.classList.toggle("fixed-height", !autoResize);
+  document.body.classList.toggle("is-compact", isCompact());
+  updateCompactButton();
+  syncExpanded();
+  if (overlayConfig.showFightSummary === false) {
+    hideSummary();
+  }
   updatePinButton();
   applyLockedState(overlayConfig.locked === true);
   syncLockedToBackend(overlayConfig.locked === true);
@@ -187,6 +269,7 @@ function applyOverlayConfig(cfg) {
   if (lastSnapshot) {
     updateOverview(lastSnapshot);
     updatePlayerList(lastSnapshot);
+    updatePace(lastSnapshot);
   }
   scheduleAutoHeightReconcile();
 }
@@ -430,18 +513,10 @@ async function runDiagnostic() {
 // =============================================================================
 function fmtDamage(n) {
   if (n == null || n === 0) return "--";
-  if (overlayConfig?.damageFormat === "万/亿") return fmtDamageZh(n);
-  // K/M/B
   if (n < 10_000) return String(n);
   if (n < 1_000_000) return (n / 1_000).toFixed(1) + "K";
   if (n < 1_000_000_000) return (n / 1_000_000).toFixed(2) + "M";
   return (n / 1_000_000_000).toFixed(2) + "B";
-}
-
-function fmtDamageZh(n) {
-  if (n < 10_000) return String(n);
-  if (n < 100_000_000) return (n / 10_000).toFixed(1) + "w";
-  return (n / 100_000_000).toFixed(2) + "e";
 }
 
 function fmtDps(n) {
@@ -1011,6 +1086,378 @@ function updatePlayerList(snap) {
 }
 
 // =============================================================================
+// You: your row, your place, your pace
+// =============================================================================
+function findYou(snap) {
+  const players = snap?.lastTargetAllPlayersOverviewStats || [];
+  const mainName = snap?.combatInfos?.mainActorName ?? null;
+  const sorted = [...players].sort((a, b) => b.totalDamage - a.totalDamage);
+  const index = mainName ? sorted.findIndex((p) => p.actorName === mainName) : -1;
+  return { sorted, you: index >= 0 ? sorted[index] : null, rank: index + 1, mainName };
+}
+
+// Capsule line: your DPS, then your place and the fight time. Before the game
+// has said who you are, the top of the list stands in.
+function updateYouLine(snap) {
+  const { sorted, you, rank } = findYou(snap);
+  const lead = you ?? sorted[0];
+  $headYou.textContent = "";
+  if (!lead) return;
+
+  $headYou.append(`${fmtDps(lead.dps)}/s`);
+  const small = document.createElement("small");
+  const place = you ? `#${rank}/${sorted.length}` : `top of ${sorted.length}`;
+  const time = fmtDuration(getTeamBattleDuration(getLastTargetInfo(snap)));
+  small.textContent = time ? `${place} · ${time}` : place;
+  $headYou.append(small);
+}
+
+// Personal bests come from the backend once per boss and character, and are
+// dropped when a fight improves one.
+const PACE_MIN_FIGHT_SECS = 10;
+const pbCache = new Map(); // "character|mobCode" -> best | null | Promise
+
+function ensurePersonalBest(character, mobCode) {
+  const key = `${character}|${mobCode}`;
+  if (!pbCache.has(key)) {
+    const pending = invoke("get_personal_best", { character, mobCode })
+      .then((best) => {
+        pbCache.set(key, best ?? null);
+        if (lastSnapshot) updatePace(lastSnapshot);
+        return best ?? null;
+      })
+      .catch((error) => {
+        console.error("[dps-overlay] get_personal_best failed:", error);
+        pbCache.set(key, null);
+        return null;
+      });
+    pbCache.set(key, pending);
+  }
+  return pbCache.get(key);
+}
+
+function knownPersonalBest(character, mobCode) {
+  const value = pbCache.get(`${character}|${mobCode}`);
+  return value && typeof value.then !== "function" ? value : null;
+}
+
+function paceAgainst(best, dps) {
+  if (!best || !(best.dps > 0) || !(dps > 0)) return null;
+  return (dps - best.dps) / best.dps;
+}
+
+function fmtPace(pace) {
+  const pct = Math.abs(pace * 100);
+  const text = pct >= 10 ? pct.toFixed(0) : pct.toFixed(1);
+  return `${pace >= 0 ? "▲" : "▼"} ${text}%`;
+}
+
+// Footer chip during a boss fight: how you are doing against your best on it.
+function updatePace(snap) {
+  const target = getLastTargetInfo(snap);
+  const { you, mainName } = findYou(snap);
+  let text = "";
+  let tone = "";
+
+  if (
+    overlayConfig?.showPersonalBest !== false &&
+    target?.isBoss &&
+    target.targetMobCode != null &&
+    you &&
+    getTeamBattleDuration(target) >= PACE_MIN_FIGHT_SECS
+  ) {
+    void ensurePersonalBest(mainName, target.targetMobCode);
+    const pace = paceAgainst(knownPersonalBest(mainName, target.targetMobCode), you.dps);
+    if (pace != null) {
+      text = `${fmtPace(pace)} vs PB`;
+      tone = pace >= 0 ? "is-ahead" : "is-behind";
+    }
+  }
+
+  if ($pbChip.textContent !== text) $pbChip.textContent = text;
+  $pbChip.className = "foot__pb" + (tone ? " " + tone : "");
+}
+
+listen("personal-bests-updated", () => {
+  pbCache.clear();
+  if (lastSnapshot) updatePace(lastSnapshot);
+});
+
+// =============================================================================
+// Fight summary
+// =============================================================================
+// After a boss: how it went, where you placed, what did the damage, and how
+// that stands against your best. It appears when the boss dies, or when a boss
+// fight has been quiet for a while (a wipe, or a kill the game did not report
+// as zero health), and stays until closed, the next boss, or a minute.
+const SUMMARY_QUIET_MS = 15_000;
+const SUMMARY_MIN_FIGHT_SECS = 15;
+const SUMMARY_SHOW_MS = 60_000;
+const SUMMARY_MEMORY = 50;
+// A kill is final; a quiet spell is provisional -- the boss may only be
+// between phases -- so a kill that follows still gets its own summary.
+const defeatedTargets = [];
+const quietTargets = [];
+let summary = null; // { targetId, duration, defeated, hideTimer }
+let quietTimer = 0;
+
+function remember(list, id) {
+  list.push(id);
+  if (list.length > SUMMARY_MEMORY) list.shift();
+}
+
+function forget(list, id) {
+  const index = list.indexOf(id);
+  if (index >= 0) list.splice(index, 1);
+}
+
+function summaryVisible() {
+  return summary != null;
+}
+
+function hideSummary() {
+  if (!summary) return;
+  clearTimeout(summary.hideTimer);
+  summary = null;
+  $summary.hidden = true;
+  $summary.textContent = "";
+  document.body.classList.remove("has-summary");
+  syncExpanded();
+  scheduleAutoHeightReconcile();
+}
+
+function trackFight(snap) {
+  const target = getLastTargetInfo(snap);
+  if (!target) {
+    clearTimeout(quietTimer);
+    hideSummary();
+    return;
+  }
+
+  // A boss fight that picks up again, or the next boss, takes the summary down.
+  if (summary) {
+    const same = target.id === summary.targetId;
+    const resumed =
+      same &&
+      Number(target.currentHp) > 0 &&
+      getTeamBattleDuration(target) > summary.duration + 1;
+    if (resumed) {
+      // Only a pause: this fight can end, and be summarised, again.
+      forget(quietTargets, target.id);
+      hideSummary();
+    } else if (!same && target.isBoss) {
+      hideSummary();
+    }
+  }
+
+  if (overlayConfig?.showFightSummary === false || !target.isBoss) {
+    clearTimeout(quietTimer);
+    return;
+  }
+
+  const maxHp = Number(target.maxHp);
+  const killed = target.currentHp != null && maxHp > 0 && Number(target.currentHp) <= 0;
+  clearTimeout(quietTimer);
+  if (killed) {
+    maybeShowSummary(snap, target, true);
+    return;
+  }
+  quietTimer = setTimeout(() => maybeShowSummary(snap, target, false), SUMMARY_QUIET_MS);
+}
+
+function maybeShowSummary(snap, target, defeated) {
+  if (defeatedTargets.includes(target.id)) return;
+  if (!defeated && quietTargets.includes(target.id)) return;
+  if (getTeamBattleDuration(target) < SUMMARY_MIN_FIGHT_SECS) return;
+
+  if (defeated) {
+    remember(defeatedTargets, target.id);
+    // A provisional summary of this same fight gives way to the real one.
+    if (summary?.targetId === target.id) hideSummary();
+  } else {
+    remember(quietTargets, target.id);
+  }
+  void showSummary(snap, target, defeated).catch((error) => {
+    console.error("[dps-overlay] fight summary failed:", error);
+  });
+}
+
+// Your skills on this target, biggest first.
+function topSkills(snap, target, actorId, count) {
+  const byActor =
+    snap.byTargetPlayerSkillStats?.[target.id] ?? snap.byTargetPlayerSkillStats?.[String(target.id)];
+  const skills = byActor?.[actorId] ?? byActor?.[String(actorId)] ?? {};
+  const entries = Object.entries(skills);
+  const total = entries.reduce((sum, [, s]) => sum + (Number(s.totalDamage) || 0), 0);
+  const hits = entries.reduce((sum, [, s]) => sum + (Number(s.counts) || 0), 0);
+  const crits = entries.reduce((sum, [, s]) => sum + (Number(s.specialCounts?.CRITICAL) || 0), 0);
+  const top = entries
+    .map(([code, s]) => ({ code, damage: Number(s.totalDamage) || 0 }))
+    .sort((a, b) => b.damage - a.damage)
+    .slice(0, count)
+    .map((skill) => ({ ...skill, share: total > 0 ? skill.damage / total : 0 }));
+  return { top, critRate: hits > 0 ? crits / hits : null };
+}
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+async function showSummary(snap, target, defeated) {
+  const { sorted, you, rank, mainName } = findYou(snap);
+  if (sorted.length === 0) return;
+  const lead = you ?? sorted[0];
+  const duration = getTeamBattleDuration(target);
+  const partyDps = sorted.reduce((sum, p) => sum + (Number(p.dps) || 0), 0);
+  const [names, best] = await Promise.all([
+    loadSkillNames(getLanguage()),
+    you && target.targetMobCode != null
+      ? ensurePersonalBest(mainName, target.targetMobCode)
+      : Promise.resolve(null),
+  ]);
+  const skills = topSkills(snap, target, lead.actorId, 3);
+  const pace = paceAgainst(best, lead.dps);
+  const name = target.targetName || `Boss ${target.targetMobCode ?? target.id}`;
+  const where = getDungeonName(target.targetMobCode);
+
+  // While the names loaded, another summary may have gone up, or the next
+  // boss fight may have started: either one wins.
+  const current = getLastTargetInfo(lastSnapshot ?? snap);
+  if (summary || (current && current.id !== target.id && current.isBoss)) return;
+
+  $summary.textContent = "";
+
+  const top = el("div", "summary__top");
+  top.append(
+    el(
+      "span",
+      "summary__outcome" + (defeated ? "" : " is-ended"),
+      `${defeated ? "Defeated" : "Fight ended"} · ${fmtDuration(duration)}`
+    )
+  );
+  const close = el("button", "summary__close", "×");
+  close.title = "Back to the meter";
+  close.addEventListener("click", hideSummary);
+  top.append(close);
+  $summary.append(top);
+
+  const title = el("div", "summary__target", maskName(name));
+  title.title = name;
+  if (where) {
+    title.append(" ", el("span", "summary__where", where));
+  }
+  $summary.append(title);
+
+  const hero = el("div", "summary__hero");
+  const dps = el("span", "summary__dps", fmtDps(lead.dps));
+  dps.append(el("small", null, "/s"));
+  hero.append(dps);
+  hero.append(
+    el(
+      "span",
+      "summary__rank",
+      you ? `#${rank} of ${sorted.length}` : `${maskName(lead.actorName || "Top")} · top`
+    )
+  );
+  let pbText = "";
+  if (you && overlayConfig?.showPersonalBest !== false) {
+    if (best == null) {
+      pbText = "First record";
+    } else if (pace > 0) {
+      pbText = `New PB ${fmtPace(pace)}`;
+    } else {
+      pbText = `PB ${fmtCompact(best.dps)}/s ${fmtPace(pace)}`;
+    }
+    const tone = best == null || pace > 0 ? "is-new" : pace >= -0.05 ? "is-ahead" : "is-behind";
+    hero.append(el("span", `summary__pb ${tone}`, pbText));
+  }
+  $summary.append(hero);
+
+  const stats = el("div", "summary__stats");
+  const stat = (label, value) => {
+    const span = el("span", null, `${label} `);
+    span.append(el("b", null, value));
+    stats.append(span);
+  };
+  stat("Share", fmtShare(lead.damageContribution ?? lead.damageShare));
+  stat("Damage", fmtDamage(lead.totalDamage));
+  if (skills.critRate != null) stat("Crit", `${(skills.critRate * 100).toFixed(0)}%`);
+  if (sorted.length > 1) stat("Party", `${fmtCompact(partyDps)}/s`);
+  $summary.append(stats);
+
+  const skillNames = skills.top.map((skill) => skillName(names, skill.code));
+  if (skills.top.length > 0) {
+    const list = el("div", "summary__skills");
+    const rgb = getClassColor(lead.actorClass);
+    skills.top.forEach((skill, index) => {
+      const row = el("div", "summary__skill");
+      if (rgb) row.style.setProperty("--row-rgb", rgb);
+      row.style.setProperty("--bar-scale", skill.share);
+      row.append(el("span", null, skillNames[index]));
+      row.append(el("span", null, `${(skill.share * 100).toFixed(0)}%`));
+      list.append(row);
+    });
+    $summary.append(list);
+  }
+
+  const actions = el("div", "summary__actions");
+  const copy = el("button", "text-btn", "Copy");
+  copy.title = "Copy for party chat or Discord";
+  copy.addEventListener("click", () => {
+    const lines = [
+      `${name}${where ? ` (${where})` : ""} · ${defeated ? "defeated" : "fight ended"} in ${fmtDuration(duration)}`,
+      [
+        `${lead.actorName || "?"} ${fmtDps(lead.dps)}/s`,
+        you ? `#${rank} of ${sorted.length}` : null,
+        fmtShare(lead.damageContribution ?? lead.damageShare),
+        skills.critRate != null ? `crit ${(skills.critRate * 100).toFixed(0)}%` : null,
+        pbText || null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    ];
+    if (skillNames.length > 0) {
+      lines.push(
+        "Top: " +
+          skills.top
+            .map((skill, index) => `${skillNames[index]} ${(skill.share * 100).toFixed(0)}%`)
+            .join(", ")
+      );
+    }
+    if (sorted.length > 1) {
+      lines.push(
+        "Party: " +
+          sorted
+            .map((p, index) => `${index + 1}. ${p.actorName || "ID:" + p.actorId} ${fmtDps(p.dps)}`)
+            .join(" · ")
+      );
+    }
+    lines.push("— Aether DPS meter");
+    void runAction("Copy summary", async () => {
+      await copyText(lines.join("\n"));
+      copy.textContent = "Copied";
+      setTimeout(() => (copy.textContent = "Copy"), 1500);
+    });
+  });
+  actions.append(copy);
+  $summary.append(actions);
+
+  summary = {
+    targetId: target.id,
+    duration,
+    defeated,
+    hideTimer: setTimeout(hideSummary, SUMMARY_SHOW_MS),
+  };
+  $summary.hidden = false;
+  document.body.classList.add("has-summary");
+  syncExpanded();
+  scheduleAutoHeightReconcile();
+}
+
+// =============================================================================
 // Init
 // =============================================================================
 // GB once the number stops being readable in MB -- a PC sitting at 14 GB
@@ -1112,6 +1559,9 @@ function formatMemory(mb) {
       lastSnapshot = snap;
       updateOverview(snap);
       updatePlayerList(snap);
+      updateYouLine(snap);
+      updatePace(snap);
+      trackFight(snap);
     });
   } catch (err) {
     console.error("[dps-overlay] listen failed:", err);

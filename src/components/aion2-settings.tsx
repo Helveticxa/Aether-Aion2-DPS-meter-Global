@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { ChevronDown, ScrollText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -94,6 +95,110 @@ function RangeControl({
   );
 }
 
+/** Mirrors `PersonalBest` in src-tauri/src/dps_meter/personal_best.rs. */
+interface PersonalBest {
+  character: string;
+  mobCode: number;
+  targetName: string | null;
+  dps: number;
+  totalDamage: number;
+  durationSecs: number;
+  achievedAt: number;
+}
+
+function fmtCompactDps(value: number) {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 10_000) return `${(value / 1_000).toFixed(1)}K`;
+  return Math.round(value).toLocaleString("en-US");
+}
+
+/**
+ * Your best DPS against each boss, newest first. Kept apart from History, so
+ * deleting history leaves them; resetting takes a second click.
+ */
+function PersonalBestsRow() {
+  const [bests, setBests] = useState<PersonalBest[]>([]);
+  const [confirming, setConfirming] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      invoke<PersonalBest[]>("list_personal_bests")
+        .then((list) => alive && setBests(list))
+        .catch((error) => console.error("[settings] list_personal_bests failed:", error));
+    void load();
+    const unlisten = listen("personal-bests-updated", () => void load());
+    return () => {
+      alive = false;
+      void unlisten.then((dispose) => dispose());
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!confirming) return;
+    const timer = window.setTimeout(() => setConfirming(false), 3000);
+    return () => window.clearTimeout(timer);
+  }, [confirming]);
+
+  const reset = async () => {
+    if (!confirming) {
+      setConfirming(true);
+      return;
+    }
+    setConfirming(false);
+    try {
+      await invoke("reset_personal_bests");
+      setBests([]);
+    } catch (error) {
+      console.error("[settings] reset_personal_bests failed:", error);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3 px-5 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-[13rem] flex-1">
+          <div className="text-sm font-medium">Personal bests</div>
+          <div className="text-muted-foreground mt-1 text-xs leading-5">
+            {bests.length === 0
+              ? "None yet. Fights of 15 seconds or more against a boss count, per character."
+              : `${bests.length} boss${bests.length === 1 ? "" : "es"} recorded, per character. Kept when History is deleted.`}
+          </div>
+        </div>
+        {bests.length > 0 ? (
+          <Button variant={confirming ? "destructive" : "outline"} size="sm" onClick={reset}>
+            {confirming ? "Click again to reset" : "Reset"}
+          </Button>
+        ) : null}
+      </div>
+
+      {bests.length > 0 ? (
+        <div className="flex flex-col divide-y rounded-xl border text-xs">
+          {bests.slice(0, 6).map((best) => (
+            <div
+              key={`${best.character}|${best.mobCode}`}
+              className="flex items-center justify-between gap-3 px-3 py-2"
+            >
+              <span className="min-w-0 truncate">
+                <span className="font-medium">
+                  {best.targetName ?? `Boss ${best.mobCode}`}
+                </span>
+                <span className="text-muted-foreground"> · {best.character}</span>
+              </span>
+              <span className="text-muted-foreground shrink-0 tabular-nums">
+                <span className="text-foreground font-semibold">
+                  {fmtCompactDps(best.dps)}/s
+                </span>{" "}
+                · {new Date(best.achievedAt).toLocaleDateString("en-GB")}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function Aion2Settings() {
   const { config, updateSettings } = useSettings();
   const { t } = useAppTranslation();
@@ -162,6 +267,30 @@ export function Aion2Settings() {
                 onCheckedChange={(v) => updateSettings("aion2.autoHideEnabled", v)}
               />
             </SettingRow>
+          </SettingsGroup>
+
+          <SettingsGroup title="Boss fights">
+            <SettingRow
+              title="Fight summary"
+              description="When a boss dies, the overlay shows how it went: your DPS and place, your top skills, crits, and your personal best. One click copies it for party chat or Discord."
+            >
+              <Switch
+                checked={overlay.showFightSummary}
+                onCheckedChange={(v) => updateSettings("aion2.overlay.showFightSummary", v)}
+              />
+            </SettingRow>
+
+            <SettingRow
+              title="Pace against your personal best"
+              description="During a boss you have beaten before, the overlay shows how your DPS compares with your best on it."
+            >
+              <Switch
+                checked={overlay.showPersonalBest}
+                onCheckedChange={(v) => updateSettings("aion2.overlay.showPersonalBest", v)}
+              />
+            </SettingRow>
+
+            <PersonalBestsRow />
           </SettingsGroup>
 
           <SettingsGroup title="What is counted">
@@ -327,16 +456,16 @@ export function Aion2Settings() {
             </SettingRow>
 
             <SettingRow
-              title={t("settings.aion2.overlayDamageFormat")}
-              description={t("settings.aion2.overlayDamageFormatDesc")}
+              title="Layout"
+              description="Full shows every player. Capsule keeps one line -- your DPS, your place, the fight time -- and opens fully while the pointer is on it."
             >
               <Choice
-                value={overlay.damageFormat}
+                value={overlay.layout}
                 options={[
-                  { value: "K/M/B", label: "K/M/B" },
-                  { value: "万/亿", label: "w/e" },
+                  { value: "full", label: "Full" },
+                  { value: "compact", label: "Capsule" },
                 ]}
-                onChange={(v) => updateSettings("aion2.overlay.damageFormat", v)}
+                onChange={(v) => updateSettings("aion2.overlay.layout", v)}
               />
             </SettingRow>
 

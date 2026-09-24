@@ -22,6 +22,7 @@ use crate::dps_meter::capture::windivert_capturer::{check_windivert_status, WinD
 use crate::dps_meter::config::{CaptureBackendPriority, DpsMeterConfig, SharedDpsMeterConfig};
 use crate::dps_meter::engine::calculator::DpsCalculator;
 use crate::dps_meter::history::HistoryStore;
+use crate::dps_meter::personal_best::{PersonalBest, PersonalBestStore};
 use crate::dps_meter::models::combat::{CombatSnapshot, PvpCombatStatsRow, PvpWatchInfoResponse};
 use crate::dps_meter::models::diagnostics::{DpsMeterState, MemorySnapshot};
 use crate::dps_meter::storage::data_storage::DataStorage;
@@ -95,6 +96,7 @@ pub struct DpsMeter {
     last_emitted_total_damage: Arc<Mutex<Option<u64>>>,
     last_snapshot: Arc<Mutex<Option<CombatSnapshot>>>,
     history: Arc<HistoryStore>,
+    personal_bests: Arc<PersonalBestStore>,
     /// Until when the overlay stays up regardless of the idle rule: after
     /// Start, after Reset, and from the show hotkey.
     peek_until: Arc<Mutex<Option<Instant>>>,
@@ -126,9 +128,11 @@ impl DpsMeter {
             Arc::clone(&config),
         );
         let history = Arc::new(HistoryStore::new());
+        let personal_bests = Arc::new(PersonalBestStore::new());
         if let Ok(dir) = app.path().app_data_dir() {
-            history.init_dir(dir);
+            history.init_dir(dir.clone());
             history.load_from_disk();
+            personal_bests.init(dir.join("history"), &history.get_records());
         }
 
         // Register main-actor callback: reset meter silently when player is identified.
@@ -173,6 +177,7 @@ impl DpsMeter {
             last_emitted_total_damage: Arc::new(Mutex::new(None)),
             last_snapshot: Arc::new(Mutex::new(None)),
             history,
+            personal_bests,
             peek_until: Arc::new(Mutex::new(None)),
             auto_record: Arc::new(Mutex::new(AutoRecordState::default())),
         }
@@ -315,6 +320,9 @@ impl DpsMeter {
         if self.auto_record.lock().unwrap().active_since.take().is_some() {
             let _ = self.recorder.stop();
         }
+        // A fight still on the meter is kept, not thrown away: stopping the
+        // meter or quitting right after a boss used to lose it.
+        self.save_fight_to_history();
         self.clear_runtime_state();
         crate::plugins::aion2_focus::set_dps_idle_hidden_for_app(&self.app, false);
         self.emit_running_status();
@@ -341,23 +349,43 @@ impl DpsMeter {
         }
     }
 
+    /// Save what the meter holds to history, and learn personal bests from it.
+    fn save_fight_to_history(&self) {
+        let Some(snapshot) = self.get_dps_snapshot(0) else {
+            return;
+        };
+        eprintln!(
+            "[dps_meter] save: total_damage={} targets={}",
+            snapshot.total_damage,
+            snapshot.by_target_player_stats.len()
+        );
+        if snapshot.total_damage == 0 {
+            return;
+        }
+        let saved = self.history.save_and_clear(snapshot);
+        let _ = self.app.emit("history-updated", ());
+        if self.personal_bests.record_and_save(&saved) {
+            let _ = self.app.emit("personal-bests-updated", ());
+        }
+    }
+
+    pub fn personal_best(&self, character: &str, mob_code: u32) -> Option<PersonalBest> {
+        self.personal_bests.get(character, mob_code)
+    }
+
+    pub fn personal_bests(&self) -> Vec<PersonalBest> {
+        self.personal_bests.all()
+    }
+
+    pub fn reset_personal_bests(&self) -> usize {
+        let count = self.personal_bests.clear();
+        let _ = self.app.emit("personal-bests-updated", ());
+        count
+    }
+
     pub fn reset_dps_meter(&self, emit_empty: bool) {
         // Capture before clearing
-        if let Some(snapshot) = self.get_dps_snapshot(0) {
-            let target_count = snapshot.by_target_player_stats.len();
-            eprintln!(
-                "[dps_meter] reset: total_damage={} targets={} records_will_save={}",
-                snapshot.total_damage,
-                target_count,
-                snapshot.total_damage > 0
-            );
-            if snapshot.total_damage > 0 {
-                self.history.save_and_clear(snapshot);
-                let _ = self.app.emit("history-updated", ());
-            }
-        } else {
-            eprintln!("[dps_meter] reset: no snapshot available");
-        }
+        self.save_fight_to_history();
         self.clear_runtime_state_nopacket();
         self.logger.info(format!(
             "dps meter runtime state reset (running={})",

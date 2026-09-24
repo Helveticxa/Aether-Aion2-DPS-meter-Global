@@ -83,16 +83,10 @@ impl StreamProcessor {
                     | ((packet[marker_idx - 1] as u32) << 16);
 
                 self.data_storage.append_mob(summon_id, mob_code);
-                if self
-                    .data_storage
-                    .boss_code_list_snapshot()
-                    .contains(&mob_code)
-                {
+                if self.data_storage.is_known_boss_code(mob_code) {
                     let boss_name = self
                         .data_storage
-                        .mob_code_name_snapshot()
-                        .get(&mob_code)
-                        .cloned()
+                        .mob_name(mob_code)
                         .unwrap_or_else(|| "Unknown Boss".to_string());
                     self.logger.info(format!(
                         "[{}] 4136 summon spawn target={} mob_code={} name={}",
@@ -350,12 +344,11 @@ impl StreamProcessor {
                 .copied()
             {
                 let mob_id_code_map = self.data_storage.mob_id_code_snapshot();
-                let mob_code_name_map = self.data_storage.mob_code_name_snapshot();
 
                 if let Some(mob_code) = mob_id_code_map.get(&target_id).copied() {
-                    let mob_name = mob_code_name_map
-                        .get(&mob_code)
-                        .cloned()
+                    let mob_name = self
+                        .data_storage
+                        .mob_name(mob_code)
                         .unwrap_or_else(|| "Unknown Boss".to_string());
                     self.logger.info(format!(
                         "[{}] first remain hp mob_id={} mob_code={} name={} current_hp={} max_hp={}",
@@ -433,7 +426,7 @@ impl StreamProcessor {
             .copied();
 
         mob_code
-            .map(|code| self.data_storage.boss_code_list_snapshot().contains(&code))
+            .map(|code| self.data_storage.is_known_boss_code(code))
             .unwrap_or(false)
     }
 

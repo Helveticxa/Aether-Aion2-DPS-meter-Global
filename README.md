@@ -36,6 +36,10 @@ buff uptime, and damage type.
   opacity and click-through
 - **Live chat** — YouTube and Twitch chat over the game, transparent and
   outlined, one pop-up per chat or merged into one
+- **Boss fights** — your pace against your personal best while you fight, and a
+  summary when the boss dies: DPS, place, crits, top skills, one-click copy
+- **Capsule mode** — the meter as one line that opens on hover
+- English names for about 8,000 monsters and bosses
 - Battle history with per-skill and per-player breakdowns, damage-type split,
   buff timelines, and cast ordering
 - Finds the game, your character, and the server on its own — nothing to set up
@@ -93,6 +97,10 @@ Recordings stay on your machine.
 
 The animated background is **Dune** by [R](https://vimeo.com/theraa), a motion
 design piece published on Vimeo.
+
+English monster and boss names, the Fighter's skill names, and the server codes
+come from **[Kuroukihime/AIon2-Dps-Meter](https://github.com/Kuroukihime/AIon2-Dps-Meter)**
+(GPL-3.0), merged by `scripts/build-npc-names.mjs`.
 
 Aether is a fork of **[NOIA2](https://github.com/ZDYoung0519/NOIA2)** by
 [zdyoung](https://github.com/ZDYoung0519), which does the heavy lifting: the Rust

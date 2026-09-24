@@ -9,6 +9,19 @@ lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
      and some players still update from there: so no hard wraps and no bold in
      2.0.0 and later. From 2.0.0 on the dialog renders Markdown. -->
 
+## [2.3.0]
+
+Boss fights get their own story: English names, your personal best, a summary when the boss dies, and a one-line capsule mode.
+
+- Monsters and bosses have English names now, about 8,000 of them. The Chinese catalogue is gone, along with every other piece of Chinese data in the app: dungeon names, the Taiwan server names (servers show a short English code now), and the Chinese number format. Damage is always K, M, B.
+- Personal bests: your best DPS against each boss, per character, learnt from every fight saved to History and from the History you already have. During a boss you have beaten before, the overlay shows your pace against it, like ▲ 12% vs PB.
+- Fight summary: when a boss dies, the overlay shows how it went. Your DPS and place, share, damage, crit rate, your three biggest skills, the dungeon, and whether it is a new personal best. Copy puts it on the clipboard for party chat or Discord. It stays for a minute, until you close it, or until the next boss.
+- Capsule mode: the meter shrinks to one line with your DPS, your place, and the fight time, and opens fully while your pointer is on it. Switch it from the overlay's buttons or in Settings, Aion 2, Overlay.
+- A fight still on the meter is saved to History when you stop the meter or quit, instead of being lost.
+- Settings, Aion 2, Meter has a Boss fights section: turn the summary and the pace on or off, and see or reset your personal bests. Deleting History keeps them.
+- The fighter's skills show their English names in the detail window.
+- Lighter: the app no longer loads skill names it does not show, and History opens faster.
+
 ## [2.2.0]
 
 Aether is now three things, done well: the DPS meter, Always on top, and live chat. Everything else is gone, and the meter looks and behaves like part of the game.

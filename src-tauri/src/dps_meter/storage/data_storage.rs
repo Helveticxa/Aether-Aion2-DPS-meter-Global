@@ -886,12 +886,11 @@ impl DataStorage {
         self.inner.read().unwrap().mob_id_hp_map.as_hash_map()
     }
 
-    pub fn mob_code_name_snapshot(&self) -> HashMap<u32, String> {
-        self.mob_code_name_map.clone()
-    }
-
-    pub fn boss_code_list_snapshot(&self) -> Vec<u32> {
-        self.boss_code_list.iter().copied().collect()
+    /// A mob's English name. A lookup rather than a copy of the catalogue:
+    /// the snapshot loop asks five times a second, and the catalogue holds
+    /// eight thousand names.
+    pub fn mob_name(&self, mob_code: u32) -> Option<String> {
+        self.mob_code_name_map.get(&mob_code).cloned()
     }
 
     pub fn start_time_by_target_snapshot(&self) -> HashMap<u32, HashMap<u32, f64>> {

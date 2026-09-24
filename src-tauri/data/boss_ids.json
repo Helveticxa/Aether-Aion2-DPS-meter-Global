@@ -1,5 +1,5 @@
 {
-  "description": "BOSS NPC ID whitelist - auto-generated from BOSS清單.md",
+  "description": "Boss NPC ids, inherited from NOIA2's boss list",
   "boss_ids": [
     2000895, 2090175, 2090222, 2090223, 2090224, 2090225, 2090226, 2090227, 2090228, 2090229,
     2090230, 2090231, 2090232, 2090232, 2090233, 2090233, 2090234, 2090234, 2090235, 2090235,

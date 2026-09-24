@@ -398,6 +398,42 @@ window work with `run_on_main_thread` instead.
 The overlay is built `focusable(false)`: the show shortcut can create it while
 you are in the game, and a new window takes the keyboard by default.
 
+## Boss fights (2.3.0)
+
+**English names.** `src-tauri/data/npc_names_en.json` (mob code -> name, about
+8,000) replaces upstream's Traditional Chinese catalogue, in the backend and in
+History alike. It is built by `scripts/build-npc-names.mjs` from
+Kuroukihime/AIon2-Dps-Meter's `mobs.json` (GPL-3.0), with NOIA2's partial
+English names as a fallback; placeholder names ("None") are dropped. A target
+the catalogue does not name is labelled `Boss <code>` or `Mob <code>`. The
+Fighter's skill names, the server codes, and the healing-skill labels come from
+the same project. The snapshot builder used to clone the whole name map five
+times a second; it now looks names up one at a time
+(`DataStorage::mob_name`).
+
+**Personal bests** (`dps_meter/personal_best.rs`, tested) keep your best DPS
+per character and boss in `history/personal_bests.json`, apart from the
+history so deleting it keeps them. They learn from every record the history
+saves, and are seeded from the history on disk on first run. A fight counts
+when the target is a boss and it lasted at least 15 seconds; shorter kills
+produce DPS figures no real fight reaches. The meter now saves the fight on
+`stop_dps_meter` too, which used to throw it away.
+
+**The overlay** asks for the best once per boss and character
+(`get_personal_best`), shows the pace in the footer after 10 seconds of a boss
+fight, and drops its cache on `personal-bests-updated`.
+
+**Fight summary**, in the overlay. A boss whose health reaches zero gets a final
+summary. A boss that goes quiet for 15 seconds gets a provisional one, which
+gives way if the fight resumes and is replaced if the boss then dies, so a
+phase transition cannot swallow the real summary. Skill names load on first
+use (`lib/skill-names.js`, a split chunk), not with the overlay.
+
+**Capsule mode** is `overlay.layout = "compact"`: one line with your DPS,
+place, and time, expanded while the pointer is on the card or a summary is
+up. The collapse waits 350 ms so crossing the card's edge does not make the
+window jump.
+
 ## Always on top
 
 A page of its own (`/aion2/on-top`) that keeps the player's **own** Chrome or

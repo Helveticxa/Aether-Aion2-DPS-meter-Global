@@ -15,17 +15,5 @@ export function useAppTranslation() {
     };
   }, [i18n]);
 
-  const tAion2Skill = (skillId: string | number) =>
-    i18n.t(String(skillId), {
-      ns: "aion2skills",
-      defaultValue: `#${skillId}`,
-    });
-
-  const tAion2Stats = (statType: string) =>
-    i18n.t(statType, {
-      ns: "aion2stats",
-      defaultValue: statType,
-    });
-
-  return { t, i18n, tAion2Skill, tAion2Stats, tSkill: tAion2Skill };
+  return { t, i18n };
 }

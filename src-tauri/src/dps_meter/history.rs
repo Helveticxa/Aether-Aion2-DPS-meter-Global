@@ -101,11 +101,13 @@ impl HistoryStore {
     }
 
     /// Persist current snapshot as per-target history records, then clear.
-    pub fn save_and_clear(&self, snapshot: CombatSnapshot) {
+    /// Returns what was saved, for the personal bests to learn from.
+    pub fn save_and_clear(&self, snapshot: CombatSnapshot) -> Vec<HistoryRecord> {
         let records = Self::extract_records(snapshot);
         if !records.is_empty() {
-            self.push(records);
+            self.push(records.clone());
         }
+        records
     }
 
     fn extract_records(snapshot: CombatSnapshot) -> Vec<HistoryRecord> {

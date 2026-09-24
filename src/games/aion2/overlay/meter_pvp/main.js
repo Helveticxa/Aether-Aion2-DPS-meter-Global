@@ -69,11 +69,6 @@ function hasConfigValue(cfg) {
 
 function fmtDamage(n) {
   if (n == null || n === 0) return "--";
-  if (overlayConfig.damageFormat === "万/亿") {
-    if (n < 10_000) return String(n);
-    if (n < 100_000_000) return (n / 10_000).toFixed(1) + "w";
-    return (n / 100_000_000).toFixed(2) + "e";
-  }
   if (n < 10_000) return String(n);
   if (n < 1_000_000) return (n / 1_000).toFixed(1) + "K";
   if (n < 1_000_000_000) return (n / 1_000_000).toFixed(2) + "M";

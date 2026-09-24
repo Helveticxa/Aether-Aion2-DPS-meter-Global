@@ -306,8 +306,6 @@ fn build_target_infos(
 ) -> HashMap<u32, TargetInfo> {
     let mob_id_code = data_storage.mob_id_code_snapshot();
     let mob_id_hp = data_storage.mob_id_hp_snapshot();
-    let code_name = data_storage.mob_code_name_snapshot();
-    let boss_codes = data_storage.boss_code_list_snapshot();
     let start_times = merge_time_map_min(
         &data_storage.start_time_by_target_snapshot(),
         summon_owner_map,
@@ -321,10 +319,16 @@ fn build_target_infos(
         .iter()
         .map(|tid| {
             let mob_code = mob_id_code.get(tid).copied();
-            let name = mob_code.and_then(|c| code_name.get(&c).cloned());
             let is_boss = mob_code
-                .map(|c| boss_codes.contains(&c) || data_storage.is_possible_boss(c))
+                .map(|c| data_storage.is_known_boss_code(c) || data_storage.is_possible_boss(c))
                 .unwrap_or(false);
+            // A mob the catalogue does not name is labelled by its code rather
+            // than left blank, so two unnamed targets stay distinguishable.
+            let name = mob_code.map(|c| {
+                data_storage
+                    .mob_name(c)
+                    .unwrap_or_else(|| format!("{} {c}", if is_boss { "Boss" } else { "Mob" }))
+            });
             let (cur_hp, max_hp) = mob_id_hp
                 .get(tid)
                 .map(|(c, m)| (Some(*c), Some(*m)))

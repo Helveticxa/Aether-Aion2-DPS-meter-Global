@@ -265,6 +265,28 @@ pub fn get_connection_status(meter: State<'_, DpsMeter>) -> Result<ConnectionSta
     })
 }
 
+/// Your best DPS against a boss, if you have one.
+#[tauri::command]
+pub fn get_personal_best(
+    meter: State<'_, DpsMeter>,
+    character: String,
+    mob_code: u32,
+) -> Result<Option<crate::dps_meter::personal_best::PersonalBest>, String> {
+    Ok(meter.personal_best(&character, mob_code))
+}
+
+#[tauri::command]
+pub fn list_personal_bests(
+    meter: State<'_, DpsMeter>,
+) -> Result<Vec<crate::dps_meter::personal_best::PersonalBest>, String> {
+    Ok(meter.personal_bests())
+}
+
+#[tauri::command]
+pub fn reset_personal_bests(meter: State<'_, DpsMeter>) -> Result<usize, String> {
+    Ok(meter.reset_personal_bests())
+}
+
 #[tauri::command]
 pub fn get_dps_meter_status(meter: State<'_, DpsMeter>) -> Result<bool, String> {
     Ok(meter.is_running())

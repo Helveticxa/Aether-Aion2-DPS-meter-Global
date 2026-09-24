@@ -62,6 +62,14 @@ const TECHNICAL_CREDITS: CreditItem[] = [
 /** Work that is not code: what the app shows, rather than how it runs. */
 const ARTWORK_CREDITS: CreditItem[] = [
   {
+    name: "Kuroukihime/AIon2-Dps-Meter",
+    description:
+      "The English names of monsters, bosses, and the Fighter's skills, and the server codes. GPL-3.0, like Aether.",
+    href: "https://github.com/Kuroukihime/AIon2-Dps-Meter",
+    avatarFallback: "KU",
+    badge: "Game data",
+  },
+  {
     name: "Dune by R",
     description:
       "The animated background and its still frame. Motion design by R, published on Vimeo.",
