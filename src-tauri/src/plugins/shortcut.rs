@@ -79,7 +79,21 @@ fn resolve_action<R: Runtime>(app: &AppHandle<R>, id: u32) -> Option<Action> {
 // Action implementations (stubs — to be filled)
 // =============================================================================
 
+/// How long the show hotkey brings back an overlay that is hidden between
+/// fights: time to look at it, drag it, or open history.
+const SHOW_PEEK_SECS: u64 = 15;
+
 fn toggle_dps_overlay<R: Runtime>(app: &AppHandle<R>) {
+    // Hidden only because there is no fight: show it for a while rather than
+    // treating the press as "hide".
+    if app.get_webview_window("dps-overlay").is_some() && aion2_focus::is_dps_idle_hidden(app) {
+        aion2_focus::set_dps_manual_hidden_for_app(app, false);
+        if let Some(meter) = app.try_state::<DpsMeter>() {
+            meter.peek_overlay(SHOW_PEEK_SECS);
+        }
+        return;
+    }
+
     let should_hide = app
         .get_webview_window("dps-overlay")
         .map(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false))
@@ -99,7 +113,7 @@ fn toggle_dps_overlay<R: Runtime>(app: &AppHandle<R>) {
 
 fn exec_reset_dps_meter<R: Runtime>(app: &AppHandle<R>) {
     if let Some(meter) = app.try_state::<DpsMeter>() {
-        meter.reset_dps_meter(true);
+        meter.reset_from_user();
     }
 }
 

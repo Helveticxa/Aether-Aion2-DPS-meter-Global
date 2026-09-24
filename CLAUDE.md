@@ -14,7 +14,7 @@ PowerShell 5.1 on the development machine has no `&&` — chain with `;`.
 ```
 pnpm install
 pnpm build                        # tsc + vite, ~6s
-cd src-tauri; cargo test --lib    # 85 tests
+cd src-tauri; cargo test --lib    # 98 tests
 pnpm tauri:dev                    # must be an ELEVATED terminal
 pnpm tauri:build                  # NSIS installer + updater bundle
 ```
@@ -60,21 +60,25 @@ runner cannot launch an executable that demands elevation.
 | `src-tauri/src/dps_meter/preflight.rs` | Startup gate: what must be true before the app opens |
 | `src-tauri/src/dps_meter/engine/` | DPS calculation, meter lifecycle |
 | `src-tauri/src/plugins/` | Overlay windows, tray, logger, shortcuts |
-| `src/games/aion2/` | Game UI, six overlay windows, bundled game data |
-| `src/games/aion2/lib/map-*.ts` | Interactive map: data model, projection, dataset loading |
-| `src/games/aion2/data/maps/` | Map zones, marker categories, and the sample marker set |
-| `src/components/` | Shared UI, including the Runtime tools panel |
+| `src/games/aion2/` | Game UI, overlay windows (meter, detail, history, PvP, log, chat), bundled game data |
+| `src/components/` | Shared UI, including Settings → Aion 2 and the Connection panel |
 | `src/i18n/locales/` | English and Korean only |
 | `docs/` | `AION2_PACKET_PROTOCOL_ANALYSIS.zh-CN.md` — upstream's protocol notes, in Chinese. Useful reference; not yet translated. |
 
 ## Things that will bite you
 
-- **Cloud is optional and off.** Upstream reads Supabase credentials from a
-  gitignored `.env`; without them `createClient` throws at module load. Anything
-  touching it must go through `isCloudEnabled` or `requireSupabase()`.
+- **There is no cloud.** Upstream's Supabase account, leaderboard upload, and
+  deep-link sign-in were removed in 2.2.0; everything is local. A merge from
+  upstream that brings them back should be resolved by dropping them again.
 - **Region profiles are load-bearing.** A server id is used *structurally* to
   locate fields inside player-info packets. Upstream hardcoded Taiwan's catalogue,
-  which silently named no players anywhere else.
+  which silently named no players anywhere else. Since 2.2.0 the profile is
+  always `Auto`; there is no picker.
+- **No window calls on the meter's threads.** `stop_dps_meter` runs on the main
+  thread and joins the snapshot thread; a window getter there (`is_visible`)
+  waits on the main thread. Post window work with `run_on_main_thread`, as
+  `aion2_focus::set_dps_idle_hidden_for_app` does. See FORK.md, *The meter
+  between fights*.
 - **Overlays carry their own defaults.** They are separate HTML+JS entry points
   with their own config fallbacks and their own tiny i18n module. Changing an
   app-level default does not reach them.

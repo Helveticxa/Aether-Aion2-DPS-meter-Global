@@ -74,13 +74,6 @@ impl PingTracker {
         self.inner.lock().unwrap().last_ping_ms
     }
 
-    pub fn history_snapshot(&self, limit: usize) -> Vec<(u64, f64)> {
-        let inner = self.inner.lock().unwrap();
-        let len = inner.history.len();
-        let start = len.saturating_sub(limit);
-        inner.history.iter().skip(start).copied().collect()
-    }
-
     pub fn reset(&self) {
         let mut inner = self.inner.lock().unwrap();
         // inner.last_ping_ms = None;

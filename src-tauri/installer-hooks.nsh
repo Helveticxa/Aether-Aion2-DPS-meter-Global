@@ -27,6 +27,14 @@
   Sleep 800
 !macroend
 
+; Updates install over the previous copy without running its uninstaller, so
+; anything an older version registered and this one no longer does has to be
+; removed here. 2.2.0 dropped the `aether://` link used only by the upstream
+; cloud sign-in, which never worked in this build.
+!macro NSIS_HOOK_POSTINSTALL
+  DeleteRegKey SHCTX "Software\Classes\aether"
+!macroend
+
 !macro NSIS_HOOK_PREUNINSTALL
   DetailPrint "Releasing the WinDivert driver..."
   nsExec::ExecToLog 'sc.exe stop WinDivert'

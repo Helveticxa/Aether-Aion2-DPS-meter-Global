@@ -31,8 +31,6 @@ pub struct HistoryRecord {
     #[serde(default)]
     pub use_buffs_by_target: HashMap<u32, Vec<BuffSummary>>,
     pub created_at: u64,
-    #[serde(default)]
-    pub uploaded: bool,
 }
 
 // =============================================================================
@@ -94,30 +92,6 @@ impl HistoryStore {
         }
 
         deleted
-    }
-
-    pub fn mark_records_uploaded(&self, ids: &[String]) -> usize {
-        if ids.is_empty() {
-            return 0;
-        }
-
-        let ids: std::collections::HashSet<&str> = ids.iter().map(String::as_str).collect();
-        let mut stored = self.records.lock().unwrap();
-        let mut updated = 0;
-
-        for record in stored.iter_mut() {
-            if ids.contains(record.id.as_str()) && !record.uploaded {
-                record.uploaded = true;
-                updated += 1;
-            }
-        }
-
-        if updated > 0 {
-            let snapshot: Vec<HistoryRecord> = stored.iter().cloned().collect();
-            self.write_to_disk(&snapshot);
-        }
-
-        updated
     }
 
     pub fn init_dir(&self, app_data_dir: PathBuf) {
@@ -193,7 +167,6 @@ impl HistoryStore {
                     player_skill_stats: skill_stats,
                     use_buffs_by_target,
                     created_at: now_ms,
-                    uploaded: false,
                 })
             })
             .collect()

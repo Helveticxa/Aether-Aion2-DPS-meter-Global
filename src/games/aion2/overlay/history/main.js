@@ -1,7 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { uploadDpsDataBatch, isUserLoggedIn } from "@/games/aion2/lib/upload-records-to-supbase";
 import { getNpcName } from "@/games/aion2/lib/npc-names";
 import { t, setLanguage } from "../../i18n.js";
 
@@ -9,23 +8,14 @@ import { t, setLanguage } from "../../i18n.js";
 const $list = document.getElementById("record-list");
 const $count = document.getElementById("header-count");
 const $empty = document.getElementById("empty");
-const $upload = document.getElementById("upload-btn");
-const $reupload = document.getElementById("reupload-btn");
-const $uploadStatus = document.getElementById("upload-status");
-const $uploadProgress = document.getElementById("upload-progress");
-const $uploadProgressLabel = document.getElementById("upload-progress-label");
-const $uploadProgressPercent = document.getElementById("upload-progress-percent");
-const $uploadProgressFill = document.getElementById("upload-progress-fill");
-const $uploadProgressQueued = document.getElementById("upload-progress-queued");
-const $uploadProgressSkipped = document.getElementById("upload-progress-skipped");
-const $uploadProgressFailed = document.getElementById("upload-progress-failed");
+const $status = document.getElementById("history-status");
+const $deleteAll = document.getElementById("delete-all-btn");
 const $targetFilter = document.getElementById("target-filter");
 const $actorFilter = document.getElementById("actor-filter");
 const $targetFilterLabel = document.getElementById("target-filter-label");
 const $actorFilterLabel = document.getElementById("actor-filter-label");
 let allRecords = [];
 let expandedId = null;
-let isUploading = false;
 const ALL_FILTER_VALUE = "__all__";
 
 document.getElementById("close-btn").addEventListener("click", async () => {
@@ -36,100 +26,15 @@ document.getElementById("close-btn").addEventListener("click", async () => {
   }
 });
 
-function setUploadStatus(message, type = "") {
-  $uploadStatus.textContent = message;
-  $uploadStatus.className = `upload-status${type ? ` is-${type}` : ""}`;
-  $uploadStatus.style.display = message ? "block" : "none";
-}
+let statusTimer = 0;
 
-function updateUploadProgress({ current, total, queued = 0, skipped = 0, failed = 0 }) {
-  const safeTotal = Math.max(1, Number(total) || 1);
-  const safeCurrent = Math.max(0, Math.min(safeTotal, Number(current) || 0));
-  const percent = Math.round((safeCurrent / safeTotal) * 100);
-  $uploadProgress.classList.add("is-visible");
-  $uploadProgressLabel.textContent = t("dps-history.uploading", {
-    current: safeCurrent,
-    total: safeTotal,
-  });
-  $uploadProgressPercent.textContent = `${percent}%`;
-  $uploadProgressFill.style.width = `${percent}%`;
-  $uploadProgressQueued.textContent = String(queued);
-  $uploadProgressSkipped.textContent = String(skipped);
-  $uploadProgressFailed.textContent = String(failed);
-}
-
-function hideUploadProgress() {
-  $uploadProgress.classList.remove("is-visible");
-}
-
-function updateUploadProgressLabels() {
-  document.getElementById("upload-progress-queued-label").textContent = t("dps-history.queued");
-  document.getElementById("upload-progress-skipped-label").textContent = t("dps-history.skipped");
-  document.getElementById("upload-progress-failed-label").textContent = t("dps-history.failed");
-}
-
-function setUploadControlsDisabled(disabled) {
-  $upload.disabled = disabled || allRecords.length === 0;
-  $reupload.disabled = disabled || allRecords.length === 0;
-  document.getElementById("delete-all-btn").disabled = disabled || allRecords.length === 0;
-  document.querySelectorAll("[data-upload]").forEach((button) => {
-    button.disabled = disabled || button.dataset.uploaded === "true";
-  });
-}
-
-async function markUploaded(ids) {
-  if (ids.length === 0) return 0;
-  const updated = await invoke("mark_history_records_uploaded", { ids });
-  const idSet = new Set(ids);
-  allRecords = allRecords.map((record) =>
-    idSet.has(record.id) ? { ...record, uploaded: true } : record
-  );
-  return updated;
-}
-
-async function uploadRecords(records, emptyMessage) {
-  if (isUploading) return;
-  if (records.length === 0) {
-    if (emptyMessage) {
-      setUploadStatus(emptyMessage, "error");
-    }
-    return;
-  }
-
-  isUploading = true;
-  setUploadControlsDisabled(true);
-  $upload.textContent = t("dps-history.queueing");
-  $reupload.textContent = t("dps-history.queueing");
-  setUploadStatus("");
-  updateUploadProgress({ current: 0, total: records.length });
-
-  try {
-    const result = await uploadDpsDataBatch(records, {
-      onProgress(progress) {
-        updateUploadProgress(progress);
-      },
-    });
-    const marked = await markUploaded(result.uploadedRecordIds);
-    setUploadStatus(
-      t("dps-history.uploadComplete", {
-        queued: result.queued,
-        skipped: result.skipped,
-        failed: result.failed,
-        marked: marked,
-      }),
-      result.failed > 0 ? "error" : "success"
-    );
-    applyFilters();
-  } catch (error) {
-    console.error("[dps-history] queue upload failed:", error);
-    setUploadStatus(error?.message || t("dps-history.uploadFailed"), "error");
-  } finally {
-    isUploading = false;
-    hideUploadProgress();
-    $upload.textContent = t("dps-history.uploadPending");
-    $reupload.textContent = t("dps-history.reuploadAll");
-    updateUploadProgressLabels();
-    setUploadControlsDisabled(false);
+function setStatus(message, type = "") {
+  $status.textContent = message;
+  $status.className = `history-status${type ? ` is-${type}` : ""}`;
+  $status.style.display = message ? "block" : "none";
+  clearTimeout(statusTimer);
+  if (message) {
+    statusTimer = setTimeout(() => setStatus(""), 4000);
   }
 }
 
@@ -146,37 +51,18 @@ async function load() {
   }
 }
 
-document.getElementById("delete-all-btn").addEventListener("click", async () => {
+$deleteAll.addEventListener("click", async () => {
   if (allRecords.length === 0) {
-    setUploadStatus(t("dps-history.noRecordsToDelete"), "error");
+    setStatus(t("dps-history.noRecordsToDelete"), "error");
     return;
   }
   try {
     const count = await invoke("delete_all_history");
-    setUploadStatus(t("dps-history.deletedCount", { count }), "success");
+    setStatus(t("dps-history.deletedCount", { count }), "success");
     await load();
   } catch (e) {
-    setUploadStatus(e?.message || t("dps-history.deleteFailed"), "error");
+    setStatus(e?.message || t("dps-history.deleteFailed"), "error");
   }
-});
-
-$upload.addEventListener("click", async () => {
-  if (!(await isUserLoggedIn())) {
-    setUploadStatus(t("dps-history.loginRequired"), "error");
-    return;
-  }
-  await uploadRecords(
-    allRecords.filter((record) => !record.uploaded),
-    t("dps-history.noUnuploadedRecords")
-  );
-});
-
-$reupload.addEventListener("click", async () => {
-  if (!(await isUserLoggedIn())) {
-    setUploadStatus(t("dps-history.loginRequired"), "error");
-    return;
-  }
-  await uploadRecords(allRecords, t("dps-history.noRecordToQueue"));
 });
 
 // ── Formatters ──
@@ -333,18 +219,15 @@ function applyFilters() {
 // ── Render record list ──
 function render(records) {
   const lbl = records.length === 1 ? t("dps-history.record") : t("dps-history.records");
-  const pendingCount = allRecords.filter((record) => !record.uploaded).length;
-  const countPrefix =
+  $count.textContent =
     records.length === allRecords.length
       ? `${records.length} ${lbl}`
       : `${records.length} / ${allRecords.length} ${lbl}`;
-  $count.textContent = `${countPrefix} · ${pendingCount} ${t("dps-history.pending")}`;
-  setUploadControlsDisabled(isUploading);
+  $deleteAll.disabled = allRecords.length === 0;
 
   if (records.length === 0) {
     $empty.style.display = "";
     $list.innerHTML = "";
-    setUploadControlsDisabled(isUploading);
     return;
   }
   $empty.style.display = "none";
@@ -355,7 +238,6 @@ function render(records) {
     const name = getTargetName(r);
     const playerCount = getRecognizedPlayers(r).length;
     const mainPlayerName = getMainPlayerName(r);
-    const uploaded = r.uploaded === true;
     html += `
       <div class="record-row" data-id="${r.id}">
         <button class="record-row__delete" data-delete="${r.id}" title="Delete">&times;</button>
@@ -369,16 +251,12 @@ function render(records) {
             <span>${playerCount} ${playerCount === 1 ? t("dps-history.player") : t("dps-history.players")}</span>
             <span class="record-row__damage"><em>${t("dps-overlay.totalDamage")}</em> ${fmtDamage(r.totalDamage)}</span>
           </div>
-          <div class="record-row__actions">
-            <button class="record-row__upload" data-upload="${r.id}" data-uploaded="${uploaded}" ${uploaded ? "disabled" : ""}>${uploaded ? t("dps-history.uploaded") : t("dps-history.upload")}</button>
-          </div>
         </div>
         <div class="record-row__detail" id="detail-${r.id}" style="display:none"></div>
       </div>`;
   }
   $list.innerHTML = html;
   expandedId = null;
-  setUploadControlsDisabled(isUploading);
 }
 
 // ── Expand record → show player list ──
@@ -425,21 +303,6 @@ function toggleExpand(id) {
 
 // ── Click handler ──
 $list.addEventListener("click", async (e) => {
-  // Upload one record
-  if (e.target.closest("[data-upload]")) {
-    e.stopPropagation();
-    e.preventDefault();
-    const id = e.target.closest("[data-upload]").dataset.upload;
-    const record = allRecords.find((r) => r.id === id);
-    if (!record || record.uploaded) return;
-    if (!(await isUserLoggedIn())) {
-      setUploadStatus(t("dps-history.loginRequired"), "error");
-      return;
-    }
-    await uploadRecords([record], t("dps-history.noRecordToQueue"));
-    return;
-  }
-
   // Delete
   if (e.target.closest("[data-delete]")) {
     e.stopPropagation();
@@ -494,21 +357,11 @@ $list.addEventListener("click", async (e) => {
 
   listen("language-changed", (event) => {
     setLanguage(event.payload.language);
-    $upload.textContent = t("dps-history.uploadPending");
-    $reupload.textContent = t("dps-history.reuploadAll");
-    updateUploadProgressLabels();
     setEmptyText();
     refreshFilterOptions();
     applyFilters();
   });
 
   await load();
-  $upload.textContent = t("dps-history.uploadPending");
-  $reupload.textContent = t("dps-history.reuploadAll");
-  updateUploadProgressLabels();
-  await uploadRecords(
-    allRecords.filter((record) => !record.uploaded),
-    ""
-  );
   listen("history-updated", () => load());
 })();

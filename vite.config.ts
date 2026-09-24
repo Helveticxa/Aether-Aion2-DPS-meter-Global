@@ -50,17 +50,9 @@ export default defineConfig(async () => ({
           __dirname,
           "src/games/aion2/overlay/chat/index.html"
         ),
-        "src/games/aion2/overlay/map/index": path.resolve(
-          __dirname,
-          "src/games/aion2/overlay/map/index.html"
-        ),
         "src/games/aion2/overlay/meter_pvp/index": path.resolve(
           __dirname,
           "src/games/aion2/overlay/meter_pvp/index.html"
-        ),
-        "src/games/aion2/overlay/buff/index": path.resolve(
-          __dirname,
-          "src/games/aion2/overlay/buff/index.html"
         ),
         "src/games/aion2/overlay/log/index": path.resolve(
           __dirname,
@@ -73,14 +65,6 @@ export default defineConfig(async () => ({
         "src/games/aion2/overlay/detail/index": path.resolve(
           __dirname,
           "src/games/aion2/overlay/detail/index.html"
-        ),
-        "src/games/aion2/overlay/event_timer/index": path.resolve(
-          __dirname,
-          "src/games/aion2/overlay/event_timer/index.html"
-        ),
-        "src/games/aion2/overlay/event_timer/boss_detail/index": path.resolve(
-          __dirname,
-          "src/games/aion2/overlay/event_timer/boss_detail/index.html"
         ),
       },
     },

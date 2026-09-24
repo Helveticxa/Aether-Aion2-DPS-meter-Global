@@ -87,13 +87,20 @@ impl PacketRecorder {
 
     /// Begin a recording in `dir`, named after the current time.
     pub fn start(&self, dir: &Path) -> Result<PathBuf, String> {
+        self.start_named(dir, "session")
+    }
+
+    /// Begin a recording whose file name starts with `prefix`, so automatic
+    /// recordings can be told apart from, and pruned without touching, the
+    /// ones started by hand.
+    pub fn start_named(&self, dir: &Path, prefix: &str) -> Result<PathBuf, String> {
         let mut active = self.active.lock().map_err(|_| "recorder lock poisoned")?;
         if active.is_some() {
             return Err("A recording is already running.".to_string());
         }
 
         fs::create_dir_all(dir).map_err(|error| format!("Cannot create {dir:?}: {error}"))?;
-        let path = dir.join(format!("session-{}.aetherpc", unix_millis()));
+        let path = dir.join(format!("{prefix}-{}.aetherpc", unix_millis()));
 
         let file = File::create(&path).map_err(|error| format!("Cannot create {path:?}: {error}"))?;
         let mut writer = BufWriter::new(file);
@@ -275,6 +282,22 @@ where
 }
 
 /// Recordings on disk, newest first.
+/// Delete all but the newest `keep` recordings whose names start with
+/// `prefix`. Returns how many were removed.
+pub fn prune_recordings(dir: &Path, prefix: &str, keep: usize) -> usize {
+    let mut removed = 0;
+    for file in list_recordings(dir)
+        .into_iter()
+        .filter(|file| file.name.starts_with(prefix))
+        .skip(keep)
+    {
+        if fs::remove_file(&file.path).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
 pub fn list_recordings(dir: &Path) -> Vec<RecordingFile> {
     let Ok(entries) = fs::read_dir(dir) else {
         return Vec::new();
@@ -444,6 +467,48 @@ mod tests {
         recorder.start(&dir).expect("first start");
         assert!(recorder.start(&dir).is_err(), "second start must fail");
         recorder.stop().expect("stop");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod prune_tests {
+    use super::*;
+    use std::time::{Duration, SystemTime};
+
+    fn file_at(dir: &Path, name: &str, age_secs: u64) {
+        let path = dir.join(name);
+        fs::write(&path, b"AETHERPC").expect("write");
+        let when = SystemTime::now() - Duration::from_secs(age_secs);
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .and_then(|file| file.set_modified(when))
+            .expect("set modified");
+    }
+
+    #[test]
+    fn keeps_the_newest_automatic_recordings_and_nothing_else_is_touched() {
+        let dir = std::env::temp_dir().join("aether-recorder-test-prune");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("dir");
+
+        for age in 1..=4 {
+            file_at(&dir, &format!("auto-{age}.aetherpc"), age * 10);
+        }
+        file_at(&dir, "session-1.aetherpc", 1_000);
+
+        let removed = prune_recordings(&dir, "auto", 2);
+        assert_eq!(removed, 2);
+
+        let mut left: Vec<String> = list_recordings(&dir).into_iter().map(|f| f.name).collect();
+        left.sort();
+        assert_eq!(
+            left,
+            vec!["auto-1.aetherpc", "auto-2.aetherpc", "session-1.aetherpc"],
+            "the two newest automatic ones stay, and a recording made by hand is never pruned"
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }

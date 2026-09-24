@@ -38,8 +38,10 @@ export function SettingsRow({
   control: ReactNode;
 }) {
   return (
-    <div className="flex min-h-[72px] items-center justify-between gap-6 px-5 py-4">
-      <div className="min-w-0 flex-1">
+    // Wraps rather than squeezes: in the narrow settings window opened from the
+    // overlay, a wide control drops below its label instead of crushing it.
+    <div className="flex min-h-[72px] flex-wrap items-center justify-between gap-x-6 gap-y-3 px-5 py-4">
+      <div className="min-w-[13rem] flex-1">
         <div className="text-sm font-medium">{label}</div>
         {description ? (
           <div className="text-muted-foreground mt-1 text-xs leading-5">{description}</div>

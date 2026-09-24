@@ -72,6 +72,9 @@ with a weighed report:
 
 ### Cloud features made optional
 
+*Superseded in 2.2.0: the cloud code is removed entirely. See "Removed in
+2.2.0" below. Kept for the history of why it never worked here.*
+
 Upstream reads `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` from a gitignored
 `.env`, so a fresh clone has neither. `createClient(undefined, undefined)` throws
 `supabaseUrl is required.` at module load, and because `main-title-bar.tsx`
@@ -147,9 +150,14 @@ Taiwan list. It keeps the disambiguation the parser depends on -- an arbitrary
 Korea is identifiable by its server block (`206.127.156.0/24`, from the MIT
 TK-open-public meter); Taiwan's and global's blocks are unknown, so detection
 returns "no fingerprint matched" rather than guessing from an id range they may
-well share. Settings → Backend shows the observed server IPs and ids so an
-uncatalogued service can be characterised from a real session -- which is exactly
-how the global fingerprint gets filled in after Early Access.
+well share. Settings → Aion 2 → Connection shows the observed server IPs and ids
+so an uncatalogued service can be characterised from a real session -- which is
+exactly how the global fingerprint gets filled in after Early Access.
+
+**Since 2.2.0 there is no region to pick.** `Auto` parses on every service, so
+the other profiles could only ever make things worse; `DpsMeterConfig::normalized`
+brings a stored region back to `Auto`, and the picker is gone from Settings.
+The profiles stay in `region.rs` because detection still names Korea.
 
 Server names now fall back to `Server <id>` instead of a hardcoded
 `"未知服务器"`, so non-Taiwan players stay distinguishable.
@@ -317,26 +325,78 @@ error, so it is worth measuring rather than assuming.
 Off by default; it sits on the per-packet path, so disabled costs one relaxed
 atomic load.
 
+### Automatic recording (2.2.0)
+
+On a server no fingerprint matches, the meter records the first two minutes of
+game traffic by itself, once per meter session (`auto_record_tick` in
+`engine/meter.rs`, on the memory-snapshot thread). Files are named `auto-*` and
+only the newest five are kept (`recorder::prune_recordings`); a recording
+started by hand is never pruned and never interrupted. Today that is every
+Taiwan and global session, because neither has a fingerprint yet. Once the
+global server block is catalogued, it stops by itself for global.
+
+It exists because launch day is exactly when nobody thinks to press Record in
+time. Off switch: Settings → Aion 2 → Connection → Advanced.
+
 ### On Early Access day
 
-1. Settings → Backend: switch on **Opcode census**, then **Start recording**.
-2. Play for a few minutes -- ideally including real combat and a party.
+1. Start the meter and play. The first two minutes are recorded automatically.
+2. Settings → Aion 2 → Connection → Advanced: switch on **Opcode census**.
+   Start a manual recording as well if a longer session is wanted.
 3. Read the census. Familiar opcodes (`04,38` damage, `05,38` DoT, `2A/2B,38`
    buffs, `33,36` player info, `41,36` summon) at familiar sizes means the
    parsers should hold. Amber `?` rows are the work list.
-4. Read Settings → Backend → **Observed traffic** for the server IPs and ids.
-   Those fill in the global region fingerprint.
-5. Stop recording. From then on, replay that file instead of playing.
+4. Connection shows the server IPs and ids. Those fill in the global region
+   fingerprint.
+5. From then on, replay the recording instead of playing.
 
 ### Diagnostics report
 
-Settings → Runtime → **Copy report** turns a session into a plain-text summary:
+Settings → Aion 2 → Connection → Advanced → **Copy report** turns a session into a plain-text summary:
 version, region profile, the server IPs and ids observed, and the full opcode
 tally. A copy is always written to `recordings/diagnostics-*.txt` as well, since
 the clipboard can fail quietly and launch day happens once.
 
 It exists so a session can be handed over by pasting rather than described screen
 by screen.
+
+## The meter between fights (2.2.0)
+
+Upstream never ended a fight. Totals piled up target after target until
+someone pressed Reset, and the whole pile was cloned and sent to the overlay on
+every snapshot. The overlay also sat on screen whether or not anything was
+happening.
+
+**Activity, not damage, decides.** `DataStorageInner::activity_at` records the
+last hit that belongs to your fight (`is_own_fight`): one you dealt, one you
+took, or one your party landed on your current target -- a healer can go minutes
+without a hit of their own on a boss. Before the game has said who you are,
+every hit counts. Other people fighting nearby move nothing.
+
+The snapshot loop then does two things each tick:
+
+- **Idle reset.** `idle_reset_secs` (default 300, 0 = never) after the last
+  activity, the fight is saved to History and the meter starts clean
+  (`end_idle_fight`). A meter holding only strangers' fights is cleared
+  without a record, measured from its start time, so it cannot grow unseen.
+- **Visibility.** With `hide_when_idle` on, the overlay is hidden while there
+  is no activity since the last reset, unless a *peek* is running: 8 s after
+  Start, 4 s after Reset, and 15 s from the show shortcut when the overlay is
+  only idle-hidden.
+
+Hiding goes through `aion2_focus`, which already owned the overlay's
+visibility, as one more reason next to the manual hotkey and the game's focus
+(`Aion2FocusState::wanted_visibility`, tested). The poller skips its work while
+no overlay is open.
+
+**Never do window calls on the snapshot thread.** Getters such as
+`is_visible` wait on the event loop, and the event loop joins the snapshot
+thread in `stop_dps_meter` -- a sync command, so on the main thread. That is a
+deadlock waiting for the wrong moment. `set_dps_idle_hidden_for_app` posts the
+window work with `run_on_main_thread` instead.
+
+The overlay is built `focusable(false)`: the show shortcut can create it while
+you are in the game, and a new window takes the keyboard by default.
 
 ## Always on top
 
@@ -547,6 +607,34 @@ The fork inherited a fair amount of scaffolding and dead weight. Removed:
 
 `docs/AION2_PACKET_PROTOCOL_ANALYSIS.zh-CN.md` is kept. It is upstream's protocol
 analysis and real domain knowledge, in Chinese and not yet translated.
+
+### Removed in 2.2.0
+
+Aether was narrowed to three features: the DPS meter, Always on top, and live
+chat. Git keeps everything below; none of it shipped anything the user wanted.
+
+- **Interactive map** (page, minimap overlay, `aion2_map*` plugins, the 8 zone
+  images, the import script, the asset protocol it needed). Tiles downloaded
+  into `%APPDATA%/<app>/maps` are deleted on the next start
+  (`remove_retired_app_data` in `lib.rs`), because an update never runs the
+  old uninstaller.
+- **Main Character card** and what only it used: the Fengwo lookup, the generic
+  `http_request` proxy command (any webview could make arbitrary requests
+  through it), the gear-slot component, and `get_main_character`.
+- **Buff monitor** overlay and settings, its two per-buff events, and
+  `buff_templates.json`. Buff *intervals* are still recorded: the detail
+  window's coverage timeline reads them.
+- **Event and field boss timers**, including the `01,91` parser. The opcode
+  stays in `KNOWN_PACKET_HEADERS`, so the stall resync and the census treat it
+  as before.
+- **Upstream cloud**: Supabase, the account modal, the deep-link sign-in, and
+  History's upload buttons (which could never succeed without upstream's
+  private backend, and ran on every open). The `aether://` scheme earlier
+  installers registered is removed by `NSIS_HOOK_POSTINSTALL`.
+- The dialog and fs plugins (nothing called them), `plugin-process` (the
+  updater never returns on Windows), the game picker over the logo (one game,
+  and its menu could stick open), the outdated usage guide, upstream
+  screenshots, and 200+ translation keys nothing referenced.
 
 Fixed along the way: `index.html` pointed its favicon at `/vite.svg`, a file that
 is not in `public/`.

@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { check } from "@tauri-apps/plugin-updater";
 import type { Update } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
 
 export interface UpdateProgress {
   event: "Started" | "Progress" | "Finished";
@@ -61,10 +60,11 @@ export async function downloadAndInstall(
   // windows pinned by Always on top are released first. Failing to release
   // them must not block the update: the next start undoes them anyway.
   await invoke("on_top_unpin_all").catch(() => {});
-  await update.install();
 
-  // On Windows the NSIS installer takes over here, so this often does not
-  // return. It matters on the paths where it does.
-  await relaunch();
+  // Does not return on success. The updater starts the NSIS installer with
+  // /P /R /UPDATE and exits this process: the installer reads the folder the
+  // user installed to from the registry, replaces the files there without
+  // uninstalling, and /R starts the new version when it is done.
+  await update.install();
   return true;
 }

@@ -8,15 +8,11 @@
     "about",
     "settings",
     "dps-overlay",
-    "aion2-map-overlay",
     "dps-overlay-pvp",
-    "dps-overlay-buff",
     "dps-history",
     "dps-detail",
     "dps-settings",
     "dps-log",
-    "aion2-event-timer",
-    "aion2-event-timer-boss",
     "aion2-chat-*"
   ],
   "permissions": [
@@ -57,9 +53,6 @@
     "global-shortcut:allow-unregister",
     "global-shortcut:allow-unregister-all",
     "notification:default",
-    "deep-link:default",
-    "dialog:default",
-    "fs:default",
     "window-state:default",
     "core:window:allow-set-ignore-cursor-events"
   ]

@@ -9,6 +9,20 @@ lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
      and some players still update from there: so no hard wraps and no bold in
      2.0.0 and later. From 2.0.0 on the dialog renders Markdown. -->
 
+## [2.2.0]
+
+Aether is now three things, done well: the DPS meter, Always on top, and live chat. Everything else is gone, and the meter looks and behaves like part of the game.
+
+- New DPS overlay: a rounded glass card with class-coloured bars and no hard lines. The target's name and health sit in the header; the buttons appear only while your pointer is on it.
+- The overlay steps aside between fights. It appears on your first hit, stays for the whole fight, and after 5 minutes without a hit of yours it saves the fight to History, starts clean, and hides again. A long boss fight never resets: any hit keeps it going, and so does your party on your target. Change the time or turn it off in Settings, Aion 2, Meter. The show shortcut (Alt+E) brings the overlay up for a moment at any time.
+- The meter no longer piles up: fights end on their own, so it stays light over a long session instead of needing a manual refresh.
+- Nothing to set up. The region choice is gone, because Aether reads every server on its own. Settings, Aion 2, Connection shows the game connection, your character, and the server as they are detected.
+- On a server it does not recognise yet, Aether records the first two minutes by itself for protocol work, so nothing has to be pressed on launch day. The newest five are kept, on this PC only. Recording, opcode census, and the diagnostics report moved to Connection, Advanced.
+- A cleaner home screen: the Main Character card is gone, and the launcher is one card that says what the meter is doing.
+- Removed: the interactive map, the buff monitor, the event and field boss timers, and the upstream cloud account, whose upload buttons in History could never work. Map tiles downloaded by earlier versions are deleted from your PC on first start.
+- The overlay no longer takes the keyboard from the game when the show shortcut opens it.
+- Updates install into the folder you chose, replace the old files there, and start Aether again, as before.
+
 ## [2.1.1]
 
 Fixes for the live chat pop-ups.

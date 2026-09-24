@@ -12,9 +12,7 @@ use crate::dps_meter::models::combat::{
     PvpWatchInfo, PvpWatchInfoResponse, SkillStats,
 };
 use crate::dps_meter::models::packet::ParsedDamagePacket;
-use crate::dps_meter::storage::loaders::{
-    load_boss_ids, load_buff_templates, load_healing_skill_codes, load_npc_names, BuffTemplates,
-};
+use crate::dps_meter::storage::loaders::{load_boss_ids, load_healing_skill_codes, load_npc_names};
 
 const ACTOR_METADATA_CAPACITY: usize = 2_000;
 const MOB_METADATA_CAPACITY: usize = 5_000;
@@ -145,6 +143,11 @@ struct DataStorageInner {
     possible_boss_codes: HashSet<u32>,
     summon_owner_map: BoundedMap<u32, u32>,
     start_time: Option<f64>,
+    /// Last time the player running Aether was in the fight: hit something,
+    /// was hit, or their target took damage from the party. `None` until the
+    /// first such hit after a reset. Drives the overlay's auto-hide and the
+    /// idle reset, so fights nearby that you are not part of move neither.
+    activity_at: Option<f64>,
     start_time_by_target: HashMap<u32, HashMap<u32, f64>>,
     last_time_by_target: HashMap<u32, HashMap<u32, f64>>,
     dot_skill_list: Vec<u32>,
@@ -158,7 +161,6 @@ struct DataStorageInner {
     pvp_last_attacker_by_target: HashMap<u32, PvpPlayerKey>,
     pvp_combat_stats: HashMap<PvpPlayerKey, PvpCombatStats>,
     pvp_dead_players: HashSet<PvpPlayerKey>,
-    field_boss_timers: HashMap<(u32, u32), u64>,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -183,6 +185,7 @@ impl Default for DataStorageInner {
             possible_boss_codes: HashSet::new(),
             summon_owner_map: BoundedMap::new(SUMMON_METADATA_CAPACITY),
             start_time: None,
+            activity_at: None,
             start_time_by_target: HashMap::new(),
             last_time_by_target: HashMap::new(),
             dot_skill_list: Vec::new(),
@@ -196,7 +199,6 @@ impl Default for DataStorageInner {
             pvp_last_attacker_by_target: HashMap::new(),
             pvp_combat_stats: HashMap::new(),
             pvp_dead_players: HashSet::new(),
-            field_boss_timers: HashMap::new(),
         }
     }
 }
@@ -210,7 +212,6 @@ pub struct DataStorage {
     healing_skill_codes: HashSet<u32>,
     boss_code_list: HashSet<u32>,
     mob_code_name_map: HashMap<u32, String>,
-    buff_templates: BuffTemplates,
     pub main_actor_callback: Mutex<Option<Box<MainActorCallback>>>,
     /// Counts what the Boss only filter threw away, so the UI can say so.
     boss_only_filtered: AtomicU64,
@@ -224,35 +225,6 @@ pub struct MainActorDetectedPayload {
     pub sid: Option<String>,
 }
 
-/// The live identity of the player running Aether.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MainCharacter {
-    pub actor_id: u32,
-    pub name: String,
-    pub server_id: Option<String>,
-    pub actor_class: Option<String>,
-    pub combat_power: Option<u64>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BuffOverlayContext {
-    pub actor_class: Option<String>,
-    pub self_buff_candidate_skill_codes: Vec<u32>,
-    pub self_buff_candidate_skill_codes_by_class: HashMap<String, Vec<u32>>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FieldBossTimerSnapshot {
-    pub map_id: u32,
-    pub mob_code: u32,
-    pub name: String,
-    pub target_ms: u64,
-    pub remaining_ms: u64,
-}
-
 impl DataStorage {
     pub fn new(app: AppHandle, config: SharedDpsMeterConfig) -> Self {
         Self {
@@ -262,7 +234,6 @@ impl DataStorage {
             healing_skill_codes: load_healing_skill_codes(),
             boss_code_list: load_boss_ids(),
             mob_code_name_map: load_npc_names(),
-            buff_templates: load_buff_templates(),
             main_actor_callback: Mutex::new(None),
             boss_only_filtered: AtomicU64::new(0),
         }
@@ -287,7 +258,6 @@ impl DataStorage {
         let pvp_last_attacker_by_target = inner.pvp_last_attacker_by_target.clone();
         let pvp_combat_stats = inner.pvp_combat_stats.clone();
         let pvp_dead_players = inner.pvp_dead_players.clone();
-        let field_boss_timers = inner.field_boss_timers.clone();
         // let summon_owner_map = inner.summon_owner_map.clone();
         let dot_skill_list = inner.dot_skill_list.clone();
 
@@ -308,7 +278,6 @@ impl DataStorage {
         inner.pvp_last_attacker_by_target = pvp_last_attacker_by_target;
         inner.pvp_combat_stats = pvp_combat_stats;
         inner.pvp_dead_players = pvp_dead_players;
-        inner.field_boss_timers = field_boss_timers;
         // inner.summon_owner_map = summon_owner_map;
         inner.dot_skill_list = dot_skill_list;
     }
@@ -332,65 +301,43 @@ impl DataStorage {
     ) -> BuffSummary {
         let local_start_ms = current_timestamp_millis();
         let local_end_ms = local_start_ms.saturating_add(duration_ms);
-        let skill_shortcode = first_four_digits(skill_code);
-        let config = self.config.read().unwrap().clone();
 
-        let (should_emit_self_buff, should_emit_boss_debuff) = {
+        // Buff intervals feed the detail window's coverage timeline. The live
+        // buff overlay that also listened here was removed in 2.2.0.
+        {
             let mut inner = self.inner.write().unwrap();
-            {
-                let skill_intervals = inner
-                    .use_buffs_by_target
-                    .get_mut_or_insert_with(target_id, HashMap::new)
-                    .entry(actor_id)
-                    .or_default()
-                    .entry(skill_code)
-                    .or_default();
-                if let Some(last_interval) = skill_intervals.back_mut() {
-                    if local_start_ms
-                        <= last_interval
-                            .end_ms
-                            .saturating_add(BUFF_INTERVAL_MERGE_TOLERANCE_MS)
-                    {
-                        last_interval.end_ms = last_interval.end_ms.max(local_end_ms);
-                    } else {
-                        skill_intervals.push_back(BuffInterval {
-                            start_ms: local_start_ms,
-                            end_ms: local_end_ms,
-                        });
-                    }
+            let skill_intervals = inner
+                .use_buffs_by_target
+                .get_mut_or_insert_with(target_id, HashMap::new)
+                .entry(actor_id)
+                .or_default()
+                .entry(skill_code)
+                .or_default();
+            if let Some(last_interval) = skill_intervals.back_mut() {
+                if local_start_ms
+                    <= last_interval
+                        .end_ms
+                        .saturating_add(BUFF_INTERVAL_MERGE_TOLERANCE_MS)
+                {
+                    last_interval.end_ms = last_interval.end_ms.max(local_end_ms);
                 } else {
                     skill_intervals.push_back(BuffInterval {
                         start_ms: local_start_ms,
                         end_ms: local_end_ms,
                     });
                 }
-                while skill_intervals.len() > BUFF_INTERVALS_PER_SKILL_CAPACITY {
-                    skill_intervals.pop_front();
-                }
-            }
-
-            let should_emit_self_buff = inner.main_actor_id == Some(target_id)
-                && self.buff_templates.classes.values().any(|template| {
-                    template
-                        .self_buff_candidate_skill_codes
-                        .contains(&skill_shortcode)
+            } else {
+                skill_intervals.push_back(BuffInterval {
+                    start_ms: local_start_ms,
+                    end_ms: local_end_ms,
                 });
-            let target_mob_code = inner.mob_id_code_map.get(&target_id).copied();
-            let is_target_boss = target_mob_code
-                .map(|mob_code| {
-                    self.boss_code_list.contains(&mob_code)
-                        || (config.show_possible_boss
-                            && inner.possible_boss_codes.contains(&mob_code))
-                })
-                .unwrap_or(false);
-            let should_emit_boss_debuff = (inner.last_target_by_main_actor == Some(target_id)
-                || is_target_boss)
-                && actor_id != target_id;
+            }
+            while skill_intervals.len() > BUFF_INTERVALS_PER_SKILL_CAPACITY {
+                skill_intervals.pop_front();
+            }
+        }
 
-            (should_emit_self_buff, should_emit_boss_debuff)
-        };
-
-        let buff = BuffSummary {
+        BuffSummary {
             target_id,
             actor_id,
             skill_code,
@@ -398,57 +345,6 @@ impl DataStorage {
             active: local_end_ms > current_timestamp_millis(),
             last_start_ms: local_start_ms,
             last_end_ms: local_end_ms,
-        };
-
-        if should_emit_self_buff {
-            let _ = self.app.emit("dps-main-actor-buff", buff.clone());
-        }
-        if should_emit_boss_debuff {
-            let _ = self.app.emit("dps-boss-debuff", buff.clone());
-        }
-
-        buff
-    }
-
-    pub fn get_buff_overlay_context(&self) -> BuffOverlayContext {
-        let inner = self.inner.read().unwrap();
-        let actor_class = inner
-            .main_actor_id
-            .and_then(|actor_id| inner.actor_id_class_map.get(&actor_id))
-            .cloned();
-        let template = actor_class
-            .as_ref()
-            .and_then(|actor_class| self.buff_templates.classes.get(actor_class));
-        let mut candidates: Vec<u32> = template
-            .map(|template| {
-                template
-                    .self_buff_candidate_skill_codes
-                    .iter()
-                    .copied()
-                    .collect()
-            })
-            .unwrap_or_default();
-        candidates.sort_unstable();
-        let mut candidates_by_class: HashMap<String, Vec<u32>> = self
-            .buff_templates
-            .classes
-            .iter()
-            .map(|(actor_class, template)| {
-                let mut skill_codes: Vec<u32> = template
-                    .self_buff_candidate_skill_codes
-                    .iter()
-                    .copied()
-                    .collect();
-                skill_codes.sort_unstable();
-                (actor_class.clone(), skill_codes)
-            })
-            .collect();
-        candidates_by_class.shrink_to_fit();
-
-        BuffOverlayContext {
-            actor_class,
-            self_buff_candidate_skill_codes: candidates,
-            self_buff_candidate_skill_codes_by_class: candidates_by_class,
         }
     }
 
@@ -607,6 +503,15 @@ impl DataStorage {
                 }
             }
         }
+
+        if is_own_fight(&inner, actor_id, packet.target_id) {
+            inner.activity_at = Some(timestamp);
+        }
+    }
+
+    /// Last time you were in the fight; see `DataStorageInner::activity_at`.
+    pub fn activity_at(&self) -> Option<f64> {
+        self.inner.read().unwrap().activity_at
     }
 
     pub fn append_actor(&self, actor_id: u32, actor_name: &str, sid: Option<&str>) {
@@ -985,43 +890,6 @@ impl DataStorage {
         self.mob_code_name_map.clone()
     }
 
-    pub fn replace_field_boss_timers<I>(&self, map_id: u32, timers: I)
-    where
-        I: IntoIterator<Item = (u32, u64)>,
-    {
-        let mut inner = self.inner.write().unwrap();
-        inner
-            .field_boss_timers
-            .retain(|(existing_map_id, _), _| *existing_map_id != map_id);
-        for (mob_code, target_ms) in timers {
-            inner
-                .field_boss_timers
-                .insert((map_id, mob_code), target_ms);
-        }
-    }
-
-    pub fn field_boss_timer_snapshot(&self) -> Vec<FieldBossTimerSnapshot> {
-        let now = current_timestamp_millis();
-        let inner = self.inner.read().unwrap();
-        let mut timers = inner
-            .field_boss_timers
-            .iter()
-            .map(|(&(map_id, mob_code), &target_ms)| FieldBossTimerSnapshot {
-                map_id,
-                mob_code,
-                name: self
-                    .mob_code_name_map
-                    .get(&mob_code)
-                    .cloned()
-                    .unwrap_or_else(|| format!("Boss {mob_code}")),
-                target_ms,
-                remaining_ms: target_ms.saturating_sub(now),
-            })
-            .collect::<Vec<_>>();
-        timers.sort_unstable_by_key(|timer| (timer.target_ms, timer.map_id, timer.mob_code));
-        timers
-    }
-
     pub fn boss_code_list_snapshot(&self) -> Vec<u32> {
         self.boss_code_list.iter().copied().collect()
     }
@@ -1044,25 +912,6 @@ impl DataStorage {
 
     pub fn main_actor_name(&self) -> Option<String> {
         self.inner.read().unwrap().main_actor_name.clone()
-    }
-
-    /// Who the meter currently believes you are.
-    ///
-    /// The Home card built its character list purely from finished combat
-    /// records, so it stayed empty until a fight had been fought and saved --
-    /// while the meter had known exactly who you were since the first own-player
-    /// packet. This reads that live state instead.
-    pub fn main_character(&self) -> Option<MainCharacter> {
-        let inner = self.inner.read().unwrap();
-        let actor_id = inner.main_actor_id?;
-        let name = inner.main_actor_name.clone()?;
-        Some(MainCharacter {
-            actor_id,
-            name,
-            server_id: inner.actor_id_server_map.get(&actor_id).cloned(),
-            actor_class: inner.actor_id_class_map.get(&actor_id).cloned(),
-            combat_power: inner.main_actor_combat_power,
-        })
     }
 
     pub fn last_target(&self) -> Option<u32> {
@@ -1129,6 +978,20 @@ fn current_timestamp_seconds() -> f64 {
         .unwrap_or_default()
 }
 
+/// Whether a counted hit belongs to your fight: you dealt it, you took it, or
+/// it landed on your current target (a healer's party keeps the boss busy).
+/// Before the game has told us who you are, every hit counts.
+fn is_own_fight(inner: &DataStorageInner, actor_id: u32, target_id: u32) -> bool {
+    match inner.main_actor_id {
+        None => true,
+        Some(me) => {
+            actor_id == me
+                || target_id == me
+                || inner.last_target_by_main_actor == Some(target_id)
+        }
+    }
+}
+
 fn current_timestamp_millis() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1136,13 +999,6 @@ fn current_timestamp_millis() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis() as u64)
         .unwrap_or_default()
-}
-
-fn first_four_digits(mut value: u32) -> u32 {
-    while value >= 10_000 {
-        value /= 10;
-    }
-    value
 }
 
 fn build_pvp_watch_info_for_actor(
@@ -1243,5 +1099,47 @@ mod bounded_map_tests {
             map.insert(key, key);
         }
         assert_eq!(map.map.len(), COMBAT_TARGET_CAPACITY);
+    }
+}
+
+#[cfg(test)]
+mod own_fight_tests {
+    use super::{is_own_fight, DataStorageInner};
+
+    const ME: u32 = 7;
+    const PARTY: u32 = 8;
+    const STRANGER: u32 = 9;
+    const BOSS: u32 = 100;
+    const OTHER_MOB: u32 = 200;
+
+    fn inner(main_actor: Option<u32>, my_target: Option<u32>) -> DataStorageInner {
+        DataStorageInner {
+            main_actor_id: main_actor,
+            last_target_by_main_actor: my_target,
+            ..DataStorageInner::default()
+        }
+    }
+
+    #[test]
+    fn before_you_are_identified_every_hit_counts() {
+        assert!(is_own_fight(&inner(None, None), STRANGER, OTHER_MOB));
+    }
+
+    #[test]
+    fn your_hits_and_hits_on_you_count() {
+        let state = inner(Some(ME), None);
+        assert!(is_own_fight(&state, ME, BOSS));
+        assert!(is_own_fight(&state, BOSS, ME));
+    }
+
+    #[test]
+    fn your_party_on_your_target_keeps_the_fight_alive() {
+        // A healer can go minutes without a hit of their own on a boss.
+        assert!(is_own_fight(&inner(Some(ME), Some(BOSS)), PARTY, BOSS));
+    }
+
+    #[test]
+    fn someone_else_fighting_nearby_does_not() {
+        assert!(!is_own_fight(&inner(Some(ME), Some(BOSS)), STRANGER, OTHER_MOB));
     }
 }

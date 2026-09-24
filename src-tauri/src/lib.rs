@@ -2,7 +2,6 @@ mod dps_meter;
 mod plugins;
 
 use tauri::{Manager, RunEvent};
-use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_window_state::StateFlags;
 
@@ -29,6 +28,24 @@ fn show_system_notification(
         .map_err(|error| error.to_string())
 }
 
+/// Delete what removed features left in app data. An update installs over the
+/// old copy without running its uninstaller, so nothing else ever would.
+///
+/// `maps/` held the optional full-resolution map tiles (tens of MB per zone)
+/// and a dataset override; the map was removed in 2.2.0.
+fn remove_retired_app_data(app: &tauri::AppHandle) {
+    let Ok(dir) = app.path().app_data_dir() else {
+        return;
+    };
+    let maps = dir.join("maps");
+    if maps.is_dir() {
+        match std::fs::remove_dir_all(&maps) {
+            Ok(()) => eprintln!("[startup] removed retired map data at {}", maps.display()),
+            Err(error) => eprintln!("[startup] could not remove {}: {error}", maps.display()),
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -36,11 +53,7 @@ pub fn run() {
             tauri_plugin_window_state::Builder::new()
                 .with_state_flags(StateFlags::all() & !StateFlags::VISIBLE)
                 .with_filter(|label| {
-                    !(matches!(
-                        label,
-                        "splashscreen"| "dps-overlay-pvp"| "aion2-event-timer-boss"
-                            // | "aion2-event-timer"
-                    )
+                    !(matches!(label, "splashscreen" | "dps-overlay-pvp")
                     // Chat pop-ups are placed from the Always on top page,
                     // which remembers where; restoring a title bar left on
                     // mid-move would be wrong.
@@ -54,9 +67,6 @@ pub fn run() {
             plugins::system_tray::show_main_window(app);
         }))
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_deep_link::init())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(plugins::logger::init())
         .plugin(plugins::shortcut::global_shortcut_plugin())
@@ -73,7 +83,6 @@ pub fn run() {
             plugins::logger::get_app_logger_debug_enabled,
             plugins::logger::set_app_logger_debug_enabled,
             plugins::logger::read_app_log_tail,
-            plugins::http::http_request,
             dps_meter::api::commands::apply_dps_meter_config,
             dps_meter::api::commands::get_dps_meter_config,
             dps_meter::api::commands::start_dps_meter,
@@ -81,12 +90,10 @@ pub fn run() {
             dps_meter::api::commands::get_pvp_watch_info,
             dps_meter::api::commands::get_pvp_combat_stats,
             dps_meter::api::commands::clear_pvp_combat_stats,
-            dps_meter::api::commands::get_buff_overlay_context,
-            dps_meter::api::commands::get_field_boss_timers,
             dps_meter::api::commands::get_dps_meter_status,
-            dps_meter::api::commands::get_main_character,
             dps_meter::api::commands::get_region_status,
             dps_meter::api::commands::reset_region_observations,
+            dps_meter::api::commands::get_connection_status,
             dps_meter::api::commands::start_packet_recording,
             dps_meter::api::commands::stop_packet_recording,
             dps_meter::api::commands::get_packet_recording_status,
@@ -108,27 +115,13 @@ pub fn run() {
             dps_meter::api::commands::delete_all_history,
             dps_meter::api::commands::delete_history_record,
             dps_meter::api::commands::delete_history_records,
-            dps_meter::api::commands::mark_history_records_uploaded,
             dps_meter::api::commands::check_npcap_available,
             dps_meter::api::commands::run_preflight,
             dps_meter::api::commands::enter_app,
             dps_meter::api::commands::install_npcap,
-            plugins::aion2_map::load_map_dataset,
-            plugins::aion2_map_tiles::map_tiles_status,
-            plugins::aion2_map_tiles::download_map_tiles,
-            plugins::aion2_map_tiles::delete_map_tiles,
-            plugins::aion2_map_tiles::map_tiles_dir,
-            plugins::aion2_map::get_map_overlay_zone,
-            plugins::aion2_map::create_map_overlay,
-            plugins::aion2_map::destroy_map_overlay,
             plugins::aion2_overlay::create_dps_overlay,
             plugins::aion2_overlay::destroy_dps_overlay,
             plugins::aion2_overlay::create_pvp_overlay,
-            plugins::aion2_overlay::create_dps_buff,
-            plugins::aion2_overlay::set_buff_monitor_enabled,
-            plugins::aion2_overlay::get_buff_monitor_enabled,
-            plugins::aion2_overlay::set_event_timer_enabled,
-            plugins::aion2_overlay::toggle_event_timer_boss_window,
             plugins::aion2_overlay::create_dps_history,
             plugins::aion2_overlay::toggle_dps_overlay_locked,
             plugins::aion2_overlay::set_dps_overlay_locked,
@@ -175,9 +168,9 @@ pub fn run() {
                 .state::<std::sync::Arc<plugins::logger::AppLogger>>()
                 .inner()
                 .clone();
+            remove_retired_app_data(app.handle());
             let meter = dps_meter::engine::meter::DpsMeter::new(app.handle().clone(), logger);
             app.manage(meter);
-            app.deep_link().register_all()?;
             Ok(())
         });
 

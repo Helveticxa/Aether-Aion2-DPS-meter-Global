@@ -7,231 +7,79 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <div class="title-bar">
-      <div class="title-bar__drag" id="drag-handle">
-        <span class="title-bar__label">AETHER METER</span>
-        <span class="title-bar__target" style="display: none"></span>
+    <!-- One rounded card. The header carries what you are fighting and the
+         fight time; its buttons only appear while the pointer is over the
+         card, so a fight shows numbers and nothing else. -->
+    <div class="card" id="card">
+      <header class="head" id="drag-handle">
+        <span class="head__dot" id="live-dot" aria-hidden="true"></span>
+        <span class="head__title" id="head-title">Aether</span>
+
+        <span class="head__meta">
+          <span class="head__idle">Waiting for a fight</span>
+          <span class="head__hp" id="head-hp"></span>
+          <span class="head__time" id="status-fight-time"></span>
+        </span>
+
+        <span class="head__actions">
+          <button class="icon-btn" id="reset-btn" title="Reset">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
+          </button>
+          <button class="icon-btn" id="history-btn" title="History">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 7v14" />
+              <path
+                d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+              />
+            </svg>
+          </button>
+          <button class="icon-btn" id="settings-btn" title="Settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+              />
+            </svg>
+          </button>
+          <button class="icon-btn" id="pin-btn" title="Always on top" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 17v5" />
+              <path
+                d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
+              />
+            </svg>
+          </button>
+          <button class="icon-btn icon-btn--close" id="close-btn" title="Close overlay">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </span>
+      </header>
+
+      <div class="hp" id="boss-row" hidden>
+        <div class="hp__fill" id="boss-row-bar"></div>
       </div>
-      <div class="title-bar__actions">
-      <button
-        class="title-bar__btn title-bar__pin"
-        id="pin-btn"
-        title="Always on top"
-        aria-pressed="false"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M12 17v5" />
-          <path
-            d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
-          />
-        </svg>
-      </button>
-      <button class="title-bar__btn" id="reset-btn" title="Reset">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-          <path d="M3 3v5h5" />
-        </svg>
-      </button>
-      <button class="title-bar__btn" id="history-btn" title="History">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M12 7v14" />
-          <path
-            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
-          />
-        </svg>
-      </button>
-      <button class="title-bar__btn" id="buff-btn" title="Buff monitor">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path
-            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.68 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
-          />
-          <path d="M9 12h6" />
-          <path d="M12 9v6" />
-        </svg>
-      </button>
-      <button class="title-bar__btn" id="settings-btn" title="Settings">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <circle cx="12" cy="12" r="3" />
-          <path
-            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
-          />
-        </svg>
-      </button>
-      </div>
-      <button class="title-bar__close" id="close-btn" title="Close overlay">&times;</button>
-    </div>
-    <div class="scaled-overlay" id="scaled-overlay">
-      <div class="scaled-overlay__inner" id="scaled-overlay-inner">
-        <div class="content">
-          <div class="diag-message" id="diag-message"></div>
-          <div class="boss-row" id="boss-row" style="display: none">
-            <div class="boss-row__bar" id="boss-row-bar"></div>
-            <img
-              class="boss-row__icon"
-              id="boss-row-icon"
-              src="/aion2/bossIcon.png"
-              alt=""
-              onerror="this.style.display = 'none'"
-            />
-            <span class="boss-row__name" id="boss-row-name">--</span>
-            <span class="boss-row__hp" id="boss-row-hp">--</span>
-            <span class="boss-row__pct" id="boss-row-pct">--</span>
-          </div>
-          <div class="player-list" id="player-list"></div>
-        </div>
-        <div class="status-bar">
-          <div class="status-bar__left">
-            <svg
-              class="status-bar__icon"
-              xmlns="http://www.w3.org/2000/svg"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
-            <span class="status-bar__duration" id="status-fight-time">--</span>
-            <button class="status-bar__copy-btn" id="copy-report-btn" title="Copy combat report">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
-                <path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-                <path d="M16 4h2a2 2 0 0 1 2 2v4" />
-                <path d="M21 14H11" />
-                <path d="m15 10-4 4 4 4" />
-              </svg>
-            </button>
-            <button class="status-bar__pvp-btn" id="pvp-btn" title="Open PVP meter">PVP</button>
-          </div>
-          <div class="status-bar__right">
-            <!-- The backend has always emitted CPU and memory alongside ping;
-                 nothing displayed them until now. -->
-            <svg
-              class="status-bar__icon"
-              xmlns="http://www.w3.org/2000/svg"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <rect x="4" y="4" width="16" height="16" rx="2" />
-              <rect x="9" y="9" width="6" height="6" />
-              <path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2" />
-            </svg>
-            <span class="status-bar__usage" id="status-cpu" title="Aether CPU usage">--</span>
-            <svg
-              class="status-bar__icon"
-              xmlns="http://www.w3.org/2000/svg"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M6 19v-3" />
-              <path d="M10 19v-3" />
-              <path d="M14 19v-3" />
-              <path d="M18 19v-3" />
-              <path d="M8 11V9" />
-              <path d="M16 11V9" />
-              <path d="M12 11V9" />
-              <path d="M2 15h20" />
-              <path d="M2 7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.1a2 2 0 0 0 0 3.837V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5.1a2 2 0 0 0 0-3.837Z" />
-            </svg>
-            <span class="status-bar__usage" id="status-mem" title="Aether memory usage">--</span>
-            <svg
-              class="status-bar__icon"
-              xmlns="http://www.w3.org/2000/svg"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M12 20h.01" />
-              <path d="M8.5 16.429a5 5 0 0 1 7 0" />
-              <path d="M5 12.86a10 10 0 0 1 14 0" />
-              <path d="M1.5 8.94a16 16 0 0 1 21 0" />
-            </svg>
-            <span class="status-bar__ping" id="status-ping">--</span>
-          </div>
-        </div>
-      </div>
+
+      <main class="body" id="scaled-overlay">
+        <div class="diag-message" id="diag-message"></div>
+        <div class="player-list" id="player-list"></div>
+      </main>
+
+      <footer class="foot" id="status-bar">
+        <span class="foot__party" id="party-dps"></span>
+        <span class="foot__tools">
+          <button class="text-btn" id="copy-report-btn" title="Copy combat report">Copy</button>
+          <button class="text-btn" id="pvp-btn" title="Open PVP meter">PvP</button>
+          <span class="foot__sys" id="status-cpu" title="CPU in use on this PC"></span>
+          <span class="foot__sys" id="status-mem" title="Memory in use on this PC"></span>
+        </span>
+        <span class="foot__ping" id="status-ping"></span>
+      </footer>
     </div>
     <script type="module" src="./main.js"></script>
   </body>

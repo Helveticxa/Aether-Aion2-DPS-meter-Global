@@ -13,6 +13,9 @@ pub const DEFAULT_UNKNOWN_PACKET_STALL_RESYNC_DELAY_MS: u64 = 10;
 pub const TRAINING_DUMMY_MOB_CODE: [u32; 2] = [2_400_032, 2_400_035];
 pub const DEFAULT_HIDE_KNOWN_PLAYERS: bool = false;
 pub const DEFAULT_MAX_PLAYER_COUNT: usize = 10;
+/// Five minutes: long enough to read the result of a fight, short enough that
+/// the next one starts clean.
+pub const DEFAULT_IDLE_RESET_SECS: u64 = 300;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -74,9 +77,22 @@ pub struct DpsMeterConfig {
     pub max_player_count: usize,
     #[serde(default)]
     pub capture_backend_priority: CaptureBackendPriority,
-    /// Which regional service to assume. `Auto` parses on every service.
+    /// Which regional service to assume. Always `Auto` since 2.2.0: it parses
+    /// on every service, so a choice here could only ever make things worse.
     #[serde(default)]
     pub region: RegionId,
+    /// Keep the DPS overlay hidden until you are in a fight.
+    #[serde(default = "default_true")]
+    pub hide_when_idle: bool,
+    /// Seconds without a hit of yours before the fight is saved to history
+    /// and the meter starts over. 0 never resets.
+    #[serde(default = "default_idle_reset_secs")]
+    pub idle_reset_secs: u64,
+    /// Record the first minutes of a session on a server no fingerprint
+    /// matches, so an unfamiliar protocol can be studied without a replay
+    /// having been started by hand.
+    #[serde(default = "default_true")]
+    pub auto_record_unknown_server: bool,
 }
 
 impl Default for DpsMeterConfig {
@@ -98,6 +114,9 @@ impl Default for DpsMeterConfig {
             max_player_count: 10,
             capture_backend_priority: CaptureBackendPriority::default(),
             region: RegionId::default(),
+            hide_when_idle: true,
+            idle_reset_secs: DEFAULT_IDLE_RESET_SECS,
+            auto_record_unknown_server: true,
         }
     }
 }
@@ -119,6 +138,12 @@ impl DpsMeterConfig {
             self.full_processor_stall_resync_delay_ms.min(2000);
         self.unknown_packet_stall_resync_delay_ms =
             self.unknown_packet_stall_resync_delay_ms.min(500);
+        // A region stored by an older build must not linger where nothing
+        // shows it any more.
+        self.region = RegionId::Auto;
+        if self.idle_reset_secs != 0 {
+            self.idle_reset_secs = self.idle_reset_secs.clamp(60, 3_600);
+        }
         self
     }
 }
@@ -157,10 +182,57 @@ fn default_hide_unknown_players() -> bool {
     DEFAULT_HIDE_KNOWN_PLAYERS
 }
 
+fn default_true() -> bool {
+    true
+}
+
+fn default_idle_reset_secs() -> u64 {
+    DEFAULT_IDLE_RESET_SECS
+}
+
 fn normalize_max_packet_size_threshold(value: u64) -> u64 {
     if matches!(value, 2048 | 4096 | 8192 | 16384) {
         value
     } else {
         DEFAULT_MAX_PACKET_SIZE_THRESHOLD
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_stored_region_is_brought_back_to_auto() {
+        let config = DpsMeterConfig {
+            region: RegionId::Tw,
+            ..DpsMeterConfig::default()
+        }
+        .normalized();
+        assert_eq!(config.region, RegionId::Auto);
+    }
+
+    #[test]
+    fn idle_reset_is_kept_in_a_sane_range_and_zero_means_never() {
+        let at = |secs| {
+            DpsMeterConfig {
+                idle_reset_secs: secs,
+                ..DpsMeterConfig::default()
+            }
+            .normalized()
+            .idle_reset_secs
+        };
+        assert_eq!(at(0), 0);
+        assert_eq!(at(5), 60);
+        assert_eq!(at(300), 300);
+        assert_eq!(at(86_400), 3_600);
+    }
+
+    #[test]
+    fn an_older_config_without_the_idle_fields_gets_the_defaults() {
+        let config: DpsMeterConfig = serde_json::from_str("{}").expect("parse");
+        assert!(config.hide_when_idle);
+        assert_eq!(config.idle_reset_secs, DEFAULT_IDLE_RESET_SECS);
+        assert!(config.auto_record_unknown_server);
     }
 }

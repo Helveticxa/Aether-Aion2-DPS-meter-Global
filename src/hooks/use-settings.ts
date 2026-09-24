@@ -10,9 +10,6 @@ type Language = "en" | "ko";
 type RGBA = [number, number, number, number];
 type PvpOverlayPosition = "bottom" | "right" | "free";
 type CaptureBackendPriority = "winDivertFirst" | "npcapFirst";
-/** Regional service. "auto" parses on every service, including uncatalogued ones. */
-export type Region = "auto" | "tw" | "kr" | "global";
-type BuffMonitorIconStyle = "style1" | "style2";
 
 interface AppSettings {
   theme: Theme;
@@ -46,7 +43,12 @@ interface BackendSettings {
   hideUnknownPlayers: boolean;
   maxPlayerCount: number;
   captureBackendPriority: CaptureBackendPriority;
-  region: Region;
+  /** Keep the DPS overlay hidden until you are in a fight. */
+  hideWhenIdle: boolean;
+  /** Seconds without a hit of yours before the fight is saved and cleared. 0 = never. */
+  idleResetSecs: number;
+  /** Record the first two minutes on a server no fingerprint matches. */
+  autoRecordUnknownServer: boolean;
 }
 
 interface OverlaySettings {
@@ -54,8 +56,6 @@ interface OverlaySettings {
   locked: boolean;
   alwaysOnTop: boolean;
   background: RGBA;
-  mainPlayerColor: RGBA;
-  otherPlayerColor: RGBA;
   showPlayerName: boolean;
   showServer: boolean;
   showDamage: boolean;
@@ -70,25 +70,10 @@ interface OverlaySettings {
   damageFormat: "万/亿" | "K/M/B";
 }
 
-interface BuffMonitorSettings {
-  enabled: boolean;
-  showOnlyActive: boolean;
-  iconStyle: BuffMonitorIconStyle;
-  iconSize: number;
-  iconGap: number;
-}
-
-interface EventReminderSettings {
-  showEventTimer: boolean;
-  showFieldBossTimers: boolean;
-}
-
 interface Aion2Settings {
   shortcuts: ShortcutSettings;
   backend: BackendSettings;
   overlay: OverlaySettings;
-  buffMonitor: BuffMonitorSettings;
-  eventReminder: EventReminderSettings;
   autoHideEnabled: boolean;
   autoCloseMain: boolean;
 }
@@ -104,7 +89,7 @@ export interface AppConfig {
 // =============================================================================
 
 const DEFAULTS: AppConfig = {
-  version: 3,
+  version: 4,
   app: {
     theme: "system",
     language: "en",
@@ -133,15 +118,15 @@ const DEFAULTS: AppConfig = {
       hideUnknownPlayers: false,
       maxPlayerCount: 10,
       captureBackendPriority: "npcapFirst",
-      region: "auto",
+      hideWhenIdle: true,
+      idleResetSecs: 300,
+      autoRecordUnknownServer: true,
     },
     overlay: {
-      fontFamily: "Consolas",
+      fontFamily: "Segoe UI Variable",
       locked: false,
       alwaysOnTop: false,
-      background: [8, 10, 16, 56],
-      mainPlayerColor: [193, 81, 21, 204],
-      otherPlayerColor: [46, 86, 142, 120],
+      background: [10, 12, 18, 150],
       showPlayerName: true,
       showServer: false,
       showDamage: false,
@@ -155,23 +140,15 @@ const DEFAULTS: AppConfig = {
       autoResizeHeight: true,
       damageFormat: "K/M/B",
     },
-    buffMonitor: {
-      enabled: false,
-      showOnlyActive: true,
-      iconStyle: "style1",
-      iconSize: 34,
-      iconGap: 5,
-    },
-    eventReminder: {
-      showEventTimer: false,
-      showFieldBossTimers: true,
-    },
     autoHideEnabled: true,
     autoCloseMain: true,
   },
 };
 
 const STORAGE_KEY = "app-config";
+
+/** Whether this window has pushed its settings to the backend yet. */
+let initialSyncDone = false;
 
 // =============================================================================
 // Helpers
@@ -187,9 +164,45 @@ const STORAGE_KEY = "app-config";
 // The old overlay background, kept so the v3 migration can tell "never touched
 // it" apart from "chose black on purpose".
 const LEGACY_OVERLAY_BACKGROUND = [0, 0, 0, 102];
+// The v3 default, which 2.2.0's glass card replaces the same way.
+const V3_OVERLAY_BACKGROUND = [8, 10, 16, 56];
+// Fonts that were the default or only made sense for the Chinese catalogue.
+const LEGACY_OVERLAY_FONTS = ["Consolas", "Microsoft YaHei"];
+
+function sameRgba(value: unknown, expected: number[]) {
+  return (
+    Array.isArray(value) &&
+    value.length === expected.length &&
+    value.every((part, index) => part === expected[index])
+  );
+}
 
 function migrate(config: AppConfig, storedVersion: number): AppConfig {
   let next = config;
+
+  if (storedVersion < 4) {
+    // v4 (2.2.0): the overlay became a rounded glass card in Segoe UI. Carry
+    // settings that were still the old defaults over to the new ones; anything
+    // chosen on purpose is left alone.
+    const overlay = next.aion2.overlay;
+    next = {
+      ...next,
+      aion2: {
+        ...next.aion2,
+        overlay: {
+          ...overlay,
+          fontFamily: LEGACY_OVERLAY_FONTS.includes(overlay.fontFamily)
+            ? DEFAULTS.aion2.overlay.fontFamily
+            : overlay.fontFamily,
+          background:
+            sameRgba(overlay.background, V3_OVERLAY_BACKGROUND) ||
+            sameRgba(overlay.background, LEGACY_OVERLAY_BACKGROUND)
+              ? [...DEFAULTS.aion2.overlay.background]
+              : overlay.background,
+        },
+      },
+    };
+  }
 
   if (storedVersion < 3) {
     // v3: the overlay default sat at 40% black, which reads as a black box laid
@@ -203,7 +216,6 @@ function migrate(config: AppConfig, storedVersion: number): AppConfig {
 
     next = {
       ...next,
-      version: 3,
       aion2: {
         ...next.aion2,
         overlay: {
@@ -219,6 +231,7 @@ function migrate(config: AppConfig, storedVersion: number): AppConfig {
     };
   }
 
+  next = { ...next, version: DEFAULTS.version };
   if (storedVersion >= 2) return next;
 
   config = next;
@@ -230,7 +243,6 @@ function migrate(config: AppConfig, storedVersion: number): AppConfig {
   // player packet.
   return {
     ...config,
-    version: 3,
     aion2: {
       ...config.aion2,
       backend: {
@@ -248,13 +260,15 @@ function loadConfig(): AppConfig {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed?.aion2?.buffMonitor) {
-        delete parsed.aion2.buffMonitor.preferencesByClass;
-        delete parsed.aion2.buffMonitor.layoutsByClass;
-      }
-      if (parsed?.aion2?.eventReminder) {
-        delete parsed.aion2.eventReminder.bossMobCodes;
-        delete parsed.aion2.eventReminder.enabled;
+      // Settings of features removed in 2.2.0 (buff monitor, event timers)
+      // and the region picker, which is always Auto now.
+      if (parsed?.aion2) {
+        delete parsed.aion2.buffMonitor;
+        delete parsed.aion2.eventReminder;
+        delete parsed.aion2.backend?.region;
+        // Bar colours: the overlay draws every row in its class colour.
+        delete parsed.aion2.overlay?.mainPlayerColor;
+        delete parsed.aion2.overlay?.otherPlayerColor;
       }
       // Deep merge with defaults to fill missing keys from newer versions
       const merged = deepMerge(DEFAULTS, parsed);
@@ -270,10 +284,6 @@ function loadConfig(): AppConfig {
       shortcuts: { ...DEFAULTS.aion2.shortcuts },
       backend: { ...DEFAULTS.aion2.backend },
       overlay: { ...DEFAULTS.aion2.overlay },
-      buffMonitor: {
-        ...DEFAULTS.aion2.buffMonitor,
-      },
-      eventReminder: { ...DEFAULTS.aion2.eventReminder },
     },
   };
 }
@@ -360,26 +370,6 @@ export function useSettings() {
     }
   }, []);
 
-  const syncBuffMonitor = useCallback(async (cfg: AppConfig) => {
-    try {
-      await invoke("set_buff_monitor_enabled", {
-        enabled: cfg.aion2.buffMonitor.enabled,
-      });
-    } catch (e) {
-      console.error("[useSettings] syncBuffMonitor failed:", e);
-    }
-  }, []);
-
-  const syncEventReminder = useCallback(async (cfg: AppConfig) => {
-    try {
-      await invoke("set_event_timer_enabled", {
-        enabled: cfg.aion2.eventReminder.showEventTimer,
-      });
-    } catch (e) {
-      console.error("[useSettings] syncEventReminder failed:", e);
-    }
-  }, []);
-
   // Push shortcuts to Rust
   const syncShortcuts = useCallback(async (cfg: AppConfig) => {
     try {
@@ -413,21 +403,15 @@ export function useSettings() {
         await syncOverlay(newConfig);
         await syncShortcuts(newConfig);
         await syncAutoHide(newConfig);
-        await syncBuffMonitor(newConfig);
-        await syncEventReminder(newConfig);
+        await syncLanguage(newConfig);
       } else if (path.startsWith("aion2.backend")) {
         await syncBackend(newConfig);
       } else if (path.startsWith("aion2.overlay")) {
         await syncOverlay(newConfig);
       } else if (path.startsWith("aion2.shortcuts")) {
         await syncShortcuts(newConfig);
-      } else if (path.startsWith("aion2.buffMonitor")) {
-        await syncBuffMonitor(newConfig);
-      } else if (path.startsWith("aion2.eventReminder")) {
-        await syncEventReminder(newConfig);
       } else if (path === "aion2.autoHideEnabled") {
         await syncAutoHide(newConfig);
-        await syncLanguage(newConfig);
       } else if (path.startsWith("app.language")) {
         await syncLanguage(newConfig);
       }
@@ -439,8 +423,6 @@ export function useSettings() {
       syncShortcuts,
       syncAutoHide,
       syncLanguage,
-      syncBuffMonitor,
-      syncEventReminder,
     ]
   );
 
@@ -493,8 +475,12 @@ export function useSettings() {
     }
   }, []);
 
-  // Initial sync on mount
+  // Initial sync, once per window. Every component that reads settings mounts
+  // this hook, and each mount used to push the whole config to the backend
+  // again -- re-registering every global shortcut on each page change.
   useEffect(() => {
+    if (initialSyncDone) return;
+    initialSyncDone = true;
     applyAndSync(config);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

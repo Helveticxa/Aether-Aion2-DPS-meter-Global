@@ -1,15 +1,11 @@
-import { useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ArrowLeft, HandHeart, RefreshCcw } from "lucide-react";
 import { FaGithub } from "react-icons/fa6";
-import { ALL_GAMES } from "@/game-config";
 
 import { TitleBar } from "@/components/title-bar";
-import { AuthModal } from "@/components/auth-modal";
-import { isCloudEnabled } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -90,25 +86,8 @@ function TitleActionButton({
 
 
 export function MainTitleBar() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [showGamePicker, setShowGamePicker] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [rememberCloseChoice, setRememberCloseChoice] = useState(false);
-  const hideTimerRef = useRef<number | null>(null);
-  const activeGameId =
-    ALL_GAMES.find((g) => location.pathname.startsWith(g.rootPath))?.id ?? ALL_GAMES[0]?.id;
-
-  const handlePickerEnter = () => {
-    if (hideTimerRef.current) {
-      clearTimeout(hideTimerRef.current);
-      hideTimerRef.current = null;
-    }
-    setShowGamePicker(true);
-  };
-  const handlePickerLeave = () => {
-    hideTimerRef.current = window.setTimeout(() => setShowGamePicker(false), 150);
-  };
 
   const handleCloseToBackground = async () => {
     setShowCloseDialog(false);
@@ -155,40 +134,15 @@ export function MainTitleBar() {
         onClose={handleCloseRequest}
         leftActions={
           <div className="flex min-w-0 items-center gap-6">
-            <div
-              className="relative"
-              onMouseEnter={handlePickerEnter}
-              onMouseLeave={handlePickerLeave}
-            >
-              <img
-                src={`/${activeGameId}/logo.png`}
-                alt={activeGameId}
-                className="h-12 w-auto shrink-0 cursor-pointer object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
-                draggable={false}
-              />
-              {showGamePicker && (
-                <div className="bg-background/90 absolute top-full left-0 mt-2 min-w-[120px] rounded-xl border border-white/10 p-1.5 shadow-lg backdrop-blur">
-                  {ALL_GAMES.map((g) => (
-                    <button
-                      key={g.id}
-                      type="button"
-                      onClick={() => {
-                        navigate(g.rootPath);
-                        setShowGamePicker(false);
-                        window.location.reload();
-                      }}
-                      className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-                        activeGameId === g.id
-                          ? "bg-white/10 text-white"
-                          : "text-white/60 hover:bg-white/5 hover:text-white"
-                      }`}
-                    >
-                      {g.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* One game, so the logo is a mark rather than a picker: the old
+                hover menu listed only AION2 and could stay stuck open over
+                the sidebar. */}
+            <img
+              src="/aion2/logo.png"
+              alt="AION 2"
+              className="h-12 w-auto shrink-0 object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+              draggable={false}
+            />
 
             <div className="flex items-center gap-1 rounded-full p-1">
               <TitleActionButton label="Back" onClick={() => window.history.back()}>
@@ -215,11 +169,6 @@ export function MainTitleBar() {
                 );
               })}
             </div>
-          </div>
-        }
-        rightActions={
-          <div className="flex items-center gap-2 pr-1">
-            {isCloudEnabled && <AuthModal />}
           </div>
         }
       />

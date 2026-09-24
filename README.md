@@ -17,29 +17,29 @@
 > session yet — the exact opcodes, the server-id range, and the server-name
 > catalogue all get filled in from the first capture.
 
-![DPS overlay](./docs/images/dps.png)
-
 ## What it is
 
 Aether reads AION 2 combat data by **passively sniffing network packets**. It
 does not read or write game memory, inject code, modify packets, or automate any
 part of the game. It is a monitor.
 
-A floating overlay shows live DPS while you play. Fights are saved to a
-searchable history and broken down by skill, buff uptime, and damage type.
+A floating overlay shows live DPS while you fight and steps aside when you
+are not. Fights are saved to a searchable history and broken down by skill,
+buff uptime, and damage type.
 
 ## Features
 
-- Floating overlay in two styles, with click-through and opacity control
-- Interactive map — 8 zones, 4,799 markers, with an always-on-top minimap overlay
-- Always on top — keep your own signed-in Chrome or Edge above the game, with opacity and click-through
-- Live chat overlay — YouTube and Twitch chat over the game, transparent and outlined, one pop-up per chat or merged into one
-- Light and dark themes
-- Live ping, CPU, and memory footer
-- Battle history with per-skill and per-player breakdowns
-- Damage-type split, buff timelines, and cast ordering
-- Multi-window workflow, global shortcuts, tray integration
-- English and Korean
+- **DPS meter** — a rounded glass overlay with class-coloured bars. It appears on
+  your first hit, stays for the whole fight, and after five quiet minutes saves
+  the fight to History, starts clean, and hides again (configurable)
+- **Always on top** — keep your own signed-in Chrome or Edge above the game, with
+  opacity and click-through
+- **Live chat** — YouTube and Twitch chat over the game, transparent and
+  outlined, one pop-up per chat or merged into one
+- Battle history with per-skill and per-player breakdowns, damage-type split,
+  buff timelines, and cast ordering
+- Finds the game, your character, and the server on its own — nothing to set up
+- Global shortcuts, tray integration, light and dark themes, English and Korean
 - Runs fully offline — nothing is uploaded
 
 ## Install
@@ -62,24 +62,24 @@ cosmetic — it is used *structurally*, to find where the server field sits insi
 player-info packet. On any other service every candidate is rejected and **no
 player is ever named**: an empty meter, with no error to explain it.
 
-Aether replaces that with region profiles:
-
-| Profile | Server-id rule |
-|---|---|
-| **Auto** (default) | `1001–1999`, `2001–2999` |
-| **Taiwan** | `1001–1021`, `2001–2021` |
-| **Korea**, **Global** | same as Auto |
+Aether accepts any structurally valid server id (`1001–1999`, `2001–2999`:
+race × 1000 + index), so it parses on every service without being told which
+one it is on. There is no region to pick.
 
 Detection only claims a region on evidence. Korea is identifiable by its server
-block; Taiwan and global are not yet, so it reports "no fingerprint matched"
-rather than guessing. Settings → Runtime shows the server IPs and ids actually
-observed, which is how an uncatalogued service gets identified.
+block; Taiwan and global are not yet, so they show as a new service rather than
+a guess. Settings → Aion 2 → Connection shows the server, its address, and your
+character as they are detected.
 
 [FORK.md](./FORK.md) has the full reasoning.
 
 ## Protocol tooling
 
-Settings → Runtime carries three tools built for launch day:
+On a server no fingerprint matches, Aether records the first two minutes of
+game traffic by itself, so the material for fixing a parser exists without
+anyone having pressed Record in time. The newest five are kept.
+
+Settings → Aion 2 → Connection → **Advanced** carries the rest:
 
 | Tool | What it does |
 |---|---|
@@ -87,34 +87,12 @@ Settings → Runtime carries three tools built for launch day:
 | **Opcode census** | Counts every packet by opcode, with payload sizes and whether a parser recognises it |
 | **Diagnostics report** | Turns all of the above into one pasteable summary |
 
-All off by default. Recordings stay on your machine.
-
-## Screenshots
-
-<table>
-<tr>
-<td width="50%"><img src="./docs/images/home.png" alt="Home" /></td>
-<td width="50%"><img src="./docs/images/dps_detail.png" alt="Combat detail" /></td>
-</tr>
-<tr>
-<td align="center"><sub>Home</sub></td>
-<td align="center"><sub>Combat detail</sub></td>
-</tr>
-</table>
-
-<sub>From the upstream build, so they still show NOIA2 branding and a Chinese UI.
-The layout is shared; this build is in English.</sub>
+Recordings stay on your machine.
 
 ## Credit
 
 The animated background is **Dune** by [R](https://vimeo.com/theraa), a motion
 design piece published on Vimeo.
-
-The interactive map is built on marker data and map images from
-**[AION2 Hub](https://aion2hub.com/maps)**. That database is their work; if the
-map is useful to you, visit and support them.
-[`public/aion2/maps/SOURCE.md`](./public/aion2/maps/SOURCE.md) records exactly
-what was taken and how.
 
 Aether is a fork of **[NOIA2](https://github.com/ZDYoung0519/NOIA2)** by
 [zdyoung](https://github.com/ZDYoung0519), which does the heavy lifting: the Rust

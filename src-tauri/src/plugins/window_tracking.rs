@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use serde::Deserialize;
 use tauri::{
     plugin::{Builder, TauriPlugin},
-    AppHandle, LogicalSize, Manager, PhysicalPosition, Runtime, WebviewUrl, WebviewWindow,
+    AppHandle, Manager, PhysicalPosition, Runtime, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder, WindowEvent,
 };
 

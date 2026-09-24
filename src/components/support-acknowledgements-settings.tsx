@@ -70,13 +70,6 @@ const ARTWORK_CREDITS: CreditItem[] = [
     avatarFallback: "R",
     badge: "Background",
   },
-  {
-    name: "AION2 Hub",
-    description: "Marker positions, region borders, and the base map images on the Map page.",
-    href: "https://aion2hub.com/maps",
-    avatarFallback: "AH",
-    badge: "Map data",
-  },
 ];
 
 function openExternalLink(href: string) {

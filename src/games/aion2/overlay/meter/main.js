@@ -1,3 +1,9 @@
+import { installDevBrowserShim } from "@/lib/dev-browser-shim";
+
+// Before the Tauri imports are used: lets the overlay render in a browser
+// during development. A no-op in builds and inside the app.
+installDevBrowserShim("dps-overlay");
+
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
 import { listen, emit } from "@tauri-apps/api/event";
@@ -12,127 +18,48 @@ function getServerName(serverId) {
 }
 
 // =============================================================================
-// Reconcile the overlay window height with the rendered content
+// DOM cache
 // =============================================================================
-const MIN_WINDOW_HEIGHT = 10;
-const AUTO_RESIZE_FALLBACK_POLL_MS = 5000;
+const $card = document.getElementById("card");
+const $playerList = document.getElementById("player-list");
+const $diag = document.getElementById("diag-message");
+const $headTitle = document.getElementById("head-title");
+const $headHp = document.getElementById("head-hp");
+const $statusFightTime = document.getElementById("status-fight-time");
+const $statusPing = document.getElementById("status-ping");
+const $statusCpu = document.getElementById("status-cpu");
+const $statusMem = document.getElementById("status-mem");
+const $partyDps = document.getElementById("party-dps");
+const $pinBtn = document.getElementById("pin-btn");
+const $bossRow = document.getElementById("boss-row");
+const $bossRowBar = document.getElementById("boss-row-bar");
+
+const DEFAULT_TITLE = "Aether";
+
+// =============================================================================
+// Overlay config (applied via CSS variables)
+// =============================================================================
 const STORAGE_KEY = "app-config";
 const DEFAULT_OVERLAY_CONFIG = {
   locked: false,
   alwaysOnTop: false,
-  background: [8, 10, 16, 56],
-  mainPlayerColor: [193, 81, 21, 204],
-  otherPlayerColor: [46, 86, 142, 120],
+  background: [10, 12, 18, 150],
   showPlayerName: true,
-  showServer: true,
-  showDamage: true,
+  showServer: false,
+  showDamage: false,
   showDps: true,
   showCombatPower: true,
+  showBossHp: true,
   pctMode: "contribution",
   contentScale: 1,
   detailWindowMode: "follow",
   autoResizeHeight: true,
   damageFormat: "K/M/B",
+  fontFamily: "Segoe UI Variable",
 };
-let contentScale = 1;
-let autoHeightReconcileScheduled = false;
-let lastAutoResizePlayerCount = null;
 
-function syncAutoResizeMode() {
-  const autoResizeEnabled = overlayConfig?.autoResizeHeight !== false;
-  document.body.classList.toggle("auto-resize-height", autoResizeEnabled);
-  document.body.classList.toggle("fixed-height", !autoResizeEnabled);
-
-  if (!autoResizeEnabled) {
-    $scaledOverlay?.style.removeProperty("--overlay-scaled-height");
-  }
-}
-
-async function reconcileAutoHeight() {
-  if (overlayConfig?.autoResizeHeight === false) return;
-  if (!$scaledOverlayInner) return;
-
-  const scaledContentHeight = Math.ceil($scaledOverlayInner.scrollHeight * contentScale);
-  $scaledOverlay.style.setProperty("--overlay-scaled-height", `${scaledContentHeight}px`);
-
-  const titleBarHeight = $titleBar ? $titleBar.offsetHeight : 0;
-  const targetHeight = Math.max(MIN_WINDOW_HEIGHT, Math.ceil(titleBarHeight + scaledContentHeight));
-
-  try {
-    const win = getCurrentWindow();
-    const currentSize = await win.innerSize();
-    const scaleFactor = await win.scaleFactor();
-    const currentHeight = currentSize.height / scaleFactor;
-
-    if (Math.abs(targetHeight - currentHeight) <= 1) return;
-
-    const width = currentSize.width / scaleFactor;
-    await win.setSize(new LogicalSize(width, targetHeight));
-  } catch (err) {
-    console.error("[dps-overlay] autoResize failed:", err);
-  }
-}
-
-function scheduleAutoHeightReconcile() {
-  if (overlayConfig?.autoResizeHeight === false) return;
-  if (autoHeightReconcileScheduled) return;
-
-  autoHeightReconcileScheduled = true;
-  requestAnimationFrame(() => {
-    requestAnimationFrame(async () => {
-      autoHeightReconcileScheduled = false;
-      await reconcileAutoHeight();
-    });
-  });
-}
-
-function startAutoHeightFallbackPolling() {
-  const poll = async () => {
-    await reconcileAutoHeight();
-    window.setTimeout(poll, AUTO_RESIZE_FALLBACK_POLL_MS);
-  };
-
-  window.setTimeout(poll, AUTO_RESIZE_FALLBACK_POLL_MS);
-}
-
-// =============================================================================
-// DOM cache
-// =============================================================================
-const $playerList = document.getElementById("player-list");
-const $diag = document.getElementById("diag-message");
-const $titleBar = document.querySelector(".title-bar");
-const $titleLabel = document.querySelector(".title-bar__label");
-const $titleTarget = document.querySelector(".title-bar__target");
-const $content = document.querySelector(".content");
-const $statusPing = document.getElementById("status-ping");
-const $statusFightTime = document.getElementById("status-fight-time");
-const $statusBar = document.querySelector(".status-bar");
-// GB once the number stops being readable in MB -- a PC sitting at 14 GB
-// should not be rendered as 14336.
-function formatMemory(mb) {
-  if (!Number.isFinite(mb) || mb <= 0) {
-    return "--";
-  }
-  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(0)} MB`;
-}
-
-const $statusCpu = document.getElementById("status-cpu");
-const $statusMem = document.getElementById("status-mem");
-const $scaledOverlay = document.getElementById("scaled-overlay");
-const $scaledOverlayInner = document.getElementById("scaled-overlay-inner");
-const $pinBtn = document.getElementById("pin-btn");
-const $bossRow = document.getElementById("boss-row");
-const $bossRowBar = document.getElementById("boss-row-bar");
-const $bossRowName = document.getElementById("boss-row-name");
-const $bossRowHp = document.getElementById("boss-row-hp");
-const $bossRowPct = document.getElementById("boss-row-pct");
-const $bossRowIcon = document.getElementById("boss-row-icon");
-
-// =============================================================================
-// Overlay config (applied via CSS variables)
-// =============================================================================
 let mainActorName = null;
-let overlayConfig = null;
+let overlayConfig = { ...DEFAULT_OVERLAY_CONFIG };
 let lastSnapshot = null;
 
 function rgbaStr([r, g, b, a]) {
@@ -175,18 +102,14 @@ function syncLockedToBackend(locked) {
   });
 }
 
+// Locked means click-through: the card still shows everything, it just never
+// takes a click, so its controls stay hidden.
 function applyLockedState(locked, { persist = false } = {}) {
   overlayConfig = { ...DEFAULT_OVERLAY_CONFIG, ...(overlayConfig || {}), locked };
   if (persist) {
     persistOverlayConfigToLocalStorage({ locked });
   }
-
-  if ($titleBar) {
-    $titleBar.style.display = locked ? "none" : "";
-    $titleBar.style.pointerEvents = locked ? "none" : "auto";
-  }
-  document.body.style.pointerEvents = locked ? "none" : "";
-  scheduleAutoHeightReconcile();
+  document.body.classList.toggle("is-locked", locked);
 }
 
 async function enablePvpMode() {
@@ -248,36 +171,93 @@ async function setAlwaysOnTop(enabled) {
 function applyOverlayConfig(cfg) {
   overlayConfig = { ...DEFAULT_OVERLAY_CONFIG, ...(cfg || {}) };
   const root = document.documentElement;
-  const [r, g, b, a] = overlayConfig.background;
-  contentScale = clampContentScale(overlayConfig.contentScale);
-  root.style.setProperty("--overlay-content-scale", String(contentScale));
+  root.style.setProperty("--overlay-scale", String(clampContentScale(overlayConfig.contentScale)));
   root.style.setProperty("--overlay-bg", rgbaStr(overlayConfig.background));
-  // Title bar: same RGB, slightly higher alpha for contrast
   root.style.setProperty(
-    "--titlebar-bg",
-    `rgba(${r},${g},${b},${Math.min(1, (a / 255) * 1.5).toFixed(2)})`
+    "--font-family",
+    `"${overlayConfig.fontFamily || "Segoe UI Variable"}", "Segoe UI", system-ui, sans-serif`
   );
-  root.style.setProperty("--color-main-bar", rgbaStr(overlayConfig.mainPlayerColor));
-  root.style.setProperty("--color-other-bar", rgbaStr(overlayConfig.otherPlayerColor));
-  root.style.setProperty("--font-family", overlayConfig.fontFamily || "Consolas");
-  syncAutoResizeMode();
+  const autoResize = overlayConfig.autoResizeHeight !== false;
+  document.body.classList.toggle("fixed-height", !autoResize);
   updatePinButton();
   applyLockedState(overlayConfig.locked === true);
   syncLockedToBackend(overlayConfig.locked === true);
   syncAlwaysOnTopToBackend(overlayConfig.alwaysOnTop === true);
   // Re-render existing rows immediately with new config
   if (lastSnapshot) {
+    updateOverview(lastSnapshot);
     updatePlayerList(lastSnapshot);
   }
   scheduleAutoHeightReconcile();
 }
 
 // =============================================================================
-// Drag & close
+// Keep the window exactly as tall as the card
 // =============================================================================
-// Every title-bar action used to swallow its own failure in an empty catch, so
-// a button whose command failed was indistinguishable from a button that did
-// nothing at all -- which is the single hardest kind of bug to report.
+const MIN_WINDOW_HEIGHT = 30;
+const AUTO_RESIZE_FALLBACK_POLL_MS = 5000;
+let autoHeightReconcileScheduled = false;
+
+async function reconcileAutoHeight() {
+  if (overlayConfig?.autoResizeHeight === false) return;
+
+  // The card carries CSS zoom, and its rectangle is reported in the page's
+  // own pixels -- already scaled -- which is what the window has to match.
+  const targetHeight = Math.max(
+    MIN_WINDOW_HEIGHT,
+    Math.ceil($card.getBoundingClientRect().height)
+  );
+
+  try {
+    const win = getCurrentWindow();
+    const currentSize = await win.innerSize();
+    const scaleFactor = await win.scaleFactor();
+    const currentHeight = currentSize.height / scaleFactor;
+
+    if (Math.abs(targetHeight - currentHeight) <= 1) return;
+
+    const width = currentSize.width / scaleFactor;
+    await win.setSize(new LogicalSize(width, targetHeight));
+  } catch (err) {
+    console.error("[dps-overlay] autoResize failed:", err);
+  }
+}
+
+// Two frames: the first lets the new rows take their height, the second
+// measures. requestAnimationFrame does not run while the window is hidden, so
+// a timer stands in for it then -- the overlay comes back already the right
+// size for the fight it is showing.
+function scheduleAutoHeightReconcile() {
+  if (overlayConfig?.autoResizeHeight === false) return;
+  if (autoHeightReconcileScheduled) return;
+
+  autoHeightReconcileScheduled = true;
+  const run = async () => {
+    autoHeightReconcileScheduled = false;
+    await reconcileAutoHeight();
+  };
+  if (document.visibilityState === "hidden") {
+    setTimeout(run, 0);
+    return;
+  }
+  requestAnimationFrame(() => requestAnimationFrame(run));
+}
+
+function startAutoHeightFallbackPolling() {
+  const poll = async () => {
+    await reconcileAutoHeight();
+    window.setTimeout(poll, AUTO_RESIZE_FALLBACK_POLL_MS);
+  };
+
+  window.setTimeout(poll, AUTO_RESIZE_FALLBACK_POLL_MS);
+}
+
+// =============================================================================
+// Actions
+// =============================================================================
+// Every action used to swallow its own failure in an empty catch, so a button
+// whose command failed was indistinguishable from a button that did nothing
+// at all -- which is the single hardest kind of bug to report.
 //
 // Failures now say so on the overlay itself, and clear on their own.
 let actionErrorTimer = 0;
@@ -290,8 +270,10 @@ function reportActionError(label, error) {
   actionErrorTimer = setTimeout(() => {
     if ($diag.textContent.endsWith("— see the DPS Log")) {
       $diag.textContent = "";
+      scheduleAutoHeightReconcile();
     }
   }, 6000);
+  scheduleAutoHeightReconcile();
 }
 
 async function runAction(label, action) {
@@ -302,9 +284,12 @@ async function runAction(label, action) {
   }
 }
 
-document.getElementById("drag-handle").addEventListener("mousedown", () => {
+// Dragging starts anywhere on the header except its buttons.
+document.getElementById("drag-handle").addEventListener("mousedown", (event) => {
+  if (event.button !== 0 || event.target.closest("button")) return;
   getCurrentWindow().startDragging();
 });
+
 document.getElementById("close-btn").addEventListener("click", () => {
   void runAction("Close overlay", () => getCurrentWindow().close());
 });
@@ -325,21 +310,7 @@ document.getElementById("history-btn").addEventListener("click", () => {
   void runAction("History", () => invoke("create_dps_history"));
 });
 
-const $buffBtn = document.getElementById("buff-btn");
-$buffBtn.addEventListener("mousedown", (event) => {
-  event.stopPropagation();
-});
-$buffBtn.addEventListener("click", (event) => {
-  event.stopPropagation();
-  void runAction("Buff monitor", () => invoke("create_dps_buff"));
-});
-
-const $pvpBtn = document.getElementById("pvp-btn");
-$pvpBtn.addEventListener("mousedown", (event) => {
-  event.stopPropagation();
-});
-$pvpBtn.addEventListener("click", (event) => {
-  event.stopPropagation();
+document.getElementById("pvp-btn").addEventListener("click", () => {
   void runAction("PVP meter", async () => {
     await enablePvpMode();
     await invoke("create_pvp_overlay");
@@ -348,15 +319,9 @@ $pvpBtn.addEventListener("click", (event) => {
 
 function buildBattleReport(snap) {
   const players = snap.lastTargetAllPlayersOverviewStats || [];
-  const targetInfo = snap.lastTargetInfo;
+  const targetInfo = getLastTargetInfo(snap);
   const allDmg = players.reduce((s, p) => s + p.totalDamage, 0);
-  const fightStart = targetInfo?.targetStartTime
-    ? Math.min(...Object.values(targetInfo.targetStartTime))
-    : 0;
-  const fightEnd = targetInfo?.targetLastTime
-    ? Math.max(...Object.values(targetInfo.targetLastTime))
-    : 0;
-  const dur = Math.max(0, fightEnd - fightStart);
+  const dur = getTeamBattleDuration(targetInfo);
   const teamDps = dur > 0 ? allDmg / dur : 0;
 
   const fmtDmg = (n) =>
@@ -373,41 +338,41 @@ function buildBattleReport(snap) {
     return m + "m" + String(sec).padStart(2, "0") + "s";
   };
 
-  let report = `Duration ${fmtTime(dur)} · Total damage ${fmtDmg(allDmg)} · Party DPS ${Math.round(teamDps).toLocaleString("en-US")}\n`;
-  const classes = [
-    "Gladiator",
-    "Templar",
-    "Assassin",
-    "Ranger",
-    "Sorcerer",
-    "Elementalist",
-    "Cleric",
-    "Chanter",
-  ];
-  const classMap = {
-    GLADIATOR: "Gladiator",
-    TEMPLAR: "Templar",
-    ASSASSIN: "Assassin",
-    RANGER: "Ranger",
-    SORCERER: "Sorcerer",
-    ELEMENTALIST: "Elementalist",
-    CLERIC: "Cleric",
-    CHANTER: "Chanter",
-  };
-  for (const cls of classes) {
-    const p = players.find((p) => classMap[p.actorClass] === cls);
-    if (!p) continue;
-    report += `${cls} — ${p.actorName || "ID:" + p.actorId} · ${fmtDmg(p.totalDamage)} · ${Math.round(p.dps).toLocaleString("en-US")}/s\n`;
+  const target = targetInfo?.targetName ? `${targetInfo.targetName} · ` : "";
+  let report = `${target}Duration ${fmtTime(dur)} · Total damage ${fmtDmg(allDmg)} · Party DPS ${Math.round(teamDps).toLocaleString("en-US")}\n`;
+  for (const p of players) {
+    report += `${p.actorName || "ID:" + p.actorId} · ${fmtDmg(p.totalDamage)} · ${Math.round(p.dps).toLocaleString("en-US")}/s\n`;
   }
   report += `\nRecorded with Aether — github.com/Helveticxa/Aether-Aion2-DPS-meter-Global`;
   return report;
+}
+
+// The overlay never takes focus, and the async clipboard API refuses an
+// unfocused document. The older copy command only needs the click itself.
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch (_) {
+    /* fall through */
+  }
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.setAttribute("readonly", "");
+  area.style.position = "fixed";
+  area.style.opacity = "0";
+  document.body.appendChild(area);
+  area.select();
+  const copied = document.execCommand("copy");
+  area.remove();
+  if (!copied) throw new Error("clipboard unavailable");
 }
 
 document.getElementById("copy-report-btn").addEventListener("click", () => {
   if (!lastSnapshot) return;
   const report = buildBattleReport(lastSnapshot);
   void runAction("Copy report", async () => {
-    await navigator.clipboard.writeText(report);
+    await copyText(report);
     invoke("show_system_notification", {
       title: "Aether",
       body: "Battle report copied to clipboard",
@@ -425,6 +390,12 @@ const DIAG_MESSAGES = [
   { key: "playerIdentified", i18n: "dps-overlay.diagPlayerId" },
 ];
 
+function setDiag(text) {
+  if ($diag.textContent === text) return;
+  $diag.textContent = text;
+  scheduleAutoHeightReconcile();
+}
+
 async function runDiagnostic() {
   try {
     const state = await invoke("check_dps_meter_state");
@@ -433,24 +404,23 @@ async function runDiagnostic() {
     // that explains itself is a setting to change; an empty meter that says
     // nothing reads as a broken app, and cost a whole play session to diagnose.
     if (!state.hasGameData && state.bossOnlyFiltered > 0) {
-      $diag.textContent = t("dps-overlay.diagBossOnly").replace(
-        "{count}",
-        state.bossOnlyFiltered.toLocaleString()
+      setDiag(
+        t("dps-overlay.diagBossOnly").replace("{count}", state.bossOnlyFiltered.toLocaleString())
       );
       return false;
     }
 
     for (const diag of DIAG_MESSAGES) {
       if (!state[diag.key]) {
-        $diag.textContent = t(diag.i18n);
+        setDiag(t(diag.i18n));
         return false;
       }
     }
-    $diag.textContent = "";
+    setDiag("");
     return true;
   } catch (err) {
     console.error("[dps-overlay] diagnostic failed:", err);
-    $diag.textContent = "Diagnostic error — check console";
+    setDiag("Diagnostic error — check console");
     return false;
   }
 }
@@ -479,11 +449,53 @@ function fmtDps(n) {
   return Math.round(n).toLocaleString("en-US");
 }
 
+// Party DPS reads at a glance: 18.6K rather than 18,642.
+function fmtCompact(n) {
+  if (!Number.isFinite(n) || n <= 0) return "";
+  if (n < 10_000) return Math.round(n).toLocaleString("en-US");
+  if (n < 1_000_000) return (n / 1_000).toFixed(1) + "K";
+  return (n / 1_000_000).toFixed(2) + "M";
+}
+
 // Combat power reads as an identity number, not a running total, so it is
 // grouped rather than abbreviated -- 24,180 rather than 24.2K.
 function fmtCombatPower(n) {
   if (!Number.isFinite(n) || n <= 0) return "";
   return Math.round(n).toLocaleString("en-US");
+}
+
+function fmtShare(n) {
+  if (n == null) return "--";
+  const pct = n * 100;
+  if (pct >= 99.95) return "100%";
+  return pct.toFixed(1) + "%";
+}
+
+function fmtHpPct(currentHp, maxHp) {
+  if (!Number.isFinite(currentHp) || !Number.isFinite(maxHp) || maxHp <= 0) return "";
+  const pct = Math.max(0, Math.min(100, (currentHp / maxHp) * 100));
+  if (pct >= 99.95) return "100%";
+  return pct.toFixed(1) + "%";
+}
+
+function fmtDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  const total = Math.floor(seconds);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  }
+  return `${minutes}:${String(secs).padStart(2, "0")}`;
+}
+
+function maskName(name) {
+  if (!overlayConfig?.maskNicknames) return name;
+  const t = (name || "").trim();
+  if (t.length <= 1) return t ? "*" : "";
+  if (t.length === 2) return t[0] + "*";
+  return t[0] + "*".repeat(t.length - 2) + t[t.length - 1];
 }
 
 // DPS counts toward its new value instead of snapping to it.
@@ -532,9 +544,10 @@ function setDpsTarget(cell, value) {
 
   cell._dpsTarget = target;
 
-  // A first value, or a reset to zero, lands immediately -- counting up from
-  // nothing at the start of every fight would just look like lag.
-  if (cell._dpsShown == null || target === 0) {
+  // A first value, a reset to zero, or a hidden window lands immediately --
+  // counting up from nothing at the start of every fight would look like lag,
+  // and a hidden window has no frames to count with.
+  if (cell._dpsShown == null || target === 0 || document.visibilityState === "hidden") {
     cell._dpsShown = target;
     tweeningCells.delete(cell);
     const text = fmtDps(target);
@@ -551,40 +564,9 @@ function setDpsTarget(cell, value) {
   }
 }
 
-function maskName(name) {
-  if (!overlayConfig?.maskNicknames) return name;
-  const t = (name || "").trim();
-  if (t.length <= 1) return t ? "*" : "";
-  if (t.length === 2) return t[0] + "*";
-  return t[0] + "*".repeat(t.length - 2) + t[t.length - 1];
-}
-
-function fmtShare(n) {
-  if (n == null) return "--";
-  const pct = n * 100;
-  if (pct >= 99.95) return "100%";
-  return pct.toFixed(1) + "%";
-}
-
-function fmtHpPct(currentHp, maxHp) {
-  if (!Number.isFinite(currentHp) || !Number.isFinite(maxHp) || maxHp <= 0) return "--";
-  const pct = Math.max(0, Math.min(100, (currentHp / maxHp) * 100));
-  if (pct >= 99.95) return "100%";
-  return pct.toFixed(1) + "%";
-}
-
-function fmtDuration(seconds) {
-  if (!Number.isFinite(seconds) || seconds <= 0) return "--";
-  const total = Math.floor(seconds);
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const secs = total % 60;
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-  }
-  return `${minutes}:${String(secs).padStart(2, "0")}`;
-}
-
+// =============================================================================
+// Snapshot helpers
+// =============================================================================
 function getObjectValues(obj) {
   return Object.values(obj || {})
     .map(Number)
@@ -612,7 +594,7 @@ function getTeamBattleDuration(targetInfo) {
 }
 
 // =============================================================================
-// Class icon
+// Class icon and colour
 // =============================================================================
 const CLASS_ICON_PATH = "/aion2/class/";
 
@@ -642,75 +624,44 @@ function getClassIcon(actorClass) {
 }
 
 // =============================================================================
-// State: last rendered strings (avoid redundant DOM writes)
-// =============================================================================
-
-// =============================================================================
-// Render: overview stats
+// Render: header (target, health, fight time)
 // =============================================================================
 function updateOverview(snap) {
   const targetInfo = getLastTargetInfo(snap);
   $statusFightTime.textContent = fmtDuration(getTeamBattleDuration(targetInfo));
-  updateBossRow(targetInfo);
-}
 
-function updateBossRow(targetInfo) {
-  const hasTarget = targetInfo != null;
-  const showBossBar = hasTarget && overlayConfig?.showBossHp !== false;
-
-  if (!hasTarget) {
-    $titleLabel.textContent = "AETHER METER";
-    if ($titleTarget) {
-      $titleTarget.textContent = "";
-      $titleTarget.style.display = "none";
-    }
-    $bossRow.style.display = "none";
+  if (!targetInfo) {
+    $headTitle.textContent = DEFAULT_TITLE;
+    $headTitle.title = "";
+    $headHp.textContent = "";
+    $bossRow.hidden = true;
     return;
   }
 
-  // The window keeps its own name; the target goes in a slot of its own.
-  //
-  // This used to overwrite the title, so hitting a mob replaced "AETHER METER"
-  // with a Traditional Chinese name from the bundled catalogue -- which reads as
-  // the app having switched language, not as the name of what you are fighting.
+  // What you are fighting, in the header where the app's name sits between
+  // fights. Its health is the context every number below is relative to.
   const name = targetInfo.targetName || `Target ${targetInfo.id ?? ""}`.trim();
-  $titleLabel.textContent = "AETHER METER";
-
-  // The name belongs in one place. With the health row showing it already sits
-  // next to the health it describes, so the title slot stands down.
-  if ($titleTarget) {
-    if (showBossBar) {
-      $titleTarget.textContent = "";
-      $titleTarget.style.display = "none";
-    } else {
-      $titleTarget.textContent = name;
-      $titleTarget.title = name;
-      $titleTarget.style.display = "";
-    }
-  }
-
-  // Boss HP bar visibility is controlled by showBossHp setting
-  $bossRow.style.display = showBossBar ? "" : "none";
-
-  if (!showBossBar) {
-    return;
-  }
+  $headTitle.textContent = maskName(name);
+  $headTitle.title = name;
 
   const currentHp = Number(targetInfo.currentHp ?? 0);
   const maxHp = Number(targetInfo.maxHp ?? 0);
-  const hpScale =
-    Number.isFinite(currentHp) && Number.isFinite(maxHp) && maxHp > 0
-      ? Math.max(0, Math.min(1, currentHp / maxHp))
-      : 0;
-  const hpText =
-    Number.isFinite(maxHp) && maxHp > 0
-      ? `${fmtDamage(currentHp)} / ${fmtDamage(maxHp)}`
-      : "-- / --";
+  const showHp = overlayConfig?.showBossHp !== false && maxHp > 0;
 
-  $bossRowName.textContent = maskName(name);
-  $bossRowHp.textContent = hpText;
-  $bossRowPct.textContent = fmtHpPct(currentHp, maxHp);
+  if (!showHp) {
+    $headHp.textContent = "";
+    $bossRow.hidden = true;
+    return;
+  }
+
+  const hpScale = Math.max(0, Math.min(1, currentHp / maxHp));
+  $headHp.textContent = fmtHpPct(currentHp, maxHp);
+  $headHp.title = `${fmtDamage(currentHp)} / ${fmtDamage(maxHp)}`;
   $bossRowBar.style.setProperty("--bar-scale", hpScale);
+  if ($bossRow.hidden) {
+    $bossRow.hidden = false;
+    scheduleAutoHeightReconcile();
+  }
 }
 
 // =============================================================================
@@ -721,42 +672,33 @@ const BAR_SCALE_FLOOR = 0.06;
 const playerRows = new Map(); // actorId → { row, cells }
 const rowPool = []; // pre-built hidden rows for reuse
 let rowTemplate = null;
+let lastRenderedCount = -1;
 
 function buildRowTemplate() {
-  // bar
   const bar = document.createElement("div");
   bar.className = "player-row__bar";
 
-  // content wrapper (z-10)
   const content = document.createElement("div");
   content.className = "player-row__content";
 
-  // -- left group --
   const left = document.createElement("div");
   left.className = "player-row__left";
 
   const iconWrap = document.createElement("div");
   iconWrap.className = "player-row__icon-wrap";
-
   const icon = document.createElement("img");
   icon.className = "player-row__icon";
   icon.alt = "";
-  icon.addEventListener("error", () => {
-    icon.style.display = "none";
-  });
-  icon.addEventListener("contextmenu", (e) => e.preventDefault());
   iconWrap.appendChild(icon);
 
   const nameWrap = document.createElement("div");
   nameWrap.className = "player-row__name-wrap";
-
   const nameEl = document.createElement("span");
   nameEl.className = "player-row__name";
   const serverEl = document.createElement("span");
   serverEl.className = "player-row__server";
   // Combat power sits with the name rather than the numbers: it says who this
-  // is, not how they are doing. The backend has carried it on every player
-  // stat since the fork without anything showing it.
+  // is, not how they are doing.
   const powerEl = document.createElement("span");
   powerEl.className = "player-row__power";
   nameWrap.appendChild(nameEl);
@@ -766,7 +708,6 @@ function buildRowTemplate() {
   left.appendChild(iconWrap);
   left.appendChild(nameWrap);
 
-  // -- right group --
   const right = document.createElement("div");
   right.className = "player-row__right";
 
@@ -776,8 +717,7 @@ function buildRowTemplate() {
   const dpsWrap = document.createElement("span");
   dpsWrap.className = "player-row__dps";
   // dps value + /s unit are separate text nodes so we only update the value
-  const dpsVal = document.createTextNode("");
-  dpsWrap.appendChild(dpsVal);
+  dpsWrap.appendChild(document.createTextNode(""));
   const dpsUnit = document.createElement("span");
   dpsUnit.className = "player-row__dps-unit";
   dpsUnit.textContent = "/s";
@@ -799,33 +739,7 @@ function buildRowTemplate() {
   row.appendChild(bar);
   row.appendChild(content);
 
-  rowTemplate = {
-    row,
-    bar,
-    icon,
-    nameEl,
-    serverEl,
-    powerEl,
-    damage,
-    dpsVal,
-    share,
-  };
-}
-
-function getRow() {
-  if (!rowTemplate) buildRowTemplate();
-  const t = rowTemplate;
-  return {
-    row: t.row.cloneNode(true),
-    bar: null, // filled below
-    icon: null,
-    nameEl: null,
-    serverEl: null,
-    powerEl: null,
-    damage: null,
-    dpsVal: null,
-    share: null,
-  };
+  rowTemplate = row;
 }
 
 // Wipe the "what is currently rendered" caches on a recycled row. Without this
@@ -834,7 +748,7 @@ function getRow() {
 function resetRow(entry) {
   const c = entry.cells;
   c._barScale = -1;
-  c._iconSrc = "";
+  c._iconSrc = null;
   c._nameRaw = "";
   c._serverRaw = "";
   c._powerRaw = "";
@@ -846,79 +760,44 @@ function resetRow(entry) {
   return entry;
 }
 
-function populateRowRefs(raw) {
+function newRow() {
+  if (!rowTemplate) buildRowTemplate();
+  const row = rowTemplate.cloneNode(true);
+
   // Direct child access (more reliable than querySelector on detached clones)
-  const bar = raw.row.children[0];
-  const content = raw.row.children[1];
+  const bar = row.children[0];
+  const content = row.children[1];
   const left = content.children[0];
   const right = content.children[1];
-
-  const iconWrap = left.children[0];
-  const icon = iconWrap.children[0];
+  const icon = left.children[0].children[0];
   const nameWrap = left.children[1];
-  const nameEl = nameWrap.children[0];
-  const serverEl = nameWrap.children[1];
-  const powerEl = nameWrap.children[2];
 
-  const damage = right.children[0];
-  const dpsWrap = right.children[1];
-  const share = right.children[2];
-  const dpsVal = dpsWrap.firstChild;
-
-  // Re-attach listeners lost during cloneNode
+  // Listeners do not survive cloneNode.
   icon.addEventListener("error", () => {
     icon.style.display = "none";
   });
   icon.addEventListener("contextmenu", (e) => e.preventDefault());
 
-  return {
-    row: raw.row,
+  return resetRow({
+    row,
     cells: {
       bar,
       icon,
-      nameEl,
-      serverEl,
-      powerEl,
-      damage,
-      dpsVal,
-      share,
-      _barScale: -1,
-      _iconSrc: "",
-      _nameRaw: "",
-      _serverRaw: "",
-      _powerRaw: "",
-      _dpsShown: null,
-      _dpsTarget: null,
-      _damageRaw: "",
-      _dpsRaw: "",
-      _shareRaw: "",
+      nameEl: nameWrap.children[0],
+      serverEl: nameWrap.children[1],
+      powerEl: nameWrap.children[2],
+      damage: right.children[0],
+      dpsVal: right.children[1].firstChild,
+      share: right.children[2],
     },
-  };
+  });
 }
 
-function createPlayerRow(p) {
-  const entry = rowPool.length > 0 ? resetRow(rowPool.pop()) : populateRowRefs(getRow());
-  const c = entry.cells;
+function createPlayerRow() {
+  const entry = rowPool.length > 0 ? resetRow(rowPool.pop()) : newRow();
 
-  // Icon, and the class colour its bar is drawn in
-  const iconSrc = getClassIcon(p.actorClass);
-  if (iconSrc) {
-    c.icon.src = iconSrc;
-    c.icon.style.display = "";
-  } else {
-    c.icon.style.display = "none";
-  }
-  c._iconSrc = iconSrc;
-
-  const rowColor = getClassColor(p.actorClass);
-  if (rowColor) {
-    entry.row.style.setProperty("--row-rgb", rowColor);
-  } else {
-    entry.row.style.removeProperty("--row-rgb");
-  }
-
-  // Show row. Rows are positioned rather than stacked, so a new one has to be
-  // attached here -- there is no insertBefore doing it as a side effect.
+  // Rows are positioned rather than stacked, so a new one has to be attached
+  // here -- there is no insertBefore doing it as a side effect.
   entry.row.style.display = "";
   entry.row.classList.add("is-entering");
   if (entry.row.parentNode !== $playerList) {
@@ -926,24 +805,39 @@ function createPlayerRow(p) {
   }
 
   // Two frames: one for the browser to accept the entering state as the start
-  // of the transition, one to transition away from it.
-  requestAnimationFrame(() => {
+  // of the transition, one to transition away from it. Hidden windows get no
+  // frames, so the row simply arrives.
+  if (document.visibilityState === "hidden") {
+    entry.row.classList.remove("is-entering");
+  } else {
     requestAnimationFrame(() => {
-      entry.row.classList.remove("is-entering");
+      requestAnimationFrame(() => {
+        entry.row.classList.remove("is-entering");
+      });
     });
-  });
+  }
 
   return entry;
 }
 
+function setText(cells, key, el, text) {
+  if (cells[key] !== text) {
+    el.textContent = text;
+    cells[key] = text;
+  }
+}
+
+function setShown(el, shown) {
+  const display = shown ? "" : "none";
+  if (el.style.display !== display) el.style.display = display;
+}
+
 function updatePlayerRow(entry, p, maxDamage) {
   const c = entry.cells;
+  const cfg = overlayConfig || {};
 
-  // Background bar — GPU-composited via CSS var on ::after.
-  //
   // A floor keeps the tail of the list visible: someone contributing 1% still
-  // gets a readable sliver of their class colour, which is what tells you they
-  // are in the fight at all.
+  // gets a readable sliver of their class colour.
   const rawScale = maxDamage > 0 ? p.totalDamage / maxDamage : 0;
   const barScale = rawScale > 0 ? Math.max(rawScale, BAR_SCALE_FLOOR) : 0;
   if (barScale !== c._barScale) {
@@ -958,6 +852,7 @@ function updatePlayerRow(entry, p, maxDamage) {
       c.icon.src = iconSrc;
       c.icon.style.display = "";
     } else {
+      c.icon.removeAttribute("src");
       c.icon.style.display = "none";
     }
     c._iconSrc = iconSrc;
@@ -970,71 +865,36 @@ function updatePlayerRow(entry, p, maxDamage) {
     }
   }
 
-  const cfg = overlayConfig || {};
-
-  // Name
+  setShown(c.nameEl, cfg.showPlayerName !== false);
   if (cfg.showPlayerName !== false) {
-    const nameText = p.actorName || `ID:${p.actorId}`;
-    if (nameText !== c._nameRaw) {
-      c.nameEl.textContent = maskName(nameText);
-      c._nameRaw = nameText;
-    }
-    c.nameEl.style.display = "";
-  } else {
-    c.nameEl.style.display = "none";
+    setText(c, "_nameRaw", c.nameEl, maskName(p.actorName || `ID:${p.actorId}`));
   }
 
-  // Server
-  if (cfg.showServer !== false) {
-    const serverText = getServerName(p.actorServerId);
-    if (serverText !== c._serverRaw) {
-      c.serverEl.textContent = serverText;
-      c._serverRaw = serverText;
-    }
-    c.serverEl.style.display = "";
-  } else {
-    c.serverEl.style.display = "none";
+  const showServer = cfg.showServer === true && p.actorServerId != null;
+  setShown(c.serverEl, showServer);
+  if (showServer) {
+    setText(c, "_serverRaw", c.serverEl, String(getServerName(p.actorServerId)));
   }
 
-  // Combat power / gear score, where the game has told us
-  if (cfg.showCombatPower !== false && p.combatPower > 0) {
-    const powerText = fmtCombatPower(p.combatPower);
-    if (powerText !== c._powerRaw) {
-      c.powerEl.textContent = powerText;
-      c._powerRaw = powerText;
-    }
-    c.powerEl.style.display = "";
-  } else {
-    c.powerEl.style.display = "none";
+  const showPower = cfg.showCombatPower !== false && p.combatPower > 0;
+  setShown(c.powerEl, showPower);
+  if (showPower) {
+    setText(c, "_powerRaw", c.powerEl, fmtCombatPower(p.combatPower));
   }
 
-  // Damage
-  if (cfg.showDamage !== false) {
-    const dmgText = fmtDamage(p.totalDamage);
-    if (dmgText !== c._damageRaw) {
-      c.damage.textContent = dmgText;
-      c._damageRaw = dmgText;
-    }
-    c.damage.style.display = "";
-  } else {
-    c.damage.style.display = "none";
+  setShown(c.damage, cfg.showDamage === true);
+  if (cfg.showDamage === true) {
+    setText(c, "_damageRaw", c.damage, fmtDamage(p.totalDamage));
   }
 
   // DPS, counted toward rather than snapped to
+  setShown(c.dpsVal.parentElement, cfg.showDps !== false);
   if (cfg.showDps !== false) {
     setDpsTarget(c, p.dps);
-    c.dpsVal.parentElement.style.display = "";
-  } else {
-    c.dpsVal.parentElement.style.display = "none";
   }
 
-  // Percentage (contribution or share based on pctMode)
   const pctValue = cfg.pctMode === "share" ? p.damageShare : p.damageContribution;
-  const shareText = fmtShare(pctValue);
-  if (shareText !== c._shareRaw) {
-    c.share.textContent = shareText;
-    c._shareRaw = shareText;
-  }
+  setText(c, "_shareRaw", c.share, fmtShare(pctValue));
 }
 
 let rowHeightPx = 0;
@@ -1044,7 +904,7 @@ function getRowHeight() {
     return rowHeightPx;
   }
   const raw = getComputedStyle(document.documentElement).getPropertyValue("--row-height");
-  rowHeightPx = parseFloat(raw) || 28;
+  rowHeightPx = parseFloat(raw) || 26;
   return rowHeightPx;
 }
 
@@ -1071,12 +931,8 @@ function releaseRow(entry) {
   rowPool.push(entry);
 }
 
-// MAX_ROWS has been declared since the fork and never applied, so a full raid
-// rendered a row per participant and the overlay grew to whatever the party
-// size was. Capping it fixes the height at a known maximum.
-//
-// Your own row is never the one dropped: an overlay that hides you when you are
-// eleventh is answering the wrong question.
+// Your own row is never the one dropped: an overlay that hides you when you
+// are eleventh is answering the wrong question.
 function limitPlayers(players, mainName) {
   if (!players || players.length <= MAX_ROWS) {
     return players;
@@ -1094,92 +950,62 @@ function limitPlayers(players, mainName) {
   return shown;
 }
 
-function updatePlayerList(snap, fullRebuild) {
+function updatePlayerList(snap) {
   const mainName = snap.combatInfos?.mainActorName ?? null;
-  const players = limitPlayers(snap.lastTargetAllPlayersOverviewStats, mainName);
-  const playerCount = players?.length ?? 0;
-  const shouldResize =
-    fullRebuild === true ||
-    lastAutoResizePlayerCount === null ||
-    playerCount !== lastAutoResizePlayerCount;
-  lastAutoResizePlayerCount = playerCount;
-
-  // Track main actor for .is-main class
+  const players = limitPlayers(snap.lastTargetAllPlayersOverviewStats, mainName) || [];
   mainActorName = mainName;
 
-  // Full rebuild: clear everything
-  if (fullRebuild) {
+  document.body.classList.toggle("has-players", players.length > 0);
+
+  // Party DPS: everyone on the target, together.
+  const partyDps = players.reduce((sum, p) => sum + (Number(p.dps) || 0), 0);
+  const partyText = players.length > 1 && partyDps > 0 ? `Party ${fmtCompact(partyDps)}/s` : "";
+  if ($partyDps.textContent !== partyText) $partyDps.textContent = partyText;
+
+  if (players.length === 0) {
     for (const [, entry] of playerRows) {
-      tweeningCells.delete(entry.cells);
-      entry.row.remove();
+      releaseRow(entry);
     }
     playerRows.clear();
-  }
-
-  // Toggle has-players based on player count (backend already filtered)
-  if (players && players.length > 0) {
-    document.body.classList.add("has-players");
   } else {
-    document.body.classList.remove("has-players");
-  }
-
-  // Hide all rows when no players
-  if (!players || players.length === 0) {
-    for (const [, entry] of playerRows) {
-      releaseRow(entry);
+    let maxDamage = 0;
+    for (const p of players) {
+      if (p.totalDamage > maxDamage) maxDamage = p.totalDamage;
     }
-    playerRows.clear();
-    $playerList.style.height = "0px";
-    if (shouldResize) {
-      scheduleAutoHeightReconcile();
-    }
-    return;
-  }
 
-  // Max totalDamage for background bar scaling
-  let maxDamage = 0;
-  for (let i = 0; i < players.length; i++) {
-    if (players[i].totalDamage > maxDamage) maxDamage = players[i].totalDamage;
-  }
+    const seen = new Set();
+    players.forEach((p, index) => {
+      seen.add(p.actorId);
 
-  const seen = new Set();
+      let entry = playerRows.get(p.actorId);
+      if (!entry) {
+        entry = createPlayerRow();
+        playerRows.set(p.actorId, entry);
+      }
+      updatePlayerRow(entry, p, maxDamage);
 
-  for (let i = 0; i < players.length; i++) {
-    const p = players[i];
+      entry.row.classList.toggle("is-main", mainActorName != null && p.actorName === mainActorName);
+      entry.row.dataset.actorId = p.actorId;
 
-    seen.add(p.actorId);
+      // Rows live in one fixed order in the DOM and are moved with a
+      // transform, so a rank change animates on the compositor instead of
+      // being an insertBefore that redraws the list.
+      placeRow(entry, index);
+    });
 
-    let entry = playerRows.get(p.actorId);
-    if (!entry) {
-      entry = createPlayerRow(p);
-      playerRows.set(p.actorId, entry);
-    }
-    updatePlayerRow(entry, p, maxDamage);
-
-    // Mark main player row + attach actorId for click handler
-    const isMain = mainActorName != null && p.actorName === mainActorName;
-    entry.row.classList.toggle("is-main", isMain);
-    entry.row.dataset.actorId = p.actorId;
-
-    // Place the row by rank. Rows live in one fixed order in the DOM and are
-    // moved with a transform, so a rank change animates on the compositor
-    // instead of being an insertBefore that redraws the list.
-    placeRow(entry, i);
-  }
-
-  // Hide stale rows (players who left combat)
-  for (const [id, entry] of playerRows) {
-    if (!seen.has(id)) {
-      releaseRow(entry);
-      playerRows.delete(id);
+    for (const [id, entry] of playerRows) {
+      if (!seen.has(id)) {
+        releaseRow(entry);
+        playerRows.delete(id);
+      }
     }
   }
 
-  // The list is absolutely populated, so it needs an explicit height for the
-  // auto-resize pass to have anything to measure.
-  $playerList.style.height = players.length * getRowHeight() + "px";
-
-  if (shouldResize) {
+  // The list is absolutely positioned, so it needs an explicit height for the
+  // window to have anything to measure.
+  if (players.length !== lastRenderedCount) {
+    lastRenderedCount = players.length;
+    $playerList.style.height = players.length * getRowHeight() + "px";
     scheduleAutoHeightReconcile();
   }
 }
@@ -1187,9 +1013,18 @@ function updatePlayerList(snap, fullRebuild) {
 // =============================================================================
 // Init
 // =============================================================================
+// GB once the number stops being readable in MB -- a PC sitting at 14 GB
+// should not be rendered as 14336.
+function formatMemory(mb) {
+  if (!Number.isFinite(mb) || mb <= 0) {
+    return "";
+  }
+  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(0)} MB`;
+}
+
 (async function init() {
   // Lock state affects local UI too; register this before any async startup work
-  // so the title bar cannot miss the initial backend event.
+  // so the card cannot miss the initial backend event.
   listen("overlay-lock-toggled", (event) => {
     applyLockedState(event.payload?.locked === true, { persist: true });
   });
@@ -1197,14 +1032,12 @@ function updatePlayerList(snap, fullRebuild) {
   // Pull initial overlay config from Rust store (avoids race with event timing)
   try {
     const cfg = await invoke("get_overlay_config");
-    if (cfg && Object.keys(cfg).length > 0) {
-      applyOverlayConfig(cfg);
-    }
+    applyOverlayConfig(cfg && Object.keys(cfg).length > 0 ? cfg : DEFAULT_OVERLAY_CONFIG);
   } catch (e) {
     console.error("[dps-overlay] get_overlay_config failed:", e);
+    applyOverlayConfig(DEFAULT_OVERLAY_CONFIG);
   }
 
-  // Listen for subsequent overlay config changes
   listen("overlay-config-changed", (event) => {
     applyOverlayConfig(event.payload);
   });
@@ -1218,19 +1051,6 @@ function updatePlayerList(snap, fullRebuild) {
     console.error("[dps-overlay] get_dps_overlay_locked failed:", e);
   }
 
-  // Diagnostic polling
-  let allOk = await runDiagnostic();
-  if (!allOk) {
-    const poll = setInterval(async () => {
-      allOk = await runDiagnostic();
-      if (allOk) {
-        clearInterval(poll);
-      }
-      scheduleAutoHeightReconcile();
-    }, 2000);
-  }
-
-  // Pull language + config on startup
   try {
     const lang = await invoke("get_language");
     setLanguage(lang);
@@ -1238,28 +1058,35 @@ function updatePlayerList(snap, fullRebuild) {
     /* ignore */
   }
 
-  // Language sync
   listen("language-changed", (event) => {
     setLanguage(event.payload.language);
     runDiagnostic();
   });
 
+  // Diagnostic polling, until the meter has everything it needs.
+  let allOk = await runDiagnostic();
+  if (!allOk) {
+    const poll = setInterval(async () => {
+      allOk = await runDiagnostic();
+      if (allOk) {
+        clearInterval(poll);
+      }
+    }, 2000);
+  }
+
   try {
-    // Memory / ping status
-    const $pingIcon = $statusPing?.previousElementSibling;
     listen("dps-memory", (event) => {
       const d = event.payload;
 
       // The whole machine, not Aether's slice of it. Someone glancing at this
-      // mid-fight wants to know whether the PC is struggling; Aether costs a
-      // fraction of a percent, so its own figure never answers that.
+      // mid-fight wants to know whether the PC is struggling.
       const cpu = d.systemCpuPercent ?? d.cpuPercent;
-      if (cpu != null && $statusCpu) {
-        $statusCpu.textContent = `${cpu.toFixed(0)}%`;
+      if (cpu != null) {
+        $statusCpu.textContent = `CPU ${cpu.toFixed(0)}%`;
       }
 
       const usedMb = d.systemMemoryUsedMb ?? d.rssMb;
-      if (usedMb != null && $statusMem) {
+      if (usedMb != null) {
         $statusMem.textContent = formatMemory(usedMb);
         const totalMb = d.systemMemoryTotalMb;
         $statusMem.title =
@@ -1271,18 +1098,8 @@ function updatePlayerList(snap, fullRebuild) {
       if (d.pingMs != null) {
         const ping = Math.round(d.pingMs);
         $statusPing.textContent = `${ping} ms`;
-        let cls = "status-bar__ping ";
-        if (ping < 60) {
-          cls += "good";
-        } else if (ping <= 120) {
-          cls += "warn";
-        } else {
-          cls += "bad";
-        }
-        $statusPing.className = cls;
-        if ($pingIcon) {
-          $pingIcon.style.color = ping < 60 ? "#4ade80" : ping <= 120 ? "#facc15" : "#ef4444";
-        }
+        $statusPing.className =
+          "foot__ping " + (ping < 60 ? "good" : ping <= 120 ? "warn" : "bad");
       }
     });
 
@@ -1298,9 +1115,11 @@ function updatePlayerList(snap, fullRebuild) {
     });
   } catch (err) {
     console.error("[dps-overlay] listen failed:", err);
-    $diag.textContent = "Event listener error — check console";
+    setDiag("Event listener error — check console");
   }
 
+  // The window may have been created at any height; fit it once now.
+  scheduleAutoHeightReconcile();
   startAutoHeightFallbackPolling();
 
   // Player row click → open detail window

@@ -1,35 +1,11 @@
 {
-  "app": {
-    "title": "Aether",
-    "welcome": "Welcome to Tauri + React",
-    "description": "Modern desktop application template with Tauri v2, React 19, and shadcn/ui"
-  },
-  "greet": {
-    "title": "Greet from Rust",
-    "description": "Test the communication between frontend and Tauri backend",
-    "placeholder": "Enter your name...",
-    "button": "Greet"
-  },
   "about": {
-    "title": "About",
-    "button": "About",
     "appName": "Aether",
     "version": "Version",
-    "description": "A modern desktop application template built with Tauri v2, React 19, and shadcn/ui.",
-    "features": "Features",
-    "feature1": "Tauri v2 - Lightweight desktop app framework",
-    "feature2": "React 19 - Latest React version",
-    "feature3": "TypeScript - Type safety",
-    "feature4": "Tailwind CSS v4 - Modern CSS framework",
-    "feature5": "shadcn/ui - Beautiful UI components",
-    "close": "Close"
-  },
-  "theme": {
-    "toggle": "Toggle theme"
+    "description": "글로벌 서버를 위한 AION 2 실시간 DPS 미터. NOIA2에서 포크되었습니다."
   },
   "language": {
-    "toggle": "Switch language",
-    "en": "English"
+    "toggle": "Switch language"
   },
   "tray": {
     "show": "Show Window",
@@ -48,16 +24,7 @@
     "later": "Later",
     "installNow": "Install Now"
   },
-  "gameSelector": {
-    "selectGame": "Switch game"
-  },
-  "dpsOverlay": {
-    "open": "Open DPS Overlay"
-  },
   "settings": {
-    "title": "Settings",
-    "button": "Settings",
-    "close": "Close",
     "appearance": {
       "title": "Appearance",
       "description": "Customize the appearance and language of the app",
@@ -70,9 +37,7 @@
       "languageDesc": "Switch the interface language and sync it to the tray menu and newly opened windows."
     },
     "shortcut": {
-      "placeholder": "Press key combination",
-      "setSuccess": "Shortcut set to {{shortcut}}!",
-      "cleared": "Shortcut cleared!"
+      "placeholder": "Press key combination"
     },
     "tcpReassembly": {
       "title": "TCP 재조립",
@@ -96,12 +61,8 @@
     },
     "aion2": {
       "title": "Aion 2",
-      "description": "DPS meter and overlay settings for Aion 2",
       "shortcuts": "Shortcuts",
       "overlay": "Overlay",
-      "buffMonitor": "Buff Monitor",
-      "eventReminder": "이벤트 알림",
-      "backend": "Runtime",
       "shortcutShowDpsOverlay": "Show / Hide DPS Overlay",
       "shortcutShowDpsOverlayDesc": "Toggle the DPS overlay on and off",
       "shortcutResetDpsMeter": "Reset DPS Meter",
@@ -114,10 +75,6 @@
       "overlayContentScaleDesc": "Scales only the DPS list and bottom status bar. The window height is recalculated from the scaled content.",
       "overlayBackgroundOpacity": "Background opacity",
       "overlayBackgroundOpacityDesc": "Adjusts the content background opacity. Lower values make the panel closer to transparent.",
-      "overlayMainPlayerColor": "My character color",
-      "overlayMainPlayerColorDesc": "Color used for your own damage bar. Opacity controls how strong the bar background appears.",
-      "overlayOtherPlayerColor": "Other player color",
-      "overlayOtherPlayerColorDesc": "Color used for other players' damage bars. Pick a color distinct from your own.",
       "overlayShowPlayerName": "Show player name",
       "overlayShowPlayerNameDesc": "When disabled, player names are hidden while icons, damage and stats remain visible.",
       "overlayShowServer": "Show server",
@@ -138,56 +95,6 @@
       "overlayDetailWindowModeDesc": "플레이어 클릭 시 스킬 상세 창이 오버레이를 따라가거나 화면 중앙에 표시됩니다.",
       "overlayDetailWindowFollow": "따라가기",
       "overlayDetailWindowCenter": "중앙",
-      "buffMonitorEnabled": "Enable buff monitor",
-      "buffMonitorEnabledDesc": "When enabled, opening the DPS overlay also opens the buff monitor window. Disabling it only stops automatic creation and does not affect DPS tracking.",
-      "eventReminderEnabled": "이벤트 알림 사용",
-      "eventReminderEnabledDesc": "DPS 오버레이를 열 때 이벤트 타이머와 알림 창도 함께 표시합니다.",
-      "fieldBossTimers": "필드 보스 타이머",
-      "fieldBossTimersEnabled": "필드 보스 타이머 표시",
-      "fieldBossTimersEnabledDesc": "이벤트 창에 보스 아이콘을 표시합니다. 마우스를 올리면 실시간 카운트다운 목록을 볼 수 있습니다.",
-      "buffMonitorShowOnlyActive": "Show only active buffs",
-      "buffMonitorShowOnlyActiveDesc": "When enabled, click-through mode only shows active buff icons. Editing and non-click-through modes still show the full layout.",
-      "buffMonitorIconStyle": "Buff icon style",
-      "buffMonitorIconStyleDesc": "Controls icon appearance in the buff monitor window and preview.",
-      "buffMonitorIconStyle1": "Style 1",
-      "buffMonitorIconStyle2": "Style 2",
-      "buffMonitorClassPreferences": "Class preferences",
-      "buffMonitorSelfBuffs": "Self buffs",
-      "buffMonitorSelfBuffsDesc": "Manage player buff skills shown in the buff monitor for the selected class.",
-      "buffMonitorBossDebuffs": "Boss debuffs",
-      "buffMonitorBossDebuffsDesc": "Manage boss debuff skills watched by the selected class.",
-      "buffMonitorNoSkills": "No skills configured yet",
-      "buffMonitorIconSize": "Buff icon size",
-      "buffMonitorIconSizeDesc": "Controls icon size in the buff monitor window and preview.",
-      "buffMonitorIconGap": "Buff icon gap",
-      "buffMonitorIconGapDesc": "Controls spacing between buff icons.",
-      "buffMonitorPreview": "Layout preview",
-      "buffMonitorEditSkillCode": "Skill ID",
-      "buffMonitorAddSelfBuff": "Add self buff",
-      "buffMonitorUpdateSelfBuff": "Set as self buff",
-      "buffMonitorAddBossDebuff": "Add boss debuff",
-      "buffMonitorUpdateBossDebuff": "Set as boss debuff",
-      "buffMonitorAddEmptySlot": "Add spacer",
-      "buffMonitorAddRow": "Add row",
-      "buffMonitorClearLayout": "Clear class layout",
-      "buffMonitorExportLayout": "Export layout",
-      "buffMonitorImportLayout": "Import layout",
-      "buffMonitorExportCopied": "Copied the buff layout token for {{actorClass}}.",
-      "buffMonitorExportCopyFailed": "Failed to copy the layout token. Check clipboard permission and try again.",
-      "buffMonitorImportTitle": "Import buff layout",
-      "buffMonitorImportDesc": "Importing will overwrite the current {{targetClass}} layout.",
-      "buffMonitorImportPlaceholder": "Paste a layout token starting with NOIA-BUFF-V1",
-      "buffMonitorImportOverwriteWarning": "This token is from {{sourceClass}}. Confirming will overwrite the current {{targetClass}} layout.",
-      "buffMonitorImportInvalid": "This layout token cannot be recognized.",
-      "buffMonitorImportSuccess": "Imported the {{sourceClass}} layout into {{targetClass}}.",
-      "buffMonitorImportCancel": "Cancel",
-      "buffMonitorImportConfirm": "Import",
-      "buffMonitorMoveRowUp": "Move row up",
-      "buffMonitorMoveRowDown": "Move row down",
-      "buffMonitorRemoveRow": "Remove row",
-      "buffMonitorRemoveSlot": "Remove selected skill",
-      "buffMonitorSelectRow": "Select row",
-      "buffMonitorStorageDesc": "The layout still uses the old aion2-buff-monitor-layout:v1 localStorage field, so settings and the buff window read the same data.",
       "overlayDamageFormat": "총 피해량 형식",
       "overlayDamageFormatDesc": "큰 숫자 표시: w/e (중국 방식) 또는 K/M/B (영어 방식).",
       "overlayMaxPlayerCount": "최대 표시 플레이어 수",
@@ -196,20 +103,6 @@
       "overlayAutoResizeHeightDesc": "플레이어 수에 따라 오버레이 높이를 자동으로 조정합니다. 비활성화하면 고정 높이를 유지합니다.",
       "autoHideEnabled": "Auto hide with game",
       "autoHideEnabledDesc": "Shows the DPS panel only while Aion2 or a related overlay window is focused.",
-      "region": "게임 지역",
-      "regionDesc": "패킷을 해석할 때 사용할 지역 프로필입니다. 자동은 아직 등록되지 않은 지역을 포함해 모든 서비스에서 동작합니다.",
-      "region_auto": "자동",
-      "region_tw": "대만",
-      "region_kr": "한국",
-      "region_global": "글로벌",
-      "regionObserved": "관측된 트래픽",
-      "regionObservedDesc": "캡처가 실제로 확인한 정보입니다. 아직 등록되지 않은 지역을 식별할 때 사용합니다.",
-      "regionDetected": "감지 결과",
-      "regionDetectedUnknown": "일치하는 특징 없음",
-      "regionServerIps": "서버 IP",
-      "regionServerIds": "서버 ID",
-      "regionReset": "지우기",
-      "regionNoData": "아직 관측된 데이터 없음",
       "recorder": "패킷 기록",
       "recorderDesc": "이 세션의 원본 패킷을 디스크에 기록해 오프라인에서 파서를 반복 검증할 수 있습니다. 기록은 이 컴퓨터를 벗어나지 않습니다.",
       "recorderStart": "기록 시작",
@@ -241,17 +134,8 @@
       "countTargetsDesc": "모든 대상은 공격한 모든 몬스터를 기록합니다. 보스 전용은 보스가 아닌 대상을 무시하므로, 일반 몬스터와 싸우는 동안에는 미터가 비어 있습니다.",
       "countAllTargets": "모든 대상",
       "countBossOnly": "보스 전용",
-      "bossOnly": "Boss only",
-      "bossOnlyDesc": "Only record damage against boss monsters",
       "showPossibleBoss": "Detect possible bosses",
       "showPossibleBossDesc": "Treats very high-HP monsters that are not in the known boss table as temporary bosses. Useful for new dungeons or missing name data.",
-      "pvpModeOn": "Record PVP damage",
-      "pvpModeOnDesc": "Also records damage against players. Can be used together with Boss only.",
-      "pvpOverlayPosition": "PVP window position",
-      "pvpOverlayPositionDesc": "Bottom and right follow the meter window. Free mode can be dragged separately.",
-      "pvpOverlayPositionBottom": "Bottom",
-      "pvpOverlayPositionRight": "Right",
-      "pvpOverlayPositionFree": "Free",
       "myMuzhuangOnly": "My Muzhuang only",
       "myMuzhuangOnlyDesc": "Only record damage from your own Muzhuang",
       "dpsSnapshotInterval": "Snapshot interval (ms)",
@@ -264,93 +148,6 @@
       "fullProcessorStallResyncDelayDesc": "Wait time after the full parser stalls. Set to 0 to resync by one byte immediately.",
       "unknownPacketStallResyncDelay": "Unknown packet resync delay",
       "unknownPacketStallResyncDelayDesc": "Wait time before skipping one byte for an incomplete packet with an unknown header. Range: 0–500ms. Set to 0 to resync immediately."
-    }
-  },
-  "auth": {
-    "title": "로그인",
-    "userFallback": "사용자",
-    "signOut": "로그아웃",
-    "membership": {
-      "loading": "멤버십 상태 로딩 중",
-      "expiresAt": "멤버십 만료: {{date}}",
-      "permanent": "멤버십 만료: 영구",
-      "inactive": "멤버십 비활성"
-    },
-    "signIn": {
-      "emailLabel": "이메일 주소",
-      "passwordLabel": "비밀번호",
-      "emailPlaceholder": "이메일 주소를 입력하세요",
-      "passwordPlaceholder": "비밀번호를 입력하세요",
-      "button": "로그인",
-      "loadingButton": "로그인 중...",
-      "socialProviderText": "{{provider}}로 로그인",
-      "linkText": "이미 계정이 있으신가요? 로그인",
-      "description": "계정에 로그인하여 프로필과 멤버십 상태를 동기화하세요."
-    },
-    "signUp": {
-      "emailLabel": "이메일 주소",
-      "passwordLabel": "비밀번호",
-      "confirmPasswordLabel": "비밀번호 확인",
-      "confirmPasswordPlaceholder": "비밀번호를 다시 입력하세요",
-      "emailPlaceholder": "이메일 주소를 입력하세요",
-      "passwordPlaceholder": "비밀번호를 생성하세요",
-      "button": "가입하기",
-      "loadingButton": "계정 생성 중...",
-      "socialProviderText": "{{provider}}로 가입하기",
-      "linkText": "계정이 없으신가요? 가입하기",
-      "confirmationText": "가입이 완료되었습니다. 이 기기에서 이메일을 확인하고 링크를 열어 인증을 완료하세요.",
-      "description": "새 계정을 만들어 클라우드 기반 기능을 사용하세요."
-    },
-    "forgottenPassword": {
-      "emailLabel": "이메일 주소",
-      "passwordLabel": "새 비밀번호",
-      "emailPlaceholder": "이메일 주소를 입력하세요",
-      "button": "재설정 안내 보내기",
-      "loadingButton": "재설정 안내 전송 중...",
-      "linkText": "비밀번호를 잊으셨나요?",
-      "confirmationText": "이메일을 확인하고 이 기기에서 재설정 링크를 여세요.",
-      "description": "이메일 주소를 입력하시면 비밀번호 재설정 링크를 보내드립니다.",
-      "backToSignIn": "로그인으로 돌아가기"
-    },
-    "magicLink": {
-      "emailLabel": "이메일 주소",
-      "emailPlaceholder": "이메일 주소를 입력하세요",
-      "button": "매직 링크 보내기",
-      "loadingButton": "매직 링크 전송 중...",
-      "linkText": "매직 링크로 로그인",
-      "confirmationText": "이메일에서 매직 링크를 확인하세요."
-    },
-    "updatePassword": {
-      "passwordLabel": "새 비밀번호",
-      "passwordPlaceholder": "새 비밀번호를 입력하세요",
-      "button": "새 비밀번호 설정",
-      "loadingButton": "비밀번호 업데이트 중...",
-      "confirmationText": "비밀번호가 성공적으로 업데이트되었습니다.",
-      "description": "계정 복구를 완료하기 위해 새 비밀번호를 설정하세요.",
-      "confirmPasswordLabel": "새 비밀번호 확인",
-      "confirmPasswordPlaceholder": "새 비밀번호를 다시 입력하세요"
-    },
-    "verifyOtp": {
-      "emailLabel": "이메일 주소",
-      "emailPlaceholder": "이메일 주소를 입력하세요",
-      "phoneLabel": "전화번호",
-      "phonePlaceholder": "전화번호를 입력하세요",
-      "tokenLabel": "인증 코드",
-      "tokenPlaceholder": "인증 코드를 입력하세요",
-      "button": "코드 확인",
-      "loadingButton": "코드 확인 중..."
-    },
-    "feedback": {
-      "deepLinkSuccess": "계정 인증이 완료되었습니다.",
-      "deepLinkFailed": "이메일 링크 처리에 실패했습니다. 다시 시도해 주세요.",
-      "recoveryReady": "인증이 완료되었습니다. 이제 새 비밀번호를 설정할 수 있습니다.",
-      "invalidCredentials": "이메일 또는 비밀번호가 올바르지 않거나 이메일이 아직 인증되지 않았습니다.",
-      "userAlreadyExists": "이미 등록된 이메일입니다. 직접 로그인해 주세요.",
-      "resetEmailAlreadySent": "재설정 이메일이 이미 전송되었습니다. 받은 편지함을 확인하고 나중에 다시 시도해 주세요.",
-      "rateLimited": "짧은 시간 내에 너무 많은 시도가 있었습니다. 잠시 후 다시 시도해 주세요."
-    },
-    "validation": {
-      "invalidEmail": "유효한 이메일 주소를 입력해 주세요."
     }
   },
   "releaseVersion": {

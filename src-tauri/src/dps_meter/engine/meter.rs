@@ -5,7 +5,7 @@ use std::sync::{
     Arc, Mutex, RwLock,
 };
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sysinfo::{get_current_pid, ProcessesToUpdate, System};
 use tauri::{AppHandle, Emitter, Manager};
@@ -15,7 +15,8 @@ use crate::dps_meter::capture::channel::Channel;
 use crate::dps_meter::capture::dispatcher::{CaptureDispatcher, TcpReassemblyStatus};
 use crate::dps_meter::capture::ping_tracker::PingTracker;
 use crate::dps_meter::capture::recorder::{
-    list_recordings, replay_recording, PacketRecorder, RecordingFile, RecordingStatus,
+    list_recordings, prune_recordings, replay_recording, PacketRecorder, RecordingFile,
+    RecordingStatus,
 };
 use crate::dps_meter::capture::windivert_capturer::{check_windivert_status, WinDivertCapturer};
 use crate::dps_meter::config::{CaptureBackendPriority, DpsMeterConfig, SharedDpsMeterConfig};
@@ -23,7 +24,7 @@ use crate::dps_meter::engine::calculator::DpsCalculator;
 use crate::dps_meter::history::HistoryStore;
 use crate::dps_meter::models::combat::{CombatSnapshot, PvpCombatStatsRow, PvpWatchInfoResponse};
 use crate::dps_meter::models::diagnostics::{DpsMeterState, MemorySnapshot};
-use crate::dps_meter::storage::data_storage::{DataStorage, FieldBossTimerSnapshot, MainCharacter};
+use crate::dps_meter::storage::data_storage::DataStorage;
 use crate::plugins::logger::AppLogger;
 
 const STALE_ASSEMBLER_IDLE_SECS: u64 = 30;
@@ -41,10 +42,34 @@ fn chrono_stamp() -> u64 {
 }
 const PACKET_CHANNEL_CAPACITY: isize = 2_000_000;
 
-#[derive(Debug, Clone, Copy)]
-enum CaptureBackend {
+/// Automatic recordings: how long each runs, and how many are kept.
+const AUTO_RECORDING_PREFIX: &str = "auto";
+const AUTO_RECORDING_DURATION: Duration = Duration::from_secs(120);
+const AUTO_RECORDINGS_KEPT: usize = 5;
+
+/// How long the overlay stays up after Reset before hiding again, so the
+/// click visibly did something.
+const RESET_PEEK_SECS: u64 = 4;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub enum CaptureBackend {
     WinDivert,
     Npcap,
+}
+
+/// One automatic recording per meter session, started when game traffic
+/// arrives from a server no fingerprint matches.
+#[derive(Debug, Default)]
+struct AutoRecordState {
+    active_since: Option<Instant>,
+    done: bool,
+}
+
+fn now_seconds() -> f64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0)
 }
 
 pub struct DpsMeter {
@@ -70,6 +95,10 @@ pub struct DpsMeter {
     last_emitted_total_damage: Arc<Mutex<Option<u64>>>,
     last_snapshot: Arc<Mutex<Option<CombatSnapshot>>>,
     history: Arc<HistoryStore>,
+    /// Until when the overlay stays up regardless of the idle rule: after
+    /// Start, after Reset, and from the show hotkey.
+    peek_until: Arc<Mutex<Option<Instant>>>,
+    auto_record: Arc<Mutex<AutoRecordState>>,
 }
 
 impl DpsMeter {
@@ -144,7 +173,33 @@ impl DpsMeter {
             last_emitted_total_damage: Arc::new(Mutex::new(None)),
             last_snapshot: Arc::new(Mutex::new(None)),
             history,
+            peek_until: Arc::new(Mutex::new(None)),
+            auto_record: Arc::new(Mutex::new(AutoRecordState::default())),
         }
+    }
+
+    /// Keep the overlay up for `secs` even with no fight to show.
+    pub fn peek_overlay(&self, secs: u64) {
+        *self.peek_until.lock().unwrap() = Some(Instant::now() + Duration::from_secs(secs));
+        crate::plugins::aion2_focus::set_dps_idle_hidden_for_app(&self.app, false);
+    }
+
+    /// The capture backend in use, while the meter runs.
+    pub fn capture_backend(&self) -> Option<CaptureBackend> {
+        *self.active_capture_backend.lock().unwrap()
+    }
+
+    pub fn has_game_traffic(&self) -> bool {
+        self.dispatcher.has_recent_ports()
+    }
+
+    pub fn main_actor_name(&self) -> Option<String> {
+        self.data_storage.main_actor_name()
+    }
+
+    /// Whether an automatic recording is running right now.
+    pub fn is_auto_recording(&self) -> bool {
+        self.auto_record.lock().unwrap().active_since.is_some()
     }
 
     pub fn apply_config(&self, config: DpsMeterConfig) -> DpsMeterConfig {
@@ -186,6 +241,7 @@ impl DpsMeter {
         }
 
         self.clear_runtime_state();
+        *self.auto_record.lock().unwrap() = AutoRecordState::default();
         self.dispatcher.start();
         let capture_backend_priority = self.config.read().unwrap().capture_backend_priority.clone();
         let backend = match self.start_capture_backend(capture_backend_priority) {
@@ -256,9 +312,33 @@ impl DpsMeter {
         self.stop_memory_snapshot_loop();
         self.stop_active_capturer();
         self.dispatcher.stop();
+        if self.auto_record.lock().unwrap().active_since.take().is_some() {
+            let _ = self.recorder.stop();
+        }
         self.clear_runtime_state();
+        crate::plugins::aion2_focus::set_dps_idle_hidden_for_app(&self.app, false);
         self.emit_running_status();
         self.logger.info("dps meter stopped");
+    }
+
+    /// Reset asked for by the player, from the overlay or the hotkey. The
+    /// overlay stays up a moment so the click visibly did something.
+    pub fn reset_from_user(&self) {
+        self.reset_dps_meter(true);
+        self.peek_overlay(RESET_PEEK_SECS);
+    }
+
+    /// Nothing of yours has happened for the idle timeout: the fight is over.
+    /// It goes to history if you were in it; a meter holding only other
+    /// people's fights nearby is cleared without a record.
+    fn end_idle_fight(&self, was_in_fight: bool) {
+        if was_in_fight {
+            self.logger.info("idle timeout: fight saved and meter reset");
+            self.reset_dps_meter(true);
+        } else {
+            self.clear_runtime_state_nopacket();
+            self.emit_empty_snap();
+        }
     }
 
     pub fn reset_dps_meter(&self, emit_empty: bool) {
@@ -311,10 +391,6 @@ impl DpsMeter {
         self.history.delete_records(ids)
     }
 
-    pub fn mark_history_records_uploaded(&self, ids: &[String]) -> usize {
-        self.history.mark_records_uploaded(ids)
-    }
-
     fn emit_empty_snap(&self) {
         use crate::dps_meter::models::combat::CombatInfos;
 
@@ -338,11 +414,6 @@ impl DpsMeter {
             main_actor_dealt_player_overview_stats: Vec::new(),
         };
         let _ = self.app.emit("dps-snapshot", empty);
-    }
-
-    /// The character the meter is currently following, if it has seen one.
-    pub fn main_character(&self) -> Option<MainCharacter> {
-        self.data_storage.main_character()
     }
 
     pub fn is_running(&self) -> bool {
@@ -411,21 +482,6 @@ impl DpsMeter {
         self.data_storage.clear_pvp_combat_stats();
     }
 
-    pub fn get_buff_overlay_context(
-        &self,
-    ) -> crate::dps_meter::storage::data_storage::BuffOverlayContext {
-        self.data_storage.get_buff_overlay_context()
-    }
-
-    pub fn get_field_boss_timers(&self) -> Vec<FieldBossTimerSnapshot> {
-        let timers = self.data_storage.field_boss_timer_snapshot();
-        // self.logger.debug(format!(
-        //     "field boss timers queried timer_count={}",
-        //     timers.len()
-        // ));
-        timers
-    }
-
     fn start_snapshot_loop(&self) {
         if self.snapshot_running.swap(true, Ordering::SeqCst) {
             return;
@@ -438,13 +494,47 @@ impl DpsMeter {
         let snapshot_running = Arc::clone(&self.snapshot_running);
         let last_emitted_total_damage = Arc::clone(&self.last_emitted_total_damage);
         let last_snapshot = Arc::clone(&self.last_snapshot);
+        let data_storage = Arc::clone(&self.data_storage);
+        let peek_until = Arc::clone(&self.peek_until);
 
         let handle = thread::spawn(move || {
+            let mut idle_hidden: Option<bool> = None;
+
             while snapshot_running.load(Ordering::SeqCst) {
                 let cfg = config.read().unwrap();
                 let hide_unknown = cfg.hide_unknown_players;
                 let max_count = cfg.max_player_count;
+                let hide_when_idle = cfg.hide_when_idle;
+                let idle_reset_secs = cfg.idle_reset_secs;
                 drop(cfg);
+
+                // A fight nobody has touched for the idle timeout is over.
+                // Measured from your own last hit, so other people fighting
+                // nearby cannot keep an old fight on screen forever.
+                if idle_reset_secs > 0 {
+                    if let Some(started) = data_storage.start_time() {
+                        let activity = data_storage.activity_at();
+                        let idle_for = now_seconds() - activity.unwrap_or(started);
+                        if idle_for >= idle_reset_secs as f64 {
+                            if let Some(meter) = app.try_state::<DpsMeter>() {
+                                meter.end_idle_fight(activity.is_some());
+                            }
+                        }
+                    }
+                }
+
+                // Between fights the overlay steps aside, and it is back for
+                // the first hit of the next one.
+                let peeking = peek_until
+                    .lock()
+                    .unwrap()
+                    .is_some_and(|until| Instant::now() < until);
+                let hidden = hide_when_idle && !peeking && data_storage.activity_at().is_none();
+                if idle_hidden != Some(hidden) {
+                    idle_hidden = Some(hidden);
+                    crate::plugins::aion2_focus::set_dps_idle_hidden_for_app(&app, hidden);
+                }
+
                 if let Some(snapshot) = calculator.get_dps_snapshot(0, hide_unknown, max_count) {
                     // Cache non-empty snapshots for detail window fallback
                     if snapshot.total_damage > 0 {
@@ -498,6 +588,9 @@ impl DpsMeter {
         let active_capture_backend = Arc::clone(&self.active_capture_backend);
         let dispatcher = self.dispatcher.clone();
         let memory_snapshot_running = Arc::clone(&self.memory_snapshot_running);
+        let recorder = Arc::clone(&self.recorder);
+        let recordings_dir = self.recordings_dir.clone();
+        let auto_record = Arc::clone(&self.auto_record);
 
         let handle = thread::spawn(move || {
             let pid = match get_current_pid() {
@@ -518,6 +611,16 @@ impl DpsMeter {
                         removed_ports.join(", ")
                     ));
                 }
+
+                let auto_record_enabled = config.read().unwrap().auto_record_unknown_server;
+                auto_record_tick(
+                    &auto_record,
+                    &recorder,
+                    &recordings_dir,
+                    &dispatcher,
+                    &logger,
+                    auto_record_enabled,
+                );
 
                 let (cap_device, cap_port) = match *active_capture_backend.lock().unwrap() {
                     Some(CaptureBackend::WinDivert) => (
@@ -705,6 +808,64 @@ impl Drop for DpsMeter {
         self.pcap_capturer.stop();
         self.dispatcher.stop();
         self.clear_runtime_state();
+    }
+}
+
+/// Start or finish the session's automatic recording.
+///
+/// A server no fingerprint matches is exactly the case where a recording is
+/// worth having -- global on launch day, or any service we have not seen --
+/// and it is also the case where nobody thinks to press Record in time. So the
+/// first two minutes of game traffic are kept, once per session, and only the
+/// newest few are kept on disk. A recording started by hand is never touched.
+fn auto_record_tick(
+    state: &Mutex<AutoRecordState>,
+    recorder: &PacketRecorder,
+    dir: &std::path::Path,
+    dispatcher: &CaptureDispatcher,
+    logger: &AppLogger,
+    enabled: bool,
+) {
+    let mut state = state.lock().unwrap();
+
+    if let Some(since) = state.active_since {
+        if since.elapsed() >= AUTO_RECORDING_DURATION || !enabled {
+            state.active_since = None;
+            state.done = true;
+            match recorder.stop() {
+                Ok(Some(status)) => logger.info(format!(
+                    "auto recording finished: {} packets, {} bytes",
+                    status.packets, status.bytes
+                )),
+                Ok(None) => {}
+                Err(error) => logger.info(format!("auto recording stop failed: {error}")),
+            }
+            prune_recordings(dir, AUTO_RECORDING_PREFIX, AUTO_RECORDINGS_KEPT);
+        }
+        return;
+    }
+
+    if state.done
+        || !enabled
+        || recorder.status().recording
+        || !dispatcher.has_recent_ports()
+        || crate::dps_meter::region::status().detected.is_some()
+    {
+        return;
+    }
+
+    match recorder.start_named(dir, AUTO_RECORDING_PREFIX) {
+        Ok(path) => {
+            state.active_since = Some(Instant::now());
+            logger.info(format!(
+                "auto recording started (server not recognised): {}",
+                path.display()
+            ));
+        }
+        Err(error) => {
+            state.done = true;
+            logger.info(format!("auto recording could not start: {error}"));
+        }
     }
 }
 

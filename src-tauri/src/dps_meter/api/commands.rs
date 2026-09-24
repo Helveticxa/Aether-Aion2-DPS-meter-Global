@@ -11,9 +11,6 @@ use crate::dps_meter::preflight;
 use crate::dps_meter::capture::census::{self, CensusSnapshot};
 use crate::dps_meter::capture::recorder::{RecordingFile, RecordingStatus};
 use crate::dps_meter::region::{self, RegionStatus};
-use crate::dps_meter::storage::data_storage::{
-    BuffOverlayContext, FieldBossTimerSnapshot, MainCharacter,
-};
 
 /// What [`install_npcap`] did, step by step, so a failure can be read off the
 /// screen instead of guessed at.
@@ -67,18 +64,6 @@ pub fn get_pvp_combat_stats(meter: State<'_, DpsMeter>) -> Result<Vec<PvpCombatS
 pub fn clear_pvp_combat_stats(meter: State<'_, DpsMeter>) -> Result<(), String> {
     meter.clear_pvp_combat_stats();
     Ok(())
-}
-
-#[tauri::command]
-pub fn get_buff_overlay_context(meter: State<'_, DpsMeter>) -> Result<BuffOverlayContext, String> {
-    Ok(meter.get_buff_overlay_context())
-}
-
-#[tauri::command]
-pub fn get_field_boss_timers(
-    meter: State<'_, DpsMeter>,
-) -> Result<Vec<FieldBossTimerSnapshot>, String> {
-    Ok(meter.get_field_boss_timers())
 }
 
 /// One pasteable summary of everything worth knowing about a session.
@@ -252,6 +237,34 @@ pub fn reset_region_observations() -> Result<(), String> {
     Ok(())
 }
 
+/// Everything the capture has worked out on its own, in one read: whether the
+/// meter runs, through which driver, whether the game's traffic has been
+/// found, who you are, and which server you are on. Nothing here needs the
+/// player to press anything.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionStatus {
+    pub running: bool,
+    pub capture_backend: Option<crate::dps_meter::engine::meter::CaptureBackend>,
+    pub game_detected: bool,
+    pub character: Option<String>,
+    pub region: RegionStatus,
+    pub auto_recording: bool,
+}
+
+#[tauri::command]
+pub fn get_connection_status(meter: State<'_, DpsMeter>) -> Result<ConnectionStatus, String> {
+    let running = meter.is_running();
+    Ok(ConnectionStatus {
+        running,
+        capture_backend: meter.capture_backend(),
+        game_detected: running && meter.has_game_traffic(),
+        character: meter.main_actor_name(),
+        region: region::status(),
+        auto_recording: meter.is_auto_recording(),
+    })
+}
+
 #[tauri::command]
 pub fn get_dps_meter_status(meter: State<'_, DpsMeter>) -> Result<bool, String> {
     Ok(meter.is_running())
@@ -259,7 +272,7 @@ pub fn get_dps_meter_status(meter: State<'_, DpsMeter>) -> Result<bool, String> 
 
 #[tauri::command]
 pub fn reset_dps_meter(meter: State<'_, DpsMeter>) -> Result<(), String> {
-    meter.reset_dps_meter(true);
+    meter.reset_from_user();
     Ok(())
 }
 
@@ -324,19 +337,6 @@ pub fn delete_history_records(
         let _ = app.emit("history-updated", ());
     }
     Ok(deleted)
-}
-
-#[tauri::command]
-pub fn mark_history_records_uploaded(
-    app: AppHandle,
-    meter: State<'_, DpsMeter>,
-    ids: Vec<String>,
-) -> Result<usize, String> {
-    let updated = meter.mark_history_records_uploaded(&ids);
-    if updated > 0 {
-        let _ = app.emit("history-updated", ());
-    }
-    Ok(updated)
 }
 
 #[tauri::command]
@@ -498,8 +498,3 @@ pub async fn install_npcap() -> Result<NpcapInstallOutcome, String> {
     }
 }
 
-
-#[tauri::command]
-pub fn get_main_character(meter: State<'_, DpsMeter>) -> Result<Option<MainCharacter>, String> {
-    Ok(meter.main_character())
-}

@@ -1,12 +1,23 @@
+/* The DPS overlay: one rounded glass card over the game.
+ *
+ * Nothing here draws a hard line. Separation comes from spacing and tone, the
+ * header's controls appear only under the pointer, and every row is a soft
+ * pill in its class colour -- a meter that reads as part of the HUD rather
+ * than a table laid over it. */
+
 :root {
-  --color-other-bar: rgba(255, 255, 255, 0.12);
-  --color-main-bar: rgba(255, 215, 0, 0.18);
   /* One place decides how tall a row is. The JS reads this rather than keeping
      its own copy, so the two cannot drift apart. */
-  --row-height: 28px;
-  --overlay-bg: rgba(8, 10, 16, 0.22);
-  --overlay-content-scale: 1;
-  --font-family: "Consolas", "Monaco", monospace;
+  --row-height: 26px;
+  --row-gap: 3px;
+  --overlay-bg: rgba(10, 12, 18, 0.59);
+  --overlay-scale: 1;
+  --font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --radius: 14px;
+  --text: rgba(255, 255, 255, 0.94);
+  --muted: rgba(255, 255, 255, 0.58);
+  --faint: rgba(255, 255, 255, 0.34);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 * {
@@ -23,350 +34,246 @@ body {
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
-  display: flex;
-  flex-direction: column;
 }
 
-/* Content area is click-through by default */
 body {
+  font-family: var(--font-family);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Locked: every click goes to the game. */
+body.is-locked {
   pointer-events: none;
 }
 
-/* ---- Title bar (interactive) ---- */
-
-.title-bar {
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 32px;
-  padding: 0 10px;
-  background: var(--titlebar-bg, rgba(8, 10, 16, 0.42));
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px 8px 0 0;
-  flex-shrink: 0;
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
 }
 
-/* The wordmark is white. Gold made it the loudest thing on a bar that sits on
-   top of a game, competing with the numbers it is meant to introduce. */
-.title-bar__label {
-  flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.92);
-  font-family: var(--font-family);
-  font-size: 12px;
-  font-weight: bold;
-  letter-spacing: 1.4px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-  max-width: 250px;
+/* ---- Card ---- */
+
+.card {
+  zoom: var(--overlay-scale);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0) 38px),
+    var(--overlay-bg);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
 }
 
-.title-bar__mode {
-  font-family: var(--font-family);
-  font-size: 9px;
-  font-weight: bold;
-  padding: 1px 5px;
-  border-radius: 3px;
-  margin-left: 6px;
-  letter-spacing: 0.5px;
+/* Fixed height: the card fills the window and the list keeps its place. */
+body.fixed-height .card {
+  height: calc(100% / var(--overlay-scale));
 }
 
-.title-bar__mode.is-live {
-  color: #4ade80;
-  background: rgba(74, 222, 128, 0.12);
+body.fixed-height .body {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
-.title-bar__mode.is-history {
-  color: #facc15;
-  background: rgba(250, 204, 21, 0.12);
-}
+/* ---- Header ---- */
 
-.title-bar__drag {
-  cursor: grab;
-  flex: 1;
-  min-width: 0;
-  height: 100%;
+.head {
+  position: relative;
   display: flex;
   align-items: center;
-  padding-left: 6px;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px 0 12px;
+  cursor: grab;
+  flex-shrink: 0;
 }
 
-.title-bar__drag:active {
+.head:active {
   cursor: grabbing;
 }
 
-/* The five actions read as one control cluster rather than five loose glyphs
-   floating in the bar -- a single recessed pill, hairline dividers between the
-   buttons, and the destructive one kept outside it. */
-.title-bar__actions {
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  margin-right: 6px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.055);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+.head__dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--faint);
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+body.has-players .head__dot {
+  background: #4ade80;
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.7);
+}
+
+.head__title {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
-.title-bar__btn {
-  pointer-events: auto;
-  cursor: pointer;
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.58);
-  line-height: 1;
-  padding: 5px 7px;
+.head__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.18s ease;
+}
+
+.head__idle {
+  color: var(--faint);
+}
+
+body.has-players .head__idle {
+  display: none;
+}
+
+.head__hp {
+  color: #fda4af;
+  font-weight: 600;
+}
+
+.head__hp:empty,
+.head__time:empty {
+  display: none;
+}
+
+.head__time {
+  color: var(--muted);
+}
+
+/* Controls sit over the meta and swap in while the pointer is on the card. */
+.head__actions {
+  position: absolute;
+  top: 50%;
+  right: 6px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 1px;
+  padding: 2px;
+  border-radius: 9px;
+  background: rgba(20, 22, 30, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) translateX(4px);
   transition:
-    color 0.15s ease,
-    background 0.15s ease;
+    opacity 0.18s ease,
+    transform 0.18s var(--ease);
 }
 
-.title-bar__actions .title-bar__btn + .title-bar__btn {
-  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.07);
-}
-
-.title-bar__btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.title-bar__btn:active {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.title-bar__pin.is-active {
-  color: #ffd700;
-  background: rgba(255, 215, 0, 0.16);
-}
-
-/* Kept out of the action cluster: closing the overlay is not the same kind of
-   thing as toggling one, and it should not sit a pixel away from Settings. */
-.title-bar__close {
+.card:hover .head__actions {
+  opacity: 1;
   pointer-events: auto;
-  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.card:hover .head__meta {
+  opacity: 0;
+}
+
+.icon-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
+  width: 24px;
   height: 22px;
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 16px;
-  line-height: 1;
-  border-radius: 6px;
+  border-radius: 7px;
+  color: var(--muted);
   transition:
     color 0.15s ease,
     background 0.15s ease;
+}
+
+.icon-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.icon-btn.is-active {
+  color: #fcd34d;
+}
+
+.icon-btn--close:hover {
+  background: rgba(239, 68, 68, 0.7);
+}
+
+/* ---- Target health ---- */
+
+.hp {
+  height: 3px;
+  margin: 0 12px 4px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.hp[hidden] {
+  display: none;
+}
+
+.hp__fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #f43f5e, #fb7185);
+  transform-origin: left center;
+  transform: scaleX(var(--bar-scale, 0));
+  /* Health drains rather than jumps, with the same rhythm as the rows. */
+  transition: transform 260ms cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+/* ---- Rows ---- */
+
+.body {
+  padding: 0 6px;
 }
 
 .diag-message {
-  color: rgba(255, 255, 255, 0.62);
-  font-family: var(--font-family);
+  padding: 2px 8px 8px;
+  color: var(--muted);
   font-size: 12px;
-  text-align: center;
-  padding: 7px 0;
-  letter-spacing: 0.2px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  line-height: 1.4;
 }
 
 .diag-message:empty {
   display: none;
 }
 
-.title-bar__close:hover {
-  color: #fff;
-  background: rgba(239, 68, 68, 0.65);
-}
-
-/* ---- Content area ---- */
-
-.scaled-overlay {
-  height: var(--overlay-scaled-height, auto);
-  transform-origin: top left;
-  flex: 0 0 auto;
-}
-
-.scaled-overlay__inner {
-  width: calc(100% / var(--overlay-content-scale));
-  transform: scale(var(--overlay-content-scale));
-  transform-origin: top left;
-  display: flex;
-  flex-direction: column;
-  background: var(--overlay-bg);
-}
-
-.content {
-  padding: 4px 8px;
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-/* Fixed-height mode fills the existing window and keeps the status bar at the bottom. */
-body.fixed-height .scaled-overlay {
-  height: auto;
-  min-height: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-}
-
-body.fixed-height .scaled-overlay__inner {
-  height: calc(100% / var(--overlay-content-scale));
-  min-height: 0;
-}
-
-body.fixed-height .content {
-  min-height: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-}
-
-body.fixed-height .status-bar {
-  margin-top: auto;
-}
-
-/* Auto-height mode can collapse empty content because the window follows its natural height. */
-body.auto-resize-height:not(.has-players) .content:has(.diag-message:empty) {
-  padding: 0;
-  border: none;
-  flex: 0;
-}
-
-body:not(.has-players) .player-list {
-  display: none;
-}
-
-/* ---- Stat rows ---- */
-
-.stat-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 3px 0;
-  gap: 24px;
-}
-
-.stat-label {
-  color: #aaaaaa;
-  font-family: var(--font-family);
-  font-size: 13px;
-}
-
-.stat-value {
-  color: #ffffff;
-  font-family: var(--font-family);
-  font-weight: bold;
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-
-.stat-dps {
-  color: #ff6b6b;
-  font-family: var(--font-family);
-  font-size: 18px;
-  font-weight: bold;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 10px rgba(255, 107, 107, 0.4);
-}
-
-/* ---- Player list ---- */
-
 .player-list {
   position: relative;
-  padding-top: 3px;
-  transition: height 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  height: 0;
+  transition: height 260ms var(--ease);
 }
 
-/* ── Boss row ── */
-.boss-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 2px;
-  margin-bottom: 2px;
-  overflow: hidden;
-  border-radius: 4px;
-  background: linear-gradient(90deg, rgba(28, 4, 8, 0.75), rgba(10, 2, 4, 0.8));
-  cursor: default;
+body.has-players .player-list {
+  margin-bottom: 4px;
 }
 
-.boss-row__bar {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  border-radius: 3px;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.boss-row__bar::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, rgba(220, 38, 38, 0.72), rgba(190, 24, 60, 0.42));
-  box-shadow: 0 0 12px rgba(200, 30, 30, 0.3);
-  transform-origin: left center;
-  transform: scaleX(var(--bar-scale, 0));
-  /* Health drains rather than jumps -- the same easing as the damage bars, so
-     the whole overlay moves with one rhythm. */
-  transition: transform 260ms cubic-bezier(0.33, 1, 0.68, 1);
-}
-
-.boss-row__icon {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  object-fit: contain;
-  z-index: 1;
-  flex-shrink: 0;
-}
-
-.boss-row__name {
-  flex: 1;
-  min-width: 0;
-  color: #ffffff;
-  font-weight: 500;
-  font-family: var(--font-family);
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  z-index: 1;
-}
-
-.boss-row__hp {
-  color: rgba(255, 255, 255, 0.72);
-  font-family: var(--font-family);
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-  z-index: 1;
-  flex-shrink: 0;
-}
-
-.boss-row__pct {
-  color: #ffffff;
-  font-family: var(--font-family);
-  font-size: 14px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  min-width: 42px;
-  z-index: 1;
-  flex-shrink: 0;
-}
-
-/* Each row is pre-allocated, hidden by default, shown when populated */
-/* Rows are absolutely placed and moved with translateY.
-   Ranking changes then animate on the compositor for free, with no layout and
-   no measuring -- a meter where rows slide past each other reads as live, and
-   a meter where they teleport reads as a table being redrawn. */
+/* Rows are absolutely placed and moved with translateY, so a rank change
+   slides on the compositor instead of redrawing a table. */
 .player-row {
   position: absolute;
   top: 0;
@@ -374,41 +281,33 @@ body:not(.has-players) .player-list {
   right: 0;
   display: flex;
   align-items: center;
-  height: var(--row-height);
-  padding: 0 2px;
+  height: calc(var(--row-height) - var(--row-gap));
+  padding: 0 8px 0 4px;
   overflow: hidden;
-  border-radius: 5px;
-  pointer-events: auto;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
   cursor: pointer;
   contain: layout style;
   will-change: transform;
   transition:
-    transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 220ms ease;
+    transform 320ms var(--ease),
+    opacity 220ms ease,
+    background 0.15s ease;
 }
 
-/* Rows that have not taken their place yet: entering from the right, and
-   leaving without a jump. */
 .player-row.is-entering {
   opacity: 0;
   transform: translateY(var(--row-y, 0px)) translateX(10px);
 }
 
 .player-row:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.07);
 }
 
-.player-row:hover .player-row__name {
-  color: #fff;
-}
-
-/* Background bar — GPU-composited via scaleX on ::after */
+/* The bar: the row's share of the top damage, in its class colour. */
 .player-row__bar {
   position: absolute;
-  inset: 2px 0;
-  overflow: hidden;
-  border-radius: 4px;
-  z-index: 0;
+  inset: 0;
   pointer-events: none;
 }
 
@@ -416,251 +315,206 @@ body:not(.has-players) .player-list {
   content: "";
   position: absolute;
   inset: 0;
-  /* Per-class colour, set on the row as an RGB triple. Falling back to the
-     configured colour keeps a custom palette working for anyone who set one. */
-  background: var(--color-other-bar);
+  border-radius: 8px;
   background: linear-gradient(
     90deg,
-    rgba(var(--row-rgb, 255, 255, 255), 0.6) 0%,
-    rgba(var(--row-rgb, 255, 255, 255), 0.16) 100%
+    rgba(var(--row-rgb, 148, 163, 184), 0.5) 0%,
+    rgba(var(--row-rgb, 148, 163, 184), 0.14) 100%
   );
-  border-radius: 0 3px 3px 0;
   transform-origin: left center;
   transform: scaleX(var(--bar-scale, 0));
   transition: transform 260ms cubic-bezier(0.33, 1, 0.68, 1);
 }
 
-/* Your own row keeps a rim rather than a different fill, so it stands out
-   without breaking the class colour that identifies it. */
+/* You: a brighter bar and a thin light rim, without losing the class colour
+   that identifies you. */
 .player-row.is-main {
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
 .player-row.is-main .player-row__bar::after {
-  filter: saturate(1.25) brightness(1.12);
+  filter: saturate(1.3) brightness(1.15);
 }
 
-/* Content layer sits above the bar */
 .player-row__content {
   position: relative;
   z-index: 1;
   display: flex;
-  width: 100%;
   align-items: center;
   gap: 8px;
-  user-select: none;
-  -webkit-user-select: none;
+  width: 100%;
+  min-width: 0;
 }
 
-/* Left group: icon + name + server */
 .player-row__left {
   display: flex;
   align-items: center;
-  gap: 4px;
-  min-width: 0;
+  gap: 6px;
   flex: 1;
+  min-width: 0;
 }
 
 .player-row__icon-wrap {
-  position: relative;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
 }
 
 .player-row__icon {
   width: 100%;
   height: 100%;
-  border-radius: 4px;
-  object-fit: cover;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
 }
 
 .player-row__name-wrap {
   display: flex;
-  align-items: center;
-  gap: 0;
+  align-items: baseline;
+  gap: 5px;
   min-width: 0;
-  font-family: var(--font-family);
-  font-size: 14px;
-  line-height: 1.2;
 }
 
 .player-row__name {
-  color: #ebebeb;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
-.player-row__server {
-  color: #cecece;
-  font-size: 11px;
+.player-row__server,
+.player-row__power {
   flex-shrink: 0;
-  margin-left: 2px;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Right group: damage | dps | pct */
 .player-row__right {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 .player-row__damage {
-  color: rgba(255, 255, 255, 0.62);
-  font-family: var(--font-family);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 12px;
   text-align: right;
 }
 
-/* White, and wide enough that a counting animation never changes the column
-   width -- a number that shoves its neighbours while it counts is worse than
-   no animation at all. */
+/* Wide enough that counting never changes the column width: a number that
+   shoves its neighbours while it counts is worse than no animation. */
 .player-row__dps {
-  min-width: 74px;
-  color: #ffffff;
-  font-family: var(--font-family);
-  font-size: 14px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  min-width: 66px;
+  font-size: 13px;
+  font-weight: 650;
   text-align: right;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
 }
 
 .player-row__dps-unit {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 11px;
-  font-weight: 500;
   margin-left: 1px;
+  color: var(--faint);
+  font-size: 10.5px;
+  font-weight: 500;
 }
 
 .player-row__share {
-  min-width: 46px;
-  color: rgba(255, 255, 255, 0.92);
-  font-family: var(--font-family);
-  font-size: 13px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
+  min-width: 40px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
   text-align: right;
 }
 
-/* ── Status bar ── */
-.status-bar {
+/* ---- Footer ---- */
+
+.foot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  height: 20px;
-  padding: 0 10px;
-  border-radius: 0 0 8px 8px;
-  pointer-events: auto;
-  flex-shrink: 0;
-}
-
-.status-bar__left,
-.status-bar__right {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.status-bar__icon {
-  flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.3);
-}
-.status-bar__usage {
-  font-family: var(--font-family);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  color: #9aa3af;
-  margin-right: 4px;
-}
-
-.status-bar__ping {
-  font-family: var(--font-family);
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-  margin-right: 2px;
-}
-.status-bar__ping.good {
-  color: #4ade80;
-}
-.status-bar__ping.warn {
-  color: #facc15;
-}
-.status-bar__ping.bad {
-  color: #ef4444;
-}
-
-.status-bar__copy-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.3);
-  cursor: pointer;
-  padding: 0;
-  margin-left: 4px;
-  border-radius: 3px;
-  flex-shrink: 0;
-}
-.status-bar__copy-btn:hover {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.status-bar__pvp-btn {
-  height: 18px;
-  padding: 0 4px;
-  margin-left: 2px;
-  border: none;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.42);
-  cursor: pointer;
-  font-family: var(--font-family);
-  font-size: 9px;
-  font-weight: 600;
-  line-height: 1;
-  pointer-events: auto;
-}
-
-.status-bar__pvp-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.72);
-}
-
-.status-bar__duration {
-  color: rgba(255, 255, 255, 0.65);
-  font-family: var(--font-family);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-/* Combat power, beside the name rather than among the damage numbers:
-   it identifies the player, it is not part of their performance. */
-.player-row__power {
-  color: rgba(255, 255, 255, 0.55);
+  gap: 8px;
+  height: 22px;
+  padding: 0 12px 2px;
+  color: var(--faint);
   font-size: 11px;
-  font-weight: 500;
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
-  margin-left: 6px;
-  padding-left: 6px;
-  border-left: 1px solid rgba(255, 255, 255, 0.18);
 }
 
-/* What you are fighting, kept apart from the window's own name so a
-   Traditional Chinese mob name never reads as the app changing language. */
-.title-bar__target {
-  color: #cfd3dc;
-  font-family: var(--font-family);
-  font-size: 11px;
-  font-weight: 500;
-  margin-left: 8px;
-  padding-left: 8px;
-  border-left: 1px solid rgba(255, 255, 255, 0.15);
-  max-width: 200px;
+.foot__party {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--muted);
+}
+
+/* Tools and system figures only while the pointer is on the card. */
+.foot__tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.card:hover .foot__tools {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.text-btn {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 16px;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.text-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.foot__sys:empty {
+  display: none;
+}
+
+.foot__ping {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.foot__ping::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.foot__ping:empty {
+  display: none;
+}
+
+.foot__ping.good {
+  color: #4ade80;
+}
+
+.foot__ping.warn {
+  color: #facc15;
+}
+
+.foot__ping.bad {
+  color: #f87171;
 }

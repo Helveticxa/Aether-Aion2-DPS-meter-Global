@@ -1,8 +1,6 @@
 {
   "dps-overlay": {
-    "title": "DPS 미터",
     "totalDamage": "총 피해량",
-    "dps": "DPS",
     "live": "실시간",
     "history": "기록",
     "diagNpcap": "WinDivert 패킷 캡처 드라이버를 사용할 수 없음",
@@ -12,32 +10,12 @@
     "diagBossOnly": "보스 전용이 켜져 있습니다 — 다른 대상에 대한 {count}회의 타격이 무시되었습니다. 설정 → Aion 2에서 끄세요."
   },
   "dps-history": {
-    "title": "DPS 기록",
     "empty": "기록 없음 — 리셋 키를 눌러 전투 데이터 저장",
-    "boss": "BOSS",
-    "mob": "일반몹",
     "record": "개",
     "records": "개",
     "player": "명",
     "players": "명",
-    "pending": "대기",
-    "upload": "업로드",
-    "reupload": "다시 업로드",
-    "uploadPending": "미제출 기록 업로드",
-    "reuploadAll": "전체 다시 업로드",
     "unknownTarget": "알 수 없는 대상 #{{id}}",
-    "unknownDungeon": "알 수 없는 던전",
-    "unknownDifficulty": "알 수 없는 난이도",
-    "uploaded": "업로드됨",
-    "notUploaded": "업로드 안됨",
-    "queueing": "대기 중",
-    "queued": "성공",
-    "skipped": "건너뜀",
-    "failed": "실패",
-    "uploading": "업로드 중 {{current}} / {{total}}...",
-    "uploadingProgress": "업로드 중 {{current}} / {{total}}... 대기 {{queued}}, 건너뜀 {{skipped}}, 실패 {{failed}}.",
-    "uploadComplete": "업로드 완료. 대기 {{queued}}, 건너뜀 {{skipped}}, 실패 {{failed}}, {{marked}}개 업로드 표시됨.",
-    "uploadFailed": "큐 업로드 실패.",
     "targetFilter": "대상",
     "actorFilter": "플레이어",
     "allTargets": "전체 대상",
@@ -45,10 +23,7 @@
     "unknownMainActor": "알 수 없는 플레이어",
     "noRecordsToDelete": "삭제할 기록이 없습니다.",
     "deleteFailed": "삭제 실패.",
-    "deletedCount": "{{count}}개 기록 삭제됨.",
-    "loginRequired": "먼저 로그인 후 업로드해 주세요.",
-    "noUnuploadedRecords": "업로드할 기록이 없습니다.",
-    "noRecordToQueue": "업로드할 기록이 없습니다."
+    "deletedCount": "{{count}}개 기록 삭제됨."
   },
   "dps-detail": {
     "empty": "플레이어 행을 클릭하여 스킬 상세 보기",

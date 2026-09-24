@@ -1,4 +1,4 @@
-import { Home, Map, Pin, type LucideIcon } from "lucide-react";
+import { Home, Pin, type LucideIcon } from "lucide-react";
 
 export type NavItem = {
   label: string;
@@ -22,7 +22,6 @@ export const AION2_GAME: GameConfig = {
   rootPath: "/aion2",
   navItems: [
     { label: "Home", path: "/aion2", icon: Home },
-    { label: "Map", path: "/aion2/map", icon: Map },
     { label: "Always on top", path: "/aion2/on-top", icon: Pin },
   ],
 

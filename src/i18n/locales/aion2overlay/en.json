@@ -1,8 +1,6 @@
 {
   "dps-overlay": {
-    "title": "DPS METER",
     "totalDamage": "Total Damage",
-    "dps": "DPS",
     "live": "LIVE",
     "history": "HISTORY",
     "diagNpcap": "WinDivert packet capture driver is unavailable",
@@ -12,32 +10,12 @@
     "diagBossOnly": "Boss only is on — {count} hits on other targets ignored. Turn it off in Settings → Aion 2."
   },
   "dps-history": {
-    "title": "DPS History",
     "empty": "No records yet — press Reset to save combat data",
-    "boss": "BOSS",
-    "mob": "MOB",
     "record": "record",
     "records": "records",
     "player": "player",
     "players": "players",
-    "pending": "pending",
-    "upload": "Upload",
-    "reupload": "Re-upload",
-    "uploadPending": "Upload Pending",
-    "reuploadAll": "Re-upload All",
     "unknownTarget": "Unknown Target #{{id}}",
-    "unknownDungeon": "Unknown Dungeon",
-    "unknownDifficulty": "Unknown Difficulty",
-    "uploaded": "Uploaded",
-    "notUploaded": "Not uploaded",
-    "queueing": "Queueing",
-    "queued": "Success",
-    "skipped": "Skipped",
-    "failed": "Failed",
-    "uploading": "Uploading {{current}} / {{total}}...",
-    "uploadingProgress": "Uploading {{current}} / {{total}}... queued {{queued}}, skipped {{skipped}}, failed {{failed}}.",
-    "uploadComplete": "Upload complete. Queued {{queued}}, skipped {{skipped}}, failed {{failed}}, marked {{marked}} uploaded.",
-    "uploadFailed": "Queue upload failed.",
     "targetFilter": "Target",
     "actorFilter": "Player",
     "allTargets": "All targets",
@@ -45,10 +23,7 @@
     "unknownMainActor": "Unknown player",
     "noRecordsToDelete": "No records to delete.",
     "deleteFailed": "Delete failed.",
-    "deletedCount": "Deleted {{count}} record(s).",
-    "loginRequired": "Please log in first before uploading.",
-    "noUnuploadedRecords": "No unuploaded records to queue.",
-    "noRecordToQueue": "No record to queue."
+    "deletedCount": "Deleted {{count}} record(s)."
   },
   "dps-detail": {
     "empty": "Click a player row to view skill details",
