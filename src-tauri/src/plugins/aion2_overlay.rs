@@ -72,20 +72,6 @@ pub async fn create_dps_overlay<R: Runtime>(app: AppHandle<R>) -> Result<(), Str
     Ok(())
 }
 
-/// Bring the DPS overlay up for a while with no fight on, so a streaming app
-/// can find it. OBS lists only windows that are on screen, and between fights
-/// the overlay is not.
-#[tauri::command]
-pub async fn show_dps_overlay_for_capture<R: Runtime>(
-    app: AppHandle<R>,
-    secs: Option<u64>,
-) -> Result<(), String> {
-    create_dps_overlay(app.clone()).await?;
-    app.state::<DpsMeter>()
-        .peek_overlay(secs.unwrap_or(60).clamp(5, 300));
-    Ok(())
-}
-
 /// Destroy the DPS overlay window and stop the DPS meter.
 #[tauri::command]
 pub fn destroy_dps_overlay<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {

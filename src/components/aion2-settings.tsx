@@ -409,38 +409,32 @@ export function Aion2Settings() {
 
           <SettingsGroup title="On stream (OBS)">
             <SettingRow
-              title="Add the meter to OBS"
-              description="In OBS: Sources → + → Window Capture, then pick [Aether.exe]: Aether | DPS Overlay. OBS only lists windows that are on screen, so bring the meter up first. It stays up while OBS is in front."
-            >
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  void invoke("show_dps_overlay_for_capture", { secs: 60 }).catch(() => {})
-                }
-              >
-                Show for 60 s
-              </Button>
-            </SettingRow>
-
-            <SettingRow
-              title="Capture method"
-              description="Set it to Windows 10 (1903 and up). Automatic picks BitBlt for Aether, which cannot see its see-through window and shows nothing or a black box. Untick Capture Cursor."
-            >
-              <span className="text-muted-foreground rounded-md border px-2 py-1 text-xs whitespace-nowrap">
-                Windows 10 (1903 and up)
-              </span>
-            </SettingRow>
-
-            <SettingRow
-              title="On stream between fights"
-              description="The meter steps aside between fights, and leaves the stream with it. To keep it on stream all the time, turn off Hide between fights."
+              title="Stream mode"
+              description="Keeps the DPS pop-up on screen all the time, so OBS captures the meter itself rather than the Aether window. Between fights it shows Waiting for a fight. The show/hide shortcut still hides it."
             >
               <Switch
-                checked={!backend.hideWhenIdle}
-                onCheckedChange={(v) => updateSettings("aion2.backend.hideWhenIdle", !v)}
+                checked={overlay.streamMode === true}
+                onCheckedChange={(v) => {
+                  updateSettings("aion2.overlay.streamMode", v);
+                  if (v) void invoke("create_dps_overlay").catch(() => {});
+                }}
               />
             </SettingRow>
+
+            <div className="text-muted-foreground flex flex-col gap-1.5 px-5 pb-5 text-xs leading-5">
+              <span className="text-foreground font-medium">In OBS</span>
+              <span>
+                1. Sources → + → <b className="text-foreground">Window Capture</b>
+              </span>
+              <span>
+                2. Window: <b className="text-foreground">[Aether.exe]: Aether | DPS Overlay</b> —
+                not the one that is only Aether, which is this app
+              </span>
+              <span>
+                3. Capture Method: <b className="text-foreground">Windows 10 (1903 and up)</b>.
+                Automatic cannot see the see-through pop-up and shows black. Untick Capture Cursor.
+              </span>
+            </div>
           </SettingsGroup>
 
           <SettingsGroup title="Look">

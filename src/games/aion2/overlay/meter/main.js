@@ -81,6 +81,7 @@ const DEFAULT_OVERLAY_CONFIG = {
   layout: "full",
   showFightSummary: true,
   showPersonalBest: true,
+  streamMode: false,
 };
 
 let mainActorName = null;
@@ -119,6 +120,14 @@ function persistOverlayConfigToLocalStorage(cfg) {
 function syncAlwaysOnTopToBackend(enabled) {
   invoke("set_dps_always_on_top", { enabled }).catch((err) => {
     console.error("[dps-overlay] sync always-on-top failed:", err);
+  });
+}
+
+// Stream mode keeps this window on screen for OBS. Re-sent whenever the
+// overlay loads, so a stream mode chosen before a restart holds.
+function syncStreamModeToBackend(enabled) {
+  invoke("set_dps_stream_mode", { enabled }).catch((err) => {
+    console.error("[dps-overlay] sync stream mode failed:", err);
   });
 }
 
@@ -267,6 +276,7 @@ function applyOverlayConfig(cfg) {
   applyLockedState(overlayConfig.locked === true);
   syncLockedToBackend(overlayConfig.locked === true);
   syncAlwaysOnTopToBackend(overlayConfig.alwaysOnTop === true);
+  syncStreamModeToBackend(overlayConfig.streamMode === true);
   // Re-render existing rows immediately with new config
   if (lastSnapshot) {
     updateOverview(lastSnapshot);

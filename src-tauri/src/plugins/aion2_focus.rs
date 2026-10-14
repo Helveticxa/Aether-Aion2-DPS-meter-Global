@@ -48,6 +48,10 @@ pub struct Aion2FocusState {
     dps_idle_hidden: AtomicBool,
     /// Whether the game, or something counted as part of it, is in front.
     game_focused: AtomicBool,
+    /// Stream mode: the DPS overlay stays on screen whatever is in front and
+    /// between fights, because OBS's Window Capture lists and captures a
+    /// window only while it is shown. Only the show/hide shortcut hides it.
+    dps_stream_mode: AtomicBool,
 }
 
 impl Default for Aion2FocusState {
@@ -58,6 +62,7 @@ impl Default for Aion2FocusState {
             dps_always_on_top: AtomicBool::new(false),
             dps_idle_hidden: AtomicBool::new(false),
             game_focused: AtomicBool::new(false),
+            dps_stream_mode: AtomicBool::new(false),
         }
     }
 }
@@ -70,6 +75,9 @@ impl Aion2FocusState {
         let follows_focus = self.auto_hide_enabled.load(Ordering::Relaxed)
             && !self.dps_always_on_top.load(Ordering::Relaxed);
 
+        if label == DPS_OVERLAY_LABEL && self.dps_stream_mode.load(Ordering::Relaxed) {
+            return Some(!manual_hidden);
+        }
         if label == DPS_OVERLAY_LABEL && self.dps_idle_hidden.load(Ordering::Relaxed) {
             return Some(false);
         }
@@ -180,6 +188,21 @@ pub fn set_dps_always_on_top<R: Runtime>(
     }
 }
 
+/// Keep the DPS overlay on screen for a streaming app to capture, or let it
+/// follow the game and step aside between fights again.
+#[tauri::command]
+pub fn set_dps_stream_mode<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    state: State<'_, Aion2FocusState>,
+    enabled: bool,
+) {
+    if state.dps_stream_mode.swap(enabled, Ordering::Relaxed) == enabled {
+        return;
+    }
+    let focused = state.game_focused.load(Ordering::Relaxed);
+    sync_windows(&app, &state, focused);
+}
+
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("aion2-focus")
         .setup(|app, _api| {
@@ -193,7 +216,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         .invoke_handler(tauri::generate_handler![
             set_dps_manual_hidden,
             set_auto_hide_enabled,
-            set_dps_always_on_top
+            set_dps_always_on_top,
+            set_dps_stream_mode
         ])
         .build()
 }
@@ -406,6 +430,19 @@ mod windows_impl {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn in_stream_mode_the_meter_stays_on_screen() {
+        // Idle, and the game not in front: hidden normally, shown on stream.
+        let s = state(true, false, true, false);
+        s.dps_stream_mode.store(true, Ordering::Relaxed);
+        assert_eq!(s.wanted_visibility(DPS_OVERLAY_LABEL, false), Some(true));
+        // The show/hide shortcut still wins.
+        s.dps_manual_hidden.store(true, Ordering::Relaxed);
+        assert_eq!(s.wanted_visibility(DPS_OVERLAY_LABEL, true), Some(false));
+        // The PvP window is not part of it.
+        assert_eq!(s.wanted_visibility(PVP_OVERLAY_LABEL, false), Some(false));
+    }
 
     fn state(idle: bool, manual: bool, auto_hide: bool, always_on_top: bool) -> Aion2FocusState {
         let state = Aion2FocusState::default();
