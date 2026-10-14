@@ -42,8 +42,12 @@ buff uptime, and damage type.
   game's exclusive fullscreen blocks every overlay
 - **Live chat** — YouTube and Twitch chat over the game, transparent and
   outlined, one pop-up per chat or merged into one
-- **On stream** — add the meter to OBS as a Window Capture; it stays up while
-  OBS is in front
+- **On stream** — Stream mode keeps the meter on screen, between fights too, so
+  OBS captures the meter itself as a Window Capture
+- **Kina calculator** — the Kina your characters make from the Expedition a
+  week and a month, with the per-server play count, Special Quai, the Wind
+  Breeze shop and Substance Morph, and whether buying or crafting Odyle Energy
+  still pays
 - **Boss fights** — your pace against your personal best while you fight, and a
   summary when the boss dies: DPS, place, crits, top skills, how much of the
   fight was captured, one-click copy
@@ -81,19 +85,39 @@ third-party tool is its call.
 
 ## Streaming with OBS
 
-The meter can go on stream on its own, as a window OBS captures.
+The meter can go on stream on its own, as a window OBS captures: the meter
+itself, not the Aether app.
 
-1. Settings → Aion 2 → Overlay → **On stream (OBS)** → **Show for 60 s**. OBS
-   lists only windows that are on screen, and between fights the meter is not.
+1. Settings → Aion 2 → Overlay → **On stream (OBS)** → turn on **Stream mode**.
+   The meter opens and stays on screen, between fights too. OBS lists only
+   windows that are on screen.
 2. In OBS: Sources → + → **Window Capture**, and pick
-   `[Aether.exe]: Aether | DPS Overlay`.
+   `[Aether.exe]: Aether | DPS Overlay` — not `[Aether.exe]: Aether`, which is
+   the app.
 3. Set **Capture Method** to **Windows 10 (1903 and up)**. *Automatic* picks
    BitBlt for Aether, which cannot see its see-through window.
 
-The meter stays up while OBS (or Streamlabs, XSplit, Twitch Studio, PRISM) is in
-front. It still steps aside between fights, and off the stream with it; turn on
-*On stream between fights* to keep it there. OBS does not need to run as
+The show/hide shortcut still hides the meter. OBS does not need to run as
 administrator.
+
+## Kina calculator
+
+The third icon in the sidebar. Add your characters with their item level,
+server and Special Quai, and it works out what they make from the Expedition, a
+week and a month, in Kina:
+
+- energy from regeneration (15 every 3 hours), the Wind Breeze shop (20 Odyle
+  Energy a character a week, 100,000 Kina each, with Special Quai) and
+  Substance Morph (4 a character and 16 a server a week);
+- the cubes that buys, in the best dungeon each character's item level allows,
+  with Special Quai claiming a run's cube twice;
+- the Cumulative Play Reward Adjustment, per server across all your characters:
+  past play 83 cubes pay 80%, then 60, 40 and 20%;
+- what a crafted Odyle Energy costs at the prices you give its materials, and
+  whether one more bought or crafted still pays.
+
+**Best plan** works out how much to buy and craft on each character for the
+most Kina. Every number is editable for the next patch, and stays on your PC.
 
 ## Install
 

@@ -1,0 +1,36 @@
+{
+  "updated": "2026-10-14",
+  "source": "Read from the game on 14 Oct 2026 (global): Expedition > Conquest, Cumulative Play Reward Adjustment, Wind Breeze Merchants > Special, Substance Morph.",
+  "rules": {
+    "regenPer3h": 15,
+    "cap": 560,
+    "capMembership": 840,
+    "energyPerItem": 40,
+    "shopPrice": 100000,
+    "shopLimit": 20,
+    "craftKina": 50000,
+    "craftLimitCharacter": 4,
+    "craftLimitServer": 16,
+    "materials": [
+      { "id": "odyle", "name": "Odyle (Bound)", "perCraft": 25, "price": 0 },
+      { "id": "fine-odyle", "name": "Fine Odyle (Bound)", "perCraft": 5, "price": 0 },
+      { "id": "pure-odyle", "name": "Pure Odyle", "perCraft": 1, "price": 0 }
+    ],
+    "playTiers": [
+      { "from": 1, "rate": 1 },
+      { "from": 84, "rate": 0.8 },
+      { "from": 105, "rate": 0.6 },
+      { "from": 126, "rate": 0.4 },
+      { "from": 147, "rate": 0.2 }
+    ],
+    "daysPerMonth": 30
+  },
+  "dungeons": [
+    { "id": "krao-cave", "name": "Krao Cave", "mode": "Conquest", "stars": 1, "minItemLevel": 700, "players": "1-5", "energy": 40, "kina": 200000 },
+    { "id": "draupnir", "name": "Draupnir", "mode": "Conquest", "stars": 1, "minItemLevel": 700, "players": "1-5", "energy": 40, "kina": 200000 },
+    { "id": "urugugu-canyon", "name": "Urugugu Canyon", "mode": "Conquest", "stars": 2, "minItemLevel": 1400, "players": "2-5", "energy": 40, "kina": 300000 },
+    { "id": "vakron-sky-island", "name": "Vakron Sky Island", "mode": "Conquest", "stars": 2, "minItemLevel": 1400, "players": "2-5", "energy": 40, "kina": 300000 },
+    { "id": "fire-temple", "name": "Fire Temple", "mode": "Conquest", "stars": 3, "minItemLevel": 2100, "players": "1-5", "energy": 40, "kina": 400000 },
+    { "id": "ferocious-horn-den", "name": "Ferocious Horn Den", "mode": "Conquest", "stars": 3, "minItemLevel": 2100, "players": "1-5", "energy": 40, "kina": 400000 }
+  ]
+}

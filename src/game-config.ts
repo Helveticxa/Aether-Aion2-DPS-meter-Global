@@ -1,4 +1,4 @@
-import { Home, Pin, type LucideIcon } from "lucide-react";
+import { Coins, Home, Pin, type LucideIcon } from "lucide-react";
 
 export type NavItem = {
   label: string;
@@ -23,6 +23,7 @@ export const AION2_GAME: GameConfig = {
   navItems: [
     { label: "Home", path: "/aion2", icon: Home },
     { label: "Always on top", path: "/aion2/on-top", icon: Pin },
+    { label: "Kina calculator", path: "/aion2/kina", icon: Coins },
   ],
 
   bgVideo: "/aion2/bg-dune.mp4",

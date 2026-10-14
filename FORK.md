@@ -545,6 +545,17 @@ the running app rather than assumed:
   run as administrator. `skip_taskbar` does not hide it either: tao implements
   it with `ITaskbarList::DeleteTab`, not `WS_EX_TOOLWINDOW`, which OBS would skip.
 
+### Stream mode (3.2.0)
+
+Showing the overlay for a minute was not enough: between fights it hid again
+and left the stream, and OBS listed only the main window whenever the overlay
+was down. `aion2.overlay.streamMode` (Settings → Aion 2 → Overlay → On stream)
+is pushed to the backend with `set_dps_stream_mode`, and while it is on,
+`aion2_focus::wanted_visibility` returns "shown" for the DPS overlay whatever
+is in front and whether or not a fight is on; only the show/hide shortcut
+(`manual_hidden`) hides it. Turning it on creates the overlay.
+`show_dps_overlay_for_capture` is gone.
+
 ### Cost
 
 Replayed in a release build, the pipeline reads 1-3.6 million packets a
@@ -556,6 +567,28 @@ rebuilt only when the data or the relevant settings changed, and sent only when
 something a window shows changed. The log lost about 95% of its lines: every
 player in view, every summon, every stall, and the config being re-applied
 each time a window opened.
+
+## Kina calculator (3.2.0)
+
+A third page, `/aion2/kina`, with no backend: `lib/kina.ts` is pure
+arithmetic, `lib/kina-store.ts` keeps the page's state in `localStorage`
+(`aether.kina.v2`), and `data/kina.json` holds the game's numbers as read on
+14 October 2026, every one of them editable on the page.
+
+The rule that shapes it is the game's Cumulative Play Reward Adjustment: plays
+of a game mode are counted weekly per server across all of an account's
+characters there, and past 83 a cube pays 80%, 60%, 40%, then 20%. So
+`calculate` groups plays by server and mode, sorts each group's plays by
+value, best first, and applies the tiers in that order; a Special Quai run that
+claims its cube twice is one play worth two cubes. What one more Odyle Energy
+is worth is computed exactly, by recomputing the group with one more item,
+because a new play can push others into a lower tier.
+
+`optimize` is greedy on that exact value: each step adds the one or two items
+(shop, character recipe, server recipe) with the best profit per item and
+stops when nothing pays for itself. Two at a time, so a Special Quai run's
+second claim is weighed with its first. It runs off `useDeferredValue`; eight
+characters take about 40 ms.
 
 ## Boss fights (2.3.0)
 

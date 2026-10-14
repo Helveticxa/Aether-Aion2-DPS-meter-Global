@@ -18,6 +18,7 @@ const PreflightGatePage = lazy(() => import("./pages/preflight-gate"));
 const SettingsViewPage = lazy(() => import("./pages/settings"));
 const Aion2HomePage = lazy(() => import("./games/aion2/pages/home"));
 const Aion2OnTopPage = lazy(() => import("./games/aion2/pages/always-on-top"));
+const Aion2KinaPage = lazy(() => import("./games/aion2/pages/kina-calculator"));
 
 const Aion2OverlaySettingPage = lazy(() => import("./games/aion2/overlay/setting/page"));
 
@@ -59,6 +60,7 @@ function AppWrapper() {
         {/* AION */}
         <Route path="/aion2" element={<Aion2HomePage />} />
         <Route path="/aion2/on-top" element={<Aion2OnTopPage />} />
+        <Route path="/aion2/kina" element={<Aion2KinaPage />} />
       </Route>
 
       {/* Overlay windows (no main frame) */}

@@ -9,6 +9,17 @@ lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
      and some players still update from there: so no hard wraps and no bold in
      2.0.0 and later. From 2.0.0 on the dialog renders Markdown. -->
 
+## [3.2.0]
+
+A Kina calculator, and a meter that stays on stream.
+
+- New Kina calculator, the third icon in the sidebar. Add your characters with their item level, server and Special Quai, and it works out the Kina they make from the Expedition a week and a month: energy from regeneration, the Wind Breeze shop and Substance Morph, the cubes it buys, the Kina each dungeon pays, and what the shop and crafting cost.
+- It counts the Cumulative Play Reward Adjustment the way the game does: per server, across all your characters there, with cubes paying 80, 60, 40 and then 20 percent past play 83. The best runs are counted first, and a Special Quai run that claims its cube twice is still one play.
+- Odyle Energy, buy or craft: enter what Odyle, Fine Odyle and Pure Odyle are worth to you, and it shows what a crafted Odyle Energy costs against the shop's 100,000 Kina, and whether one more of either still pays on each character.
+- Best plan finds how much Odyle Energy to buy and craft on each character for the most Kina, stopping where the play count makes it cost more than it pays. One click applies it.
+- Dungeons, prices, limits and the play-count table are from the game on 14 October 2026 (20 Odyle Energy a character a week in the shop since that patch) and can all be edited. Everything stays on your PC.
+- Stream mode, in Settings, Aion 2, Overlay, On stream (OBS), keeps the DPS pop-up on screen all the time, between fights included, so OBS Window Capture captures the meter itself rather than the Aether window. Turning it on opens the pop-up. The show and hide shortcut still hides it. It replaces the Show for 60 s button.
+
 ## [3.1.0]
 
 On stream with OBS, a name on every row, and credit where it is due.
