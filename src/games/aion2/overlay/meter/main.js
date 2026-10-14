@@ -82,6 +82,7 @@ const DEFAULT_OVERLAY_CONFIG = {
   showFightSummary: true,
   showPersonalBest: true,
   streamMode: false,
+  streamAuto: true,
 };
 
 let mainActorName = null;
@@ -123,10 +124,11 @@ function syncAlwaysOnTopToBackend(enabled) {
   });
 }
 
-// Stream mode keeps this window on screen for OBS. Re-sent whenever the
-// overlay loads, so a stream mode chosen before a restart holds.
-function syncStreamModeToBackend(enabled) {
-  invoke("set_dps_stream_mode", { enabled }).catch((err) => {
+// Stream mode keeps this window on screen for OBS; automatic stream mode does
+// so while a streaming app runs. Re-sent whenever the overlay loads, so what
+// was chosen before a restart holds.
+function syncStreamModeToBackend(enabled, auto) {
+  invoke("set_dps_stream_mode", { enabled, auto }).catch((err) => {
     console.error("[dps-overlay] sync stream mode failed:", err);
   });
 }
@@ -276,7 +278,7 @@ function applyOverlayConfig(cfg) {
   applyLockedState(overlayConfig.locked === true);
   syncLockedToBackend(overlayConfig.locked === true);
   syncAlwaysOnTopToBackend(overlayConfig.alwaysOnTop === true);
-  syncStreamModeToBackend(overlayConfig.streamMode === true);
+  syncStreamModeToBackend(overlayConfig.streamMode === true, overlayConfig.streamAuto !== false);
   // Re-render existing rows immediately with new config
   if (lastSnapshot) {
     updateOverview(lastSnapshot);

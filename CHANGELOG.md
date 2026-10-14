@@ -9,6 +9,14 @@ lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
      and some players still update from there: so no hard wraps and no bold in
      2.0.0 and later. From 2.0.0 on the dialog renders Markdown. -->
 
+## [3.2.1]
+
+OBS always finds the meter.
+
+- While OBS, Streamlabs, XSplit, Twitch Studio or PRISM is running, the meter stays on screen by itself, between fights included, so a Window Capture never comes up empty. It turns off again when the streaming app closes. Settings, Aion 2, Overlay, On stream (OBS), Automatic while streaming switches it off; Stream mode still keeps the meter up all the time.
+- OBS no longer captures the Aether app instead of the meter. When the meter was not on screen, OBS took another Aether window of the same kind, and stayed on it after the meter came back: an empty source if the app was minimized, the whole app if not. Now the meter is the only window OBS can pick for it. OBS sources set up for the meter keep working. A Window Capture of a live chat pop-up or the PvP window has to be picked again once.
+- The Kina calculator works out its best plan only when something it depends on changes, not while you type a name or press a stepper.
+
 ## [3.2.0]
 
 A Kina calculator, and a meter that stays on stream.

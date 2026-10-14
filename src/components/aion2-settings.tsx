@@ -199,6 +199,37 @@ function PersonalBestsRow() {
   );
 }
 
+/** obs64.exe -> OBS, Streamlabs Desktop.exe -> Streamlabs Desktop. */
+function streamingAppLabel(exe: string): string {
+  const name = exe.replace(/\.exe$/i, "");
+  return /^obs(64|32)?$/i.test(name) ? "OBS" : name;
+}
+
+/** The streaming app running now, if any, checked every few seconds. */
+function useRunningStreamingApp(enabled: boolean): string | null {
+  const [app, setApp] = useState<string | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    const check = () => {
+      invoke<string | null>("get_running_streaming_app")
+        .then((name) => {
+          if (alive) setApp(name ? streamingAppLabel(name) : null);
+        })
+        .catch(() => {
+          if (alive) setApp(null);
+        });
+    };
+    check();
+    const timer = window.setInterval(check, 3000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [enabled]);
+  return app;
+}
+
 export function Aion2Settings() {
   const { config, updateSettings } = useSettings();
   const { t } = useAppTranslation();
@@ -207,6 +238,9 @@ export function Aion2Settings() {
 
   const backend = config.aion2.backend;
   const overlay = config.aion2.overlay;
+  const streamingApp = useRunningStreamingApp(
+    tab === "overlay" && overlay.streamAuto !== false && overlay.streamMode !== true
+  );
 
   const tabs: { id: Aion2Tab; label: string }[] = [
     { id: "meter", label: "Meter" },
@@ -418,6 +452,23 @@ export function Aion2Settings() {
                   updateSettings("aion2.overlay.streamMode", v);
                   if (v) void invoke("create_dps_overlay").catch(() => {});
                 }}
+              />
+            </SettingRow>
+
+            <SettingRow
+              title="Automatic while streaming"
+              description={
+                overlay.streamMode === true
+                  ? "Stream mode is on all the time, so this has nothing to do."
+                  : streamingApp
+                    ? `On now: ${streamingApp} is running, so the meter stays on screen while it runs.`
+                    : "Stream mode turns itself on while OBS, Streamlabs, XSplit, Twitch Studio or PRISM is running, and off when it closes. Start the meter as usual."
+              }
+            >
+              <Switch
+                checked={overlay.streamAuto !== false}
+                disabled={overlay.streamMode === true}
+                onCheckedChange={(v) => updateSettings("aion2.overlay.streamAuto", v)}
               />
             </SettingRow>
 

@@ -88,9 +88,10 @@ third-party tool is its call.
 The meter can go on stream on its own, as a window OBS captures: the meter
 itself, not the Aether app.
 
-1. Settings → Aion 2 → Overlay → **On stream (OBS)** → turn on **Stream mode**.
-   The meter opens and stays on screen, between fights too. OBS lists only
-   windows that are on screen.
+1. Start the meter. While OBS (or Streamlabs, XSplit, Twitch Studio, PRISM) is
+   running, it stays on screen, between fights too: OBS lists only windows that
+   are. To keep it there without a streaming app, turn on **Stream mode** in
+   Settings → Aion 2 → Overlay → **On stream (OBS)**.
 2. In OBS: Sources → + → **Window Capture**, and pick
    `[Aether.exe]: Aether | DPS Overlay` — not `[Aether.exe]: Aether`, which is
    the app.

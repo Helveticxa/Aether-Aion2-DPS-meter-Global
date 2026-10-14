@@ -144,6 +144,7 @@ pub fn run() {
             plugins::aion2_focus::set_auto_hide_enabled,
             plugins::aion2_focus::set_dps_always_on_top,
             plugins::aion2_focus::set_dps_stream_mode,
+            plugins::aion2_focus::get_running_streaming_app,
             plugins::shortcut::sync_shortcuts,
             plugins::shortcut::get_shortcut_failures,
             plugins::on_top::on_top_detect,

@@ -6,6 +6,7 @@ use tauri::{
     AppHandle, Emitter, Manager, Runtime, State, WebviewUrl, WebviewWindowBuilder,
 };
 
+use super::{OWN_WINDOW_CLASS_PANEL, OWN_WINDOW_CLASS_PVP};
 use crate::dps_meter::engine::meter::DpsMeter;
 
 pub(crate) const DPS_OVERLAY_LABEL: &str = "dps-overlay";
@@ -37,6 +38,12 @@ pub async fn create_dps_overlay<R: Runtime>(app: AppHandle<R>) -> Result<(), Str
         WebviewUrl::App("src/games/aion2/overlay/meter/index.html".into()),
     )
     .title("Aether | DPS Overlay")
+    // The only Aether window left with Tauri's default class, "Tauri Window".
+    // OBS saves a Window Capture as title, class and executable, and when the
+    // title is not on screen it falls back to a window of the same class: with
+    // every other window of ours in a class of its own, that fallback can only
+    // find this one. Changing this class would also break every OBS source
+    // already set up for it.
     .decorations(false)
     .transparent(true)
     .shadow(false)
@@ -122,6 +129,7 @@ pub async fn create_pvp_overlay<R: Runtime>(app: AppHandle<R>) -> Result<(), Str
         WebviewUrl::App("src/games/aion2/overlay/meter_pvp/index.html".into()),
     )
     .title("Aether | PVP Overlay")
+    .window_classname(OWN_WINDOW_CLASS_PVP)
     .decorations(false)
     .transparent(true)
     .always_on_top(true)
@@ -294,6 +302,7 @@ pub async fn create_dps_log<R: Runtime>(app: AppHandle<R>) -> Result<(), String>
         WebviewUrl::App("src/games/aion2/overlay/log/index.html".into()),
     )
     .title("DPS Log")
+    .window_classname(OWN_WINDOW_CLASS_PANEL)
     .inner_size(320.0, 1000.0)
     .decorations(false)
     .transparent(true)
@@ -360,6 +369,7 @@ pub async fn create_dps_detail<R: Runtime>(app: AppHandle<R>) -> Result<(), Stri
         WebviewUrl::App("src/games/aion2/overlay/detail/index.html".into()),
     )
     .title("Aether | DPS Detail")
+    .window_classname(OWN_WINDOW_CLASS_PANEL)
     .decorations(false)
     .transparent(true)
     .always_on_top(true)
@@ -472,6 +482,7 @@ pub async fn create_dps_history<R: Runtime>(app: AppHandle<R>) -> Result<(), Str
         WebviewUrl::App("src/games/aion2/overlay/history/index.html".into()),
     )
     .title("Aether | DPS History")
+    .window_classname(OWN_WINDOW_CLASS_PANEL)
     .decorations(false)
     .transparent(true)
     .always_on_top(true)

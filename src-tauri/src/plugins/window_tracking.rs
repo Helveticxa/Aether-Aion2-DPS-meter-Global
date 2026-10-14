@@ -255,6 +255,7 @@ pub fn ensure_tracked_window<R: Runtime>(
         WebviewUrl::App(options.url.into()),
     )
     .title(options.title.unwrap_or_else(|| "DPS Detail".to_string()))
+    .window_classname(super::OWN_WINDOW_CLASS_PANEL)
     .inner_size(width, height)
     .decorations(options.decorations.unwrap_or(false))
     .transparent(options.transparent.unwrap_or(true))

@@ -71,6 +71,8 @@ interface OverlaySettings {
   showPersonalBest: boolean;
   /** Keep the DPS pop-up on screen for OBS's Window Capture. */
   streamMode: boolean;
+  /** Stream mode turns itself on while OBS or another streaming app runs. */
+  streamAuto: boolean;
 }
 
 interface Aion2Settings {
@@ -141,6 +143,7 @@ const DEFAULTS: AppConfig = {
       showFightSummary: true,
       showPersonalBest: true,
       streamMode: false,
+      streamAuto: true,
     },
     autoHideEnabled: true,
     autoCloseMain: true,
@@ -351,7 +354,10 @@ export function useSettings() {
       await invoke("set_overlay_config", { value: cfg.aion2.overlay });
       await invoke("set_dps_overlay_locked", { locked: cfg.aion2.overlay.locked });
       await invoke("set_dps_always_on_top", { enabled: cfg.aion2.overlay.alwaysOnTop });
-      await invoke("set_dps_stream_mode", { enabled: cfg.aion2.overlay.streamMode === true });
+      await invoke("set_dps_stream_mode", {
+        enabled: cfg.aion2.overlay.streamMode === true,
+        auto: cfg.aion2.overlay.streamAuto !== false,
+      });
     } catch (e) {
       console.error("[useSettings] syncOverlay failed:", e);
     }
@@ -478,6 +484,7 @@ export function useSettings() {
       });
       await invoke("set_dps_stream_mode", {
         enabled: configRef.current.aion2.overlay.streamMode === true,
+        auto: configRef.current.aion2.overlay.streamAuto !== false,
       });
     } catch (e) {
       console.error("[useSettings] pushOverlayConfig failed:", e);

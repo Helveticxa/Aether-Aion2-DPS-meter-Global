@@ -534,10 +534,12 @@ the running app rather than assumed:
   part of the game session (`aion2_focus::STREAMING_PROCESS_NAMES`), and
   `show_dps_overlay_for_capture` brings the overlay up for a minute so it can
   be picked.
-- The overlay is a transparent window, which tao creates with
-  `WS_EX_NOREDIRECTIONBITMAP`. BitBlt, which OBS's *Automatic* method picks for
-  a "Tauri Window", sees nothing there. Windows Graphics Capture ("Windows 10
-  (1903 and up)") composes it like DWM does. Settings says so.
+- The overlay is a transparent WebView2 window, drawn through DirectComposition
+  rather than into the window's GDI surface. BitBlt, which OBS's *Automatic*
+  method picks for it, copies that surface and gets solid black (measured in
+  3.2.1: every pixel black). Windows Graphics Capture ("Windows 10 (1903 and
+  up)") composes it like DWM does, see-through edges and all (measured: the
+  card's glass comes through with its alpha). Settings says so.
 - Not a problem, though it looked like one: Aether runs elevated and OBS does
   not. A non-elevated test process created a Windows Graphics Capture item for
   Aether's window and received frames, and resolved its executable the way OBS
@@ -555,6 +557,35 @@ is pushed to the backend with `set_dps_stream_mode`, and while it is on,
 is in front and whether or not a fight is on; only the show/hide shortcut
 (`manual_hidden`) hides it. Turning it on creates the overlay.
 `show_dps_overlay_for_capture` is gone.
+
+### OBS finds the meter, not the app (3.2.1)
+
+A streamer's OBS showed an empty Window Capture with every setting right. OBS
+saves a Window Capture as title, window class and executable, and finds it
+again by those. Its default *Match title, otherwise find window of same type*
+needs the class to match, and takes any window of that class when the title is
+not on screen. Every Aether window had Tauri's default class, `Tauri Window`:
+whenever the meter was hidden, closed, or not yet started, OBS took the main
+window (or a chat pop-up) instead, and stayed on it after the meter came back,
+because it searches again only when the window it holds is destroyed. Empty
+when that window was minimized, the whole app when it was not.
+
+- Every window but the DPS overlay now has a class of its own: `AetherApp`
+  (main window and startup gate, in `tauri.conf.json`), `AetherPanel` (detail,
+  history, log, overlay settings), `AetherPvp`, `AetherChat`
+  (`plugins::OWN_WINDOW_CLASS_*`). The DPS overlay keeps `Tauri Window`, so
+  the sources streamers already have keep matching it, and the fallback can no
+  longer land anywhere else in Aether. A Window Capture of a chat pop-up or the
+  PvP window has to be picked again once. Checked with a non-elevated probe of
+  real Tauri windows: the config's `windowClassname` and the builder's
+  `window_classname` both take effect, the default stays `Tauri Window`, and
+  Windows Graphics Capture reads a custom-class window pixel for pixel the same.
+- Automatic stream mode (`aion2.overlay.streamAuto`, on by default): while a
+  streaming app from `STREAMING_PROCESS_NAMES` is running, stream mode is on.
+  The 1 s focus poller asks `process_names::find_running`, which reuses the
+  process snapshot `exe_name` keeps and takes a new one at most every 5 s. No
+  process is opened. It only keeps an overlay on screen; it does not start the
+  meter.
 
 ### Cost
 

@@ -28,6 +28,11 @@ fn is_streaming_app(process_name: &str) -> bool {
         .iter()
         .any(|name| name.eq_ignore_ascii_case(process_name))
 }
+
+/// The streaming app running on this PC, if any, from a process snapshot.
+pub fn running_streaming_app() -> Option<String> {
+    crate::plugins::process_names::find_running(STREAMING_PROCESS_NAMES)
+}
 const DPS_OVERLAY_LABEL: &str = "dps-overlay";
 const PVP_OVERLAY_LABEL: &str = "dps-overlay-pvp";
 const FOLLOW_FOCUS_WINDOW_LABELS: [&str; 2] = [DPS_OVERLAY_LABEL, PVP_OVERLAY_LABEL];
@@ -52,6 +57,11 @@ pub struct Aion2FocusState {
     /// between fights, because OBS's Window Capture lists and captures a
     /// window only while it is shown. Only the show/hide shortcut hides it.
     dps_stream_mode: AtomicBool,
+    /// Stream mode switches itself on while a streaming app is running, so a
+    /// streamer gets the meter on screen without knowing the setting exists.
+    dps_stream_auto: AtomicBool,
+    /// A streaming app is running. Refreshed by the poller.
+    streaming_app_running: AtomicBool,
 }
 
 impl Default for Aion2FocusState {
@@ -63,11 +73,20 @@ impl Default for Aion2FocusState {
             dps_idle_hidden: AtomicBool::new(false),
             game_focused: AtomicBool::new(false),
             dps_stream_mode: AtomicBool::new(false),
+            dps_stream_auto: AtomicBool::new(true),
+            streaming_app_running: AtomicBool::new(false),
         }
     }
 }
 
 impl Aion2FocusState {
+    /// Stream mode in effect: chosen, or automatic with a streaming app running.
+    fn stream_mode(&self) -> bool {
+        self.dps_stream_mode.load(Ordering::Relaxed)
+            || (self.dps_stream_auto.load(Ordering::Relaxed)
+                && self.streaming_app_running.load(Ordering::Relaxed))
+    }
+
     /// What a follow-focus window should be doing right now. `None` leaves it
     /// as it is.
     fn wanted_visibility(&self, label: &str, focused: bool) -> Option<bool> {
@@ -75,7 +94,7 @@ impl Aion2FocusState {
         let follows_focus = self.auto_hide_enabled.load(Ordering::Relaxed)
             && !self.dps_always_on_top.load(Ordering::Relaxed);
 
-        if label == DPS_OVERLAY_LABEL && self.dps_stream_mode.load(Ordering::Relaxed) {
+        if label == DPS_OVERLAY_LABEL && self.stream_mode() {
             return Some(!manual_hidden);
         }
         if label == DPS_OVERLAY_LABEL && self.dps_idle_hidden.load(Ordering::Relaxed) {
@@ -189,18 +208,32 @@ pub fn set_dps_always_on_top<R: Runtime>(
 }
 
 /// Keep the DPS overlay on screen for a streaming app to capture, or let it
-/// follow the game and step aside between fights again.
+/// follow the game and step aside between fights again. `auto` turns stream
+/// mode on by itself while a streaming app runs; left out, it is unchanged.
 #[tauri::command]
 pub fn set_dps_stream_mode<R: Runtime>(
     app: tauri::AppHandle<R>,
     state: State<'_, Aion2FocusState>,
     enabled: bool,
+    auto: Option<bool>,
 ) {
-    if state.dps_stream_mode.swap(enabled, Ordering::Relaxed) == enabled {
+    let before = state.stream_mode();
+    state.dps_stream_mode.store(enabled, Ordering::Relaxed);
+    if let Some(auto) = auto {
+        state.dps_stream_auto.store(auto, Ordering::Relaxed);
+    }
+    if state.stream_mode() == before {
         return;
     }
     let focused = state.game_focused.load(Ordering::Relaxed);
     sync_windows(&app, &state, focused);
+}
+
+/// The streaming app automatic stream mode would react to, for Settings.
+/// Async, so a process snapshot never runs on the main thread.
+#[tauri::command]
+pub async fn get_running_streaming_app() -> Option<String> {
+    running_streaming_app()
 }
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
@@ -217,7 +250,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             set_dps_manual_hidden,
             set_auto_hide_enabled,
             set_dps_always_on_top,
-            set_dps_stream_mode
+            set_dps_stream_mode,
+            get_running_streaming_app
         ])
         .build()
 }
@@ -248,8 +282,8 @@ mod windows_impl {
     };
 
     use super::{
-        is_streaming_app, sync_windows, Aion2FocusChangedPayload, Aion2FocusState,
-        AION2_PROCESS_NAME, PVP_OVERLAY_LABEL,
+        is_streaming_app, running_streaming_app, sync_windows, Aion2FocusChangedPayload,
+        Aion2FocusState, AION2_PROCESS_NAME, PVP_OVERLAY_LABEL,
     };
 
     static FOREGROUND_SENDER: OnceLock<Mutex<Option<Sender<isize>>>> = OnceLock::new();
@@ -363,6 +397,13 @@ mod windows_impl {
             let (focused, _) = is_game_session(hwnd.0 as isize);
 
             if let Some(state) = app_for_poller.try_state::<Aion2FocusState>() {
+                // A process snapshot at most every few seconds: the names are
+                // cached by `process_names`.
+                if state.dps_stream_auto.load(Ordering::Relaxed) {
+                    state
+                        .streaming_app_running
+                        .store(running_streaming_app().is_some(), Ordering::Relaxed);
+                }
                 state.game_focused.store(focused, Ordering::Relaxed);
                 sync_windows(&app_for_poller, &state, focused);
             }
@@ -442,6 +483,17 @@ mod tests {
         assert_eq!(s.wanted_visibility(DPS_OVERLAY_LABEL, true), Some(false));
         // The PvP window is not part of it.
         assert_eq!(s.wanted_visibility(PVP_OVERLAY_LABEL, false), Some(false));
+    }
+
+    #[test]
+    fn a_running_streaming_app_turns_stream_mode_on_by_itself() {
+        let s = state(true, false, true, false);
+        assert_eq!(s.wanted_visibility(DPS_OVERLAY_LABEL, false), Some(false));
+        s.streaming_app_running.store(true, Ordering::Relaxed);
+        assert_eq!(s.wanted_visibility(DPS_OVERLAY_LABEL, false), Some(true));
+        // Unless automatic stream mode is off.
+        s.dps_stream_auto.store(false, Ordering::Relaxed);
+        assert_eq!(s.wanted_visibility(DPS_OVERLAY_LABEL, false), Some(false));
     }
 
     fn state(idle: bool, manual: bool, auto_hide: bool, always_on_top: bool) -> Aion2FocusState {

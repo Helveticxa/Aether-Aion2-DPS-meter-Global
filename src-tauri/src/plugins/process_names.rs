@@ -85,11 +85,29 @@ mod platform {
         }
         cache.get(pid).cloned()
     }
+
+    pub fn find_running(names: &[&str]) -> Option<String> {
+        let mut cache = CACHE.lock().ok()?;
+        if !cache.taken.is_some_and(|taken| taken.elapsed() < MAX_AGE) {
+            cache.names = snapshot();
+            cache.taken = Some(Instant::now());
+        }
+        cache
+            .names
+            .iter()
+            .map(|(_, name)| name)
+            .find(|name| names.iter().any(|wanted| wanted.eq_ignore_ascii_case(name)))
+            .cloned()
+    }
 }
 
 #[cfg(not(windows))]
 mod platform {
     pub fn exe_name(_: u32) -> Option<String> {
+        None
+    }
+
+    pub fn find_running(_: &[&str]) -> Option<String> {
         None
     }
 }
@@ -99,6 +117,12 @@ pub fn exe_name(pid: u32) -> Option<String> {
     platform::exe_name(pid)
 }
 
+/// The first running process whose executable is one of `names`, compared
+/// without case. The snapshot is at most a few seconds old.
+pub fn find_running(names: &[&str]) -> Option<String> {
+    platform::find_running(names)
+}
+
 #[cfg(all(test, windows))]
 mod tests {
     #[test]
@@ -106,5 +130,13 @@ mod tests {
         let name = super::exe_name(std::process::id()).expect("this process is listed");
         assert!(name.to_ascii_lowercase().ends_with(".exe"), "{name}");
         assert_eq!(super::exe_name(0), None);
+    }
+
+    #[test]
+    fn finds_a_running_process_by_name() {
+        let own = super::exe_name(std::process::id()).expect("this process is listed");
+        let upper = own.to_ascii_uppercase();
+        assert_eq!(super::find_running(&["no-such-program.exe", &upper]), Some(own));
+        assert_eq!(super::find_running(&["no-such-program.exe"]), None);
     }
 }

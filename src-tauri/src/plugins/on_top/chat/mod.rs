@@ -474,6 +474,7 @@ fn create_window<R: Runtime>(
     let (width, height) = chat_size(placement.size);
     let window = WebviewWindowBuilder::new(app, label(id), WebviewUrl::App(PAGE.into()))
         .title("Aether | Live chat")
+        .window_classname(crate::plugins::OWN_WINDOW_CLASS_CHAT)
         .transparent(true)
         .decorations(false)
         .shadow(false)

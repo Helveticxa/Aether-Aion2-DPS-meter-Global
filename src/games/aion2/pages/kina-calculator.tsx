@@ -51,6 +51,23 @@ import {
 const MAX_CHARACTERS = 8;
 const SAVE_DELAY_MS = 250;
 
+/** Everything `optimize` reads: it starts every character from nothing bought. */
+function planInputsKey(state: KinaState): string {
+  return JSON.stringify([
+    state.rules,
+    state.dungeons,
+    state.characters.map((c) => [
+      c.id,
+      c.server,
+      c.itemLevel,
+      c.membership,
+      c.dungeonId,
+      c.extraEnergy,
+      c.otherKinaPerDay,
+    ]),
+  ]);
+}
+
 // =============================================================================
 // Numbers
 // =============================================================================
@@ -999,8 +1016,12 @@ export default function KinaCalculatorPage() {
   const calc = useMemo(() => calculate(state), [state]);
   // The best plan is the expensive part; it trails typing instead of blocking it.
   const deferred = useDeferredValue(state);
-  const plan = useMemo(() => optimize(deferred), [deferred]);
-  const planFresh = deferred === state;
+  const deferredKey = useMemo(() => planInputsKey(deferred), [deferred]);
+  // Names and the current buy/craft counts do not change the best plan, so
+  // typing a name or pressing a stepper does not re-run the optimiser.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const plan = useMemo(() => optimize(deferred), [deferredKey]);
+  const planFresh = deferredKey === planInputsKey(state);
   const gain = plan.netWeek - calc.totals.netWeek;
   const planDiffers =
     planFresh &&
