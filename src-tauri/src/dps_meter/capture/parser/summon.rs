@@ -37,15 +37,13 @@ impl StreamProcessor {
 
         self.data_storage
             .append_summon(owner_info.value as u32, summon_info.value as u32);
-        if self.is_boss_summon(summon_info.value as u32) {
-            self.logger.info(format!(
+        if self.logger.is_debug_enabled() && self.is_boss_summon(summon_info.value as u32) {
+            self.logger.debug(format!(
                 "[{}] summon ownership owner={} owner_name={} summon={}",
                 self.port,
                 owner_info.value,
                 self.data_storage
-                    .actor_id_name_snapshot()
-                    .get(&(owner_info.value as u32))
-                    .cloned()
+                    .actor_name(owner_info.value as u32)
                     .unwrap_or_else(|| "Unknown".to_string()),
                 summon_info.value
             ));
@@ -92,7 +90,7 @@ impl StreamProcessor {
                         "[{}] 4136 summon spawn target={} mob_code={} name={}",
                         self.port, summon_id, mob_code, boss_name
                     ));
-                } else {
+                } else if self.logger.is_debug_enabled() {
                     self.logger.debug(format!(
                         "[{}] 4136 summon spawn target={} mob_code={}",
                         self.port, summon_id, mob_code
@@ -109,83 +107,19 @@ impl StreamProcessor {
 
         if let Some(owner_id) = self.extract_summon_owner_kotlin_style(packet, real_actor_id) {
             self.data_storage.append_summon(owner_id, real_actor_id);
-            self.logger.info(format!(
-                "[{}] summon kotlin owner={} owner_name={} summon={}",
-                self.port,
-                owner_id,
-                self.data_storage
-                    .actor_id_name_snapshot()
-                    .get(&owner_id)
-                    .cloned()
-                    .unwrap_or_else(|| "Unknown".to_string()),
-                real_actor_id
-            ));
+            if self.logger.is_debug_enabled() {
+                self.logger.debug(format!(
+                    "[{}] summon owner={} owner_name={} summon={}",
+                    self.port,
+                    owner_id,
+                    self.data_storage
+                        .actor_name(owner_id)
+                        .unwrap_or_else(|| "Unknown".to_string()),
+                    real_actor_id
+                ));
+            }
             parsed_any = true;
         }
-
-        // else if let Some(owner_id) = self.scan_for_known_player_le32(packet, real_actor_id) {
-        //     self.data_storage.append_summon(owner_id, real_actor_id);
-        //     self.logger.info(format!(
-        //         "[{}] summon fallback le32 owner={} owner_name={} summon={}",
-        //         self.port,
-        //         owner_id,
-        //         self.data_storage
-        //             .actor_id_name_snapshot()
-        //             .get(&owner_id)
-        //             .cloned()
-        //             .unwrap_or_else(|| "Unknown".to_string()),
-        //         real_actor_id
-        //     ));
-        //     parsed_any = true;
-        // } else if let Some(owner_id) = self.extract_owner_from_packet(packet, real_actor_id) {
-        //     self.data_storage.append_summon(owner_id, real_actor_id);
-        //     self.logger.info(format!(
-        //         "[{}] summon fallback marker owner={} owner_name={} summon={}",
-        //         self.port,
-        //         owner_id,
-        //         self.data_storage
-        //             .actor_id_name_snapshot()
-        //             .get(&owner_id)
-        //             .cloned()
-        //             .unwrap_or_else(|| "Unknown".to_string()),
-        //         real_actor_id
-        //     ));
-        //     parsed_any = true;
-        // } else if !self.data_storage.has_summon_owner(real_actor_id) {
-        //     let mut best_match: Option<(u32, String)> = None;
-        //     let mut best_len = 0usize;
-        //     let actor_id_name_map = self.data_storage.actor_id_name_snapshot();
-
-        //     for (actor_id, nickname) in actor_id_name_map {
-        //         if nickname.is_empty() {
-        //             continue;
-        //         }
-
-        //         let nickname_bytes = nickname.as_bytes();
-        //         if nickname_bytes.is_empty()
-        //             || !packet
-        //                 .windows(nickname_bytes.len())
-        //                 .any(|window| window == nickname_bytes)
-        //         {
-        //             continue;
-        //         }
-
-        //         let nickname_len = nickname.chars().count();
-        //         if nickname_len > best_len {
-        //             best_len = nickname_len;
-        //             best_match = Some((actor_id, nickname));
-        //         }
-        //     }
-
-        //     if let Some((owner_id, nickname)) = best_match {
-        //         self.data_storage.append_summon(owner_id, real_actor_id);
-        //         self.logger.info(format!(
-        //             "[{}] summon-nickname matched nick owner={} owner_name={} summon={}",
-        //             self.port, owner_id, nickname, real_actor_id
-        //         ));
-        //         parsed_any = true;
-        //     }
-        // }
 
         parsed_any
     }
@@ -254,11 +188,7 @@ impl StreamProcessor {
             }
         }
 
-        let is_target_player = self
-            .data_storage
-            .actor_id_name_snapshot()
-            .contains_key(&target_id)
-            && self.data_storage.get_mob_code(target_id).is_none();
+        let is_target_player = self.data_storage.is_player(target_id);
 
         if is_target_player {
             if !self.config.read().unwrap().pvp_mode_on {
@@ -292,74 +222,52 @@ impl StreamProcessor {
             }
 
             self.data_storage.append_player_hp(target_id, target_hp);
-            let actor_name = self
-                .data_storage
-                .actor_id_name_snapshot()
-                .get(&target_id)
-                .cloned()
-                .unwrap_or_else(|| "Unknown".to_string());
-            self.logger.info(format!(
-                "[{}] player remain hp actor={} name={} current_hp={}",
-                self.port, target_id, actor_name, target_hp
-            ));
+            if self.logger.is_debug_enabled() {
+                self.logger.debug(format!(
+                    "[{}] player remain hp actor={} name={} current_hp={}",
+                    self.port,
+                    target_id,
+                    self.data_storage
+                        .actor_name(target_id)
+                        .unwrap_or_else(|| "Unknown".to_string()),
+                    target_hp
+                ));
+            }
             return true;
         }
 
-        // self.logger.debug(format!(
-        //     "[{}] remain hp target not player target={} current_hp={} known_actor={} mob_code={:?}",
-        //     self.port,
-        //     target_id,
-        //     target_hp,
-        //     self.data_storage
-        //         .actor_id_name_snapshot()
-        //         .contains_key(&target_id),
-        //     self.data_storage.get_mob_code(target_id)
-        // ));
-
-        // Skip non-boss targets hp changes when boss_only is enabled
+        // With Boss only, health is kept for bosses -- and for targets whose
+        // spawn was missed, which may well be one.
         {
             let config = self.config.read().unwrap();
             if config.boss_only {
-                let mob_code = self.data_storage.get_mob_code(target_id);
-                let is_known =
-                    mob_code.is_some_and(|code| self.data_storage.is_known_boss_code(code));
-                let is_possible =
-                    mob_code.is_some_and(|code| self.data_storage.is_possible_boss(code));
-                if !is_known && !is_possible {
-                    return true;
+                if let Some(code) = self.data_storage.get_mob_code(target_id) {
+                    if !self.data_storage.is_known_boss_code(code)
+                        && !self.data_storage.is_possible_boss(code)
+                    {
+                        return true;
+                    }
                 }
             }
         }
 
-        let is_first_hp_detection = !self
-            .data_storage
-            .mob_id_hp_snapshot()
-            .contains_key(&target_id);
-        self.data_storage.append_mob_hp(target_id, target_hp);
+        let is_first_hp_detection = self.data_storage.append_mob_hp(target_id, target_hp);
         if is_first_hp_detection {
-            if let Some((current_hp, max_hp)) = self
-                .data_storage
-                .mob_id_hp_snapshot()
-                .get(&target_id)
-                .copied()
-            {
-                let mob_id_code_map = self.data_storage.mob_id_code_snapshot();
-
-                if let Some(mob_code) = mob_id_code_map.get(&target_id).copied() {
-                    let mob_name = self
-                        .data_storage
-                        .mob_name(mob_code)
-                        .unwrap_or_else(|| "Unknown Boss".to_string());
-                    self.logger.info(format!(
-                        "[{}] first remain hp mob_id={} mob_code={} name={} current_hp={} max_hp={}",
-                        self.port, target_id, mob_code, mob_name, current_hp, max_hp
-                    ));
-                } else {
-                    self.logger.info(format!(
-                        "[{}] first remain hp mob_id={} current_hp={} max_hp={}",
-                        self.port, target_id, current_hp, max_hp
-                    ));
-                }
+            let mob_code = self.data_storage.get_mob_code(target_id);
+            let is_boss = mob_code.is_some_and(|code| self.data_storage.is_known_boss_code(code));
+            // Bosses only at info level: every mob in view has a first reading.
+            if is_boss || self.logger.is_debug_enabled() {
+                let name = mob_code
+                    .and_then(|code| self.data_storage.mob_name(code))
+                    .unwrap_or_else(|| "Unknown".to_string());
+                self.logger.info(format!(
+                    "[{}] first remain hp mob_id={} mob_code={} name={} hp={}",
+                    self.port,
+                    target_id,
+                    mob_code.map(|code| code.to_string()).unwrap_or_else(|| "?".to_string()),
+                    name,
+                    target_hp
+                ));
             }
         }
         true
@@ -394,65 +302,9 @@ impl StreamProcessor {
         Some(owner_id)
     }
 
-    fn extract_owner_from_packet(&self, packet: &[u8], exclude_actor_id: u32) -> Option<u32> {
-        let marker = [0x80, 0x75, 0xD5, 0x2A, 0xBB, 0x03, 0x00, 0x00];
-        let marker_idx = find_bytes(packet, 0, &marker)?;
-        let owner_offset = marker_idx + marker.len();
-        if owner_offset >= packet.len() {
-            return None;
-        }
-
-        let owner_info = read_varint(packet, owner_offset);
-        if !owner_info.is_valid() || !(100..=999_999).contains(&owner_info.value) {
-            return None;
-        }
-
-        let owner_id = owner_info.value as u32;
-        if owner_id == exclude_actor_id
-            || self.data_storage.has_summon_owner(owner_id)
-            || self.data_storage.has_mob(owner_id)
-        {
-            return None;
-        }
-
-        Some(owner_id)
-    }
-
     fn is_boss_summon(&self, summon_id: u32) -> bool {
-        let mob_code = self
-            .data_storage
-            .mob_id_code_snapshot()
-            .get(&summon_id)
-            .copied();
-
-        mob_code
-            .map(|code| self.data_storage.is_known_boss_code(code))
-            .unwrap_or(false)
-    }
-
-    fn scan_for_known_player_le32(&self, packet: &[u8], exclude_actor_id: u32) -> Option<u32> {
-        let marker = [0x80, 0x75, 0xD5, 0x2A, 0xBB, 0x03, 0x00, 0x00];
-        let marker_idx = find_bytes(packet, 0, &marker)?;
-        let start_offset = marker_idx + marker.len();
-        let end_offset = packet.len().saturating_sub(3).min(start_offset + 48);
-        let known_actor_ids = self.data_storage.actor_id_name_snapshot();
-
-        for i in start_offset..end_offset {
-            let le32 = (packet[i] as u32)
-                | ((packet[i + 1] as u32) << 8)
-                | ((packet[i + 2] as u32) << 16)
-                | ((packet[i + 3] as u32) << 24);
-
-            if le32 != exclude_actor_id
-                && (1..=999_999).contains(&le32)
-                && known_actor_ids.contains_key(&le32)
-                && !self.data_storage.has_summon_owner(le32)
-                && !self.data_storage.has_mob(le32)
-            {
-                return Some(le32);
-            }
-        }
-
-        None
+        self.data_storage
+            .get_mob_code(summon_id)
+            .is_some_and(|code| self.data_storage.is_known_boss_code(code))
     }
 }

@@ -23,8 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 
-# Claude AI
+# AI agent notes: local to the maintainer, never published
 .claude/
+CLAUDE.md
+AGENTS.md
 
 .tauri
 generate_key.sh

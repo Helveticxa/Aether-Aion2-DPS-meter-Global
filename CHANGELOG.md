@@ -9,6 +9,25 @@ lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
      and some players still update from there: so no hard wraps and no bold in
      2.0.0 and later. From 2.0.0 on the dialog renders Markdown. -->
 
+## [3.0.0]
+
+Made for the live global servers: the meter now reads every packet the game sends, shows up in every dungeon, and proves it against the boss's health.
+
+- The meter shows up in dungeons again. Each map and dungeon run is a new connection with new ids for every character, yours included, and the packet that told Aether your new id was often lost. Your hits then did not count as yours, the overlay stayed hidden, and the fight was thrown away five minutes later. Aether now reads that packet reliably, and until it arrives, every hit counts as yours.
+- Far more accurate. Aether read packets longer than 127 bytes one byte short, a bug inherited from the meter it is built on. In busy fights that lost about a quarter of all damage. On recorded global boss fights the damage Aether reads now matches the health the boss lost (100.1 to 100.4 percent, the rest being the killing blow's overkill).
+- No more freezing. When the meter lost its place in the game's data it crept back one byte at a time, holding everything behind it for seconds. It now jumps straight back in at the next heartbeat the server sends, twenty times a second.
+- Leaving a map or dungeon ends the fight: it is saved to History if it was yours, and the meter starts clean for the next run.
+- The fight summary shows Captured: the damage the meter read against the health the boss lost. Green near 100 percent means nothing was missed; amber means hits went unseen, usually because the meter started part way through the fight.
+- Boss only no longer throws away a boss whose spawn the meter missed. Only targets known to be ordinary monsters are left out.
+- The overlay no longer freezes on a target it has no name for. It shows the fight and names the target by its number.
+- Ping shows on the global servers. The global client reports time differently, and Aether now reads it that way.
+- Two Elementalist heals, Spirit Communion and Enhance: Spirit's Benediction, no longer count as damage.
+- A spirit or other summon keeps its owner after a reset, instead of showing up as a separate nameless player.
+- Updated game data: about 9,000 monster and boss names (1,000 more), 1,384 bosses for Boss only, and 49 training dummies for "only your hits".
+- Connection shows the server as Global, and Connection, Advanced shows how cleanly each game connection is being read. The diagnostics report includes it too.
+- Lighter: one parser per connection instead of two, no copying of name tables for every health packet, the overlay is rebuilt only when something changed, and the log is about 95 percent shorter.
+- Removed four packet-parser settings from Advanced. They tuned the old byte-by-byte recovery and do nothing now.
+
 ## [2.4.0]
 
 Safer next to anti-cheat, and a straight answer about fullscreen games.

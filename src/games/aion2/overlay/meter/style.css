@@ -731,6 +731,15 @@ body.has-summary .player-list {
   font-weight: 600;
 }
 
+/* Damage read against health lost: green when the meter saw it all. */
+.summary__captured b {
+  color: #4ade80;
+}
+
+.summary__captured.is-partial b {
+  color: #fcd34d;
+}
+
 .summary__skills {
   display: flex;
   flex-direction: column;

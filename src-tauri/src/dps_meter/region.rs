@@ -13,9 +13,12 @@
 //! per-region profiles and a structural fallback that holds on services we have
 //! not seen yet.
 //!
-//! It also records what we actually observe (server ids, server IPs).
-//! Fingerprints for Korea and global are thin today; these observations are what
-//! will fill them in from a real capture.
+//! It also records what we actually observe (server ids, server IPs), and
+//! names the service from that evidence. Korea is known by its server block.
+//! Global, live since October 2026, is known by the player's own server id:
+//! global characters sit outside Taiwan's catalogue (`1101` for one), and the
+//! game traffic often reaches us through a local accelerator on 127.0.0.1, so
+//! an IP fingerprint could not work there anyway.
 //!
 //! The runtime lives in a process-global on purpose: it is one app-wide setting
 //! plus an observation log, and threading it through every parser would enlarge
@@ -58,15 +61,6 @@ const GENERIC_SERVER_IDS: &[RangeInclusive<u32>] = &[1001..=1999, 2001..=2999];
 const KR_IP_PREFIXES: &[[u8; 3]] = &[[206, 127, 156]];
 
 impl RegionId {
-    pub fn label(self) -> &'static str {
-        match self {
-            RegionId::Auto => "Auto",
-            RegionId::Tw => "Taiwan",
-            RegionId::Kr => "Korea",
-            RegionId::Global => "Global",
-        }
-    }
-
     fn server_id_ranges(self) -> &'static [RangeInclusive<u32>] {
         match self {
             // Taiwan is the only catalogued list, so it can stay tight.
@@ -140,7 +134,10 @@ pub fn accepts_server_id(server_id: u32) -> bool {
     effective().accepts_server_id(server_id)
 }
 
-pub fn observe_server_id(server_id: u32) {
+/// The server id of the player running Aether, from their own player-info
+/// packet. Other players' ids are not recorded: in shared zones they come from
+/// every server, and say nothing about which service this is.
+pub fn observe_own_server_id(server_id: u32) {
     if let Ok(mut runtime) = RUNTIME.write() {
         runtime.server_ids.insert(server_id);
     }
@@ -198,9 +195,10 @@ pub fn status() -> RegionStatus {
 
 /// Identify the service from what we have seen.
 ///
-/// Only claims a region on evidence. Korea is identifiable by its server block;
-/// Taiwan and global are not yet, so this returns `None` for them rather than
-/// guessing from a server-id range they may well share.
+/// Only claims a region on evidence. Korea is identifiable by its server
+/// block; global by a character of yours on a server Taiwan does not have.
+/// Taiwan itself shares its id range with what global might add later, so it
+/// is left unnamed rather than guessed.
 fn detect(runtime: &RegionRuntime) -> Option<RegionId> {
     if runtime
         .server_ips
@@ -208,6 +206,13 @@ fn detect(runtime: &RegionRuntime) -> Option<RegionId> {
         .any(|ip| KR_IP_PREFIXES.contains(&[ip[0], ip[1], ip[2]]))
     {
         return Some(RegionId::Kr);
+    }
+    if runtime
+        .server_ids
+        .iter()
+        .any(|id| !RegionId::Tw.accepts_server_id(*id))
+    {
+        return Some(RegionId::Global);
     }
     None
 }
@@ -242,6 +247,18 @@ mod tests {
         for id in [0u32, 1, 999, 1000, 2000, 3001, 65535] {
             assert!(!RegionId::Auto.accepts_server_id(id), "accepted {id}");
         }
+    }
+
+    #[test]
+    fn global_is_detected_from_your_own_server() {
+        // A global character, seen on the live service in October 2026.
+        let mut runtime = RegionRuntime::default();
+        runtime.server_ids.insert(1101);
+        assert_eq!(detect(&runtime), Some(RegionId::Global));
+
+        let mut taiwan = RegionRuntime::default();
+        taiwan.server_ids.insert(1012);
+        assert_eq!(detect(&taiwan), None);
     }
 
     #[test]

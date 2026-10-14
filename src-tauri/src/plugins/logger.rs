@@ -1,6 +1,7 @@
 use std::fs::{create_dir_all, rename, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -29,7 +30,8 @@ pub struct LogEvent {
 pub struct AppLogger {
     emit: Box<dyn Fn(LogEvent) + Send + Sync>,
     file_path: PathBuf,
-    debug_enabled: Mutex<bool>,
+    /// Read on every parsed packet, so an atomic rather than a lock.
+    debug_enabled: AtomicBool,
     write_lock: Mutex<()>,
 }
 
@@ -46,21 +48,33 @@ impl AppLogger {
                 let _ = app.emit("app-logger", event);
             }),
             file_path,
-            debug_enabled: Mutex::new(false),
+            debug_enabled: AtomicBool::new(false),
+            write_lock: Mutex::new(()),
+        }
+    }
+
+    /// A logger that writes to a file in the temp directory and tells no
+    /// window, for tests that run the pipeline.
+    #[cfg(test)]
+    pub fn for_tests() -> Self {
+        Self {
+            emit: Box::new(|_| {}),
+            file_path: std::env::temp_dir().join("aether-tests.log"),
+            debug_enabled: AtomicBool::new(false),
             write_lock: Mutex::new(()),
         }
     }
 
     pub fn set_debug_enabled(&self, enabled: bool) {
-        *self.debug_enabled.lock().unwrap() = enabled;
+        self.debug_enabled.store(enabled, Ordering::Relaxed);
     }
 
     pub fn is_debug_enabled(&self) -> bool {
-        *self.debug_enabled.lock().unwrap()
+        self.debug_enabled.load(Ordering::Relaxed)
     }
 
     pub fn debug(&self, message: impl AsRef<str>) {
-        if *self.debug_enabled.lock().unwrap() {
+        if self.is_debug_enabled() {
             self.write_line("DEBUG", message.as_ref());
         }
     }

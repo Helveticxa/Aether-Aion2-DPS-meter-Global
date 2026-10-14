@@ -35,6 +35,9 @@ interface TcpReassemblyFlowStatus {
   gapSkips: number;
   idleMs: number;
   isCombatFlow: boolean;
+  isGameFlow?: boolean;
+  /** How cleanly a game connection is being read; absent on other flows. */
+  stream?: { frames: number; resyncs: number; droppedBytes: number; badBundles: number } | null;
 }
 
 interface TcpReassemblyStatus {
@@ -44,6 +47,7 @@ interface TcpReassemblyStatus {
   totalHeldBytes: number;
   totalRetransmits: number;
   totalGapSkips: number;
+  zoneChanges?: number;
   flows: TcpReassemblyFlowStatus[];
 }
 
@@ -149,6 +153,9 @@ export function TcpReassemblySettings() {
           <CardTitle>{t("settings.tcpReassembly.connections")}</CardTitle>
           <CardDescription className="font-mono text-xs">
             {status?.combatConnection ?? t("settings.tcpReassembly.notDetected")}
+            {status?.zoneChanges
+              ? ` · ${t("settings.tcpReassembly.zoneChanges", { count: status.zoneChanges })}`
+              : null}
           </CardDescription>
         </CardHeader>
         <CardContent className="px-0">
@@ -182,6 +189,22 @@ export function TcpReassemblySettings() {
                       <div className="flex min-w-0 flex-col font-mono text-xs">
                         <span className="truncate">{flow.source}</span>
                         <span className="text-muted-foreground truncate">→ {flow.destination}</span>
+                        {flow.stream ? (
+                          <span
+                            className={cn(
+                              "truncate font-sans",
+                              flow.stream.resyncs > 0 || flow.stream.droppedBytes > 0
+                                ? "text-amber-400"
+                                : "text-emerald-400"
+                            )}
+                          >
+                            {t("settings.tcpReassembly.streamHealth", {
+                              frames: flow.stream.frames.toLocaleString(),
+                              resyncs: flow.stream.resyncs,
+                              dropped: formatBytes(flow.stream.droppedBytes),
+                            })}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   </TableCell>

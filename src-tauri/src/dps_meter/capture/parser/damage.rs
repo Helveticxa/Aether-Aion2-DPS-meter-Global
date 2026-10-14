@@ -214,7 +214,13 @@ impl StreamProcessor {
                 specials: special_names.clone(),
             };
 
-            self.data_storage.append_damage(parsed);
+            self.data_storage.append_damage_at(parsed, self.packet_time);
+            // Formatted only when someone reads it: hex-dumping every damage
+            // packet to throw the string away cost more than parsing it.
+            if !self.logger.is_debug_enabled() {
+                parsed_any = true;
+                continue;
+            }
             self.logger.debug(format!(
                 "[{}] damage target={} actor={} skill={} ori_code={} damage={} tail_mode={} unknown={} legacy_damage={} raw_damage={} tail_values={:?} tail_hit_count={} multi_hit_count={} multi_hit_damage={} per_hits={:?} specials={:?} packet_len={} packet_hex={}",
                 self.port,
@@ -310,7 +316,10 @@ impl StreamProcessor {
         let log_actor_id = parsed.actor_id;
         let log_skill_code = parsed.skill_code;
         let log_damage = parsed.damage;
-        self.data_storage.append_damage(parsed);
+        self.data_storage.append_damage_at(parsed, self.packet_time);
+        if !self.logger.is_debug_enabled() {
+            return true;
+        }
         self.logger.debug(format!(
             "[{}] dot target={} actor={} skill={} ori_code={}, damage={}",
             self.port,

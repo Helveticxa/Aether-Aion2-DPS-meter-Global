@@ -22,9 +22,12 @@ if (!kuroPath) {
 const kuro = JSON.parse(fs.readFileSync(kuroPath, "utf8"));
 const noia = noiaPath ? JSON.parse(fs.readFileSync(noiaPath, "utf8")) : {};
 
+// "None" and runs of "?" are the catalogues' placeholders for a mob nobody
+// has named yet.
 const usable = (name) => {
   const trimmed = typeof name === "string" ? name.trim() : "";
-  return trimmed && trimmed.toLowerCase() !== "none" ? trimmed : null;
+  if (!trimmed || trimmed.toLowerCase() === "none" || /^\?+$/.test(trimmed)) return null;
+  return trimmed;
 };
 
 const names = new Map();

@@ -2,7 +2,7 @@
 
 # Aether
 
-**A real-time DPS meter for AION 2, built for the global servers.**
+**A real-time DPS meter for AION 2's global servers.**
 
 [![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8DB?logo=tauri&logoColor=white)](https://tauri.app/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111)](https://react.dev/)
@@ -11,11 +11,11 @@
 
 </div>
 
-> [!IMPORTANT]
-> **Pre-release.** AION 2 launches globally on **5 October 2026**, Early Access
-> from **30 September**. Nothing here has been confirmed against a real global
-> session yet — the exact opcodes, the server-id range, and the server-name
-> catalogue all get filled in from the first capture.
+> [!NOTE]
+> **Built and tested on the live global service** (Early Access 30 September,
+> launch 5 October 2026). Every release since 3.0.0 is checked against recorded
+> global sessions: the damage it reads on a boss matches the health the boss
+> lost.
 
 ## What it is
 
@@ -32,18 +32,28 @@ buff uptime, and damage type.
 - **DPS meter** — a rounded glass overlay with class-coloured bars. It appears on
   your first hit, stays for the whole fight, and after five quiet minutes saves
   the fight to History, starts clean, and hides again (configurable)
+- **Accurate to the boss's health** — every hit the game sends is read, checked
+  against the health the boss actually lost. The fight summary shows it:
+  *Captured 100%* means nothing was missed
+- **Follows you through dungeons** — each map and dungeon run starts clean, and
+  the run you just left is saved to History
 - **Always on top** — keep your own signed-in Chrome or Edge above the game, with
   opacity and click-through. Works over any borderless game, and tells you when a
   game's exclusive fullscreen blocks every overlay
 - **Live chat** — YouTube and Twitch chat over the game, transparent and
   outlined, one pop-up per chat or merged into one
 - **Boss fights** — your pace against your personal best while you fight, and a
-  summary when the boss dies: DPS, place, crits, top skills, one-click copy
+  summary when the boss dies: DPS, place, crits, top skills, how much of the
+  fight was captured, one-click copy
 - **Capsule mode** — the meter as one line that opens on hover
-- English names for about 8,000 monsters and bosses
+- English names for about 9,000 monsters and bosses, and 1,384 bosses known by
+  name for the Boss only filter
 - Battle history with per-skill and per-player breakdowns, damage-type split,
   buff timelines, and cast ordering
-- Finds the game, your character, and the server on its own — nothing to set up
+- Finds the game, your character, and the server on its own — nothing to set up,
+  including when the game's traffic passes through a local accelerator or proxy
+  on 127.0.0.1
+- Ping, read the way the global client reports it
 - Global shortcuts, tray integration, light and dark themes, English and Korean
 - Runs fully offline — nothing is uploaded
 
@@ -79,8 +89,9 @@ actually capture. If nothing is available it offers to install
 
 ## Built for the global servers
 
-Every other AION 2 meter targets Korea or Taiwan. This fork exists to work on the
-global service from day one.
+Aether started as the only AION 2 meter aimed at the global service, and was
+ready for it on day one. Global turned out to speak the same protocol as Taiwan
+-- what it needed was a meter that reads every packet of it.
 
 Upstream validated server ids against Taiwan's exact catalogue. That value is not
 cosmetic — it is used *structurally*, to find where the server field sits inside a
@@ -91,10 +102,21 @@ Aether accepts any structurally valid server id (`1001–1999`, `2001–2999`:
 race × 1000 + index), so it parses on every service without being told which
 one it is on. There is no region to pick.
 
-Detection only claims a region on evidence. Korea is identifiable by its server
-block; Taiwan and global are not yet, so they show as a new service rather than
-a guess. Settings → Aion 2 → Connection shows the server, its address, and your
-character as they are detected.
+Detection only claims a region on evidence: Korea by its server block, global by
+your character's server, which Taiwan does not have. Settings → Aion 2 →
+Connection shows the server, the game connection, and your character as they
+are detected, and Connection → Advanced shows how cleanly each connection is
+being read.
+
+### Accuracy
+
+What the meter reads is checked against the game itself: the damage dealt to a
+boss should add up to the health it lost. On recorded global sessions it does,
+to within the killing blow's overkill (100.1-100.4%). Version 3.0.0 fixed a
+packet-framing bug inherited from upstream that dropped about a quarter of all
+damage in busy fights, and the player's identity on entering a dungeon --
+which is why the meter sometimes did not appear there. [FORK.md](./FORK.md)
+has the details.
 
 [FORK.md](./FORK.md) has the full reasoning.
 
@@ -119,9 +141,11 @@ Recordings stay on your machine.
 The animated background is **Dune** by [R](https://vimeo.com/theraa), a motion
 design piece published on Vimeo.
 
-English monster and boss names, the Fighter's skill names, and the server codes
-come from **[Kuroukihime/AIon2-Dps-Meter](https://github.com/Kuroukihime/AIon2-Dps-Meter)**
-(GPL-3.0), merged by `scripts/build-npc-names.mjs`.
+English monster and boss names, the boss and training-dummy lists, the
+Fighter's skill names, and the server codes come from
+**[Kuroukihime/AIon2-Dps-Meter](https://github.com/Kuroukihime/AIon2-Dps-Meter)**
+(GPL-3.0), merged by `scripts/build-npc-names.mjs`. Its work on the global
+client's ping format pointed the way for ours.
 
 Aether is a fork of **[NOIA2](https://github.com/ZDYoung0519/NOIA2)** by
 [zdyoung](https://github.com/ZDYoung0519), which does the heavy lifting: the Rust
@@ -148,7 +172,7 @@ pnpm tauri:build    # produce an installer
 
 Needs Rust (MSVC toolchain), Node 18+, pnpm, and the MSVC build tools.
 
-See [CLAUDE.md](./CLAUDE.md) for conventions and the gotchas worth knowing before
+See [FORK.md](./FORK.md) for how the code is organised and the gotchas worth knowing before
 changing anything.
 
 ## Disclaimer

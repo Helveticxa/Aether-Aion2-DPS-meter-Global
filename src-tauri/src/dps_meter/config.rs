@@ -6,11 +6,6 @@ use crate::dps_meter::region::RegionId;
 
 pub const DEFAULT_DPS_SNAPSHOT_INTERVAL_MS: u64 = 100;
 pub const DEFAULT_MEMORY_SNAPSHOT_INTERVAL_MS: u64 = 2000;
-pub const DEFAULT_MAX_PACKET_SIZE_THRESHOLD: u64 = 8 * 1024;
-pub const DEFAULT_STALL_RESYNC_DELAY_MS: u64 = 1000;
-pub const DEFAULT_FULL_PROCESSOR_STALL_RESYNC_DELAY_MS: u64 = 200;
-pub const DEFAULT_UNKNOWN_PACKET_STALL_RESYNC_DELAY_MS: u64 = 10;
-pub const TRAINING_DUMMY_MOB_CODE: [u32; 2] = [2_400_032, 2_400_035];
 pub const DEFAULT_HIDE_KNOWN_PLAYERS: bool = false;
 pub const DEFAULT_MAX_PLAYER_COUNT: usize = 10;
 /// Five minutes: long enough to read the result of a fight, short enough that
@@ -44,21 +39,20 @@ impl Default for PvpOverlayPosition {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// The meter's settings, as the Settings window sends them.
+///
+/// 3.0.0 dropped four stream-parser knobs -- a packet size threshold and three
+/// stall delays. They tuned a resync that stepped one byte per arriving packet;
+/// framing is exact now and resyncs on the heartbeat, so there is nothing left
+/// to tune. Configs saved by older builds still carry them, and serde skips
+/// them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DpsMeterConfig {
     #[serde(default = "default_dps_snapshot_interval_ms")]
     pub dps_snapshot_interval_ms: u64,
     #[serde(default = "default_memory_snapshot_interval_ms")]
     pub memory_snapshot_interval_ms: u64,
-    #[serde(default = "default_max_packet_size_threshold")]
-    pub max_packet_size_threshold: u64,
-    #[serde(default = "default_stall_resync_delay_ms")]
-    pub stall_resync_delay_ms: u64,
-    #[serde(default = "default_full_processor_stall_resync_delay_ms")]
-    pub full_processor_stall_resync_delay_ms: u64,
-    #[serde(default = "default_unknown_packet_stall_resync_delay_ms")]
-    pub unknown_packet_stall_resync_delay_ms: u64,
     #[serde(default)]
     pub boss_only: bool,
     #[serde(default)]
@@ -100,10 +94,6 @@ impl Default for DpsMeterConfig {
         Self {
             dps_snapshot_interval_ms: DEFAULT_DPS_SNAPSHOT_INTERVAL_MS,
             memory_snapshot_interval_ms: DEFAULT_MEMORY_SNAPSHOT_INTERVAL_MS,
-            max_packet_size_threshold: DEFAULT_MAX_PACKET_SIZE_THRESHOLD,
-            stall_resync_delay_ms: DEFAULT_STALL_RESYNC_DELAY_MS,
-            full_processor_stall_resync_delay_ms: DEFAULT_FULL_PROCESSOR_STALL_RESYNC_DELAY_MS,
-            unknown_packet_stall_resync_delay_ms: DEFAULT_UNKNOWN_PACKET_STALL_RESYNC_DELAY_MS,
             boss_only: false,
             pvp_mode_on: false,
             pvp_overlay_position: PvpOverlayPosition::Bottom,
@@ -131,13 +121,6 @@ impl DpsMeterConfig {
         }
         self.dps_snapshot_interval_ms = self.dps_snapshot_interval_ms.clamp(50, 10_000);
         self.memory_snapshot_interval_ms = self.memory_snapshot_interval_ms.clamp(100, 10_000);
-        self.max_packet_size_threshold =
-            normalize_max_packet_size_threshold(self.max_packet_size_threshold);
-        self.stall_resync_delay_ms = self.stall_resync_delay_ms.clamp(50, 2000);
-        self.full_processor_stall_resync_delay_ms =
-            self.full_processor_stall_resync_delay_ms.min(2000);
-        self.unknown_packet_stall_resync_delay_ms =
-            self.unknown_packet_stall_resync_delay_ms.min(500);
         // A region stored by an older build must not linger where nothing
         // shows it any more.
         self.region = RegionId::Auto;
@@ -158,22 +141,6 @@ fn default_memory_snapshot_interval_ms() -> u64 {
     DEFAULT_MEMORY_SNAPSHOT_INTERVAL_MS
 }
 
-fn default_max_packet_size_threshold() -> u64 {
-    DEFAULT_MAX_PACKET_SIZE_THRESHOLD
-}
-
-fn default_stall_resync_delay_ms() -> u64 {
-    DEFAULT_STALL_RESYNC_DELAY_MS
-}
-
-fn default_full_processor_stall_resync_delay_ms() -> u64 {
-    DEFAULT_FULL_PROCESSOR_STALL_RESYNC_DELAY_MS
-}
-
-fn default_unknown_packet_stall_resync_delay_ms() -> u64 {
-    DEFAULT_UNKNOWN_PACKET_STALL_RESYNC_DELAY_MS
-}
-
 fn default_max_player_count() -> usize {
     DEFAULT_MAX_PLAYER_COUNT
 }
@@ -188,14 +155,6 @@ fn default_true() -> bool {
 
 fn default_idle_reset_secs() -> u64 {
     DEFAULT_IDLE_RESET_SECS
-}
-
-fn normalize_max_packet_size_threshold(value: u64) -> u64 {
-    if matches!(value, 2048 | 4096 | 8192 | 16384) {
-        value
-    } else {
-        DEFAULT_MAX_PACKET_SIZE_THRESHOLD
-    }
 }
 
 #[cfg(test)]
@@ -226,6 +185,15 @@ mod tests {
         assert_eq!(at(5), 60);
         assert_eq!(at(300), 300);
         assert_eq!(at(86_400), 3_600);
+    }
+
+    #[test]
+    fn a_config_saved_before_3_0_still_loads() {
+        let config: DpsMeterConfig = serde_json::from_str(
+            r#"{"maxPacketSizeThreshold":8192,"stallResyncDelayMs":600,"bossOnly":true}"#,
+        )
+        .expect("parse");
+        assert!(config.boss_only);
     }
 
     #[test]

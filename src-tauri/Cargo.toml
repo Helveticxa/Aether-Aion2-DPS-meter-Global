@@ -1,6 +1,6 @@
 [package]
 name = "aether"
-version = "2.4.0"
+version = "3.0.0"
 license = "GPL-3.0-only"
 description = "Real-time DPS meter for AION 2"
 authors = ["Helveticxa"]
@@ -58,5 +58,6 @@ windows = { version = "0.61.3", features = [
     "Win32_UI_Shell",
     "Win32_Security",
     "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Performance",
     "Win32_UI_WindowsAndMessaging",
 ] }

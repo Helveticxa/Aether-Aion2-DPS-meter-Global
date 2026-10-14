@@ -111,12 +111,15 @@ pnpm tauri:dev
 ## Staying current with upstream
 
 ```
-git fetch upstream
+git fetch upstream --no-tags
 git merge upstream/main
 ```
 
-Changes here are deliberately kept to small, anchored edits so these merges stay
-cheap.
+Upstream froze its public source in October 2026: the repository now holds
+"the legacy NoiA 4.0 branch", and 5.0 is closed. There is nothing left to
+merge, so since 3.0.0 this fork changes its own code freely -- the capture
+pipeline was rewritten -- rather than keeping edits small for merges that will
+not come. `--no-tags` still matters: upstream's tags clash with ours.
 
 ### Region profiles (Taiwan / Korea / global)
 
@@ -179,7 +182,8 @@ Windows manifest demands elevation and the test runner cannot launch it.
 Do not run `pnpm format`: it rewrites 119 upstream files and would make every
 future merge expensive.
 
-`CLAUDE.md` carries the short version of these notes for day-to-day work.
+The maintainer keeps a short, local version of these notes for day-to-day
+work; this file is the public record.
 
 ## Gotcha: moving the repository folder
 
@@ -239,11 +243,11 @@ committed in `src-tauri/tauri.conf.json`, because both are public values and
 baking them in means a local build behaves exactly like a CI build -- and it
 drops one secret the workflow would otherwise need.
 
-The private key and its password live outside this repository, at
-`C:/Users/kapte/.aether-release/`, with a README explaining what goes where.
-They are deliberately not in the project vault either: a signing key is the only
-thing proving an update genuinely came from this project, and a vault that gains
-a Git remote later would carry it in history.
+The private key and its password live outside this repository, on the
+maintainer's machine, with a README explaining what goes where. They are
+deliberately kept out of every repository: a signing key is the only thing
+proving an update genuinely came from this project, and anything that gains a
+Git remote later would carry it in history.
 
 The workflow needs two repository secrets, under Settings → Secrets and variables
 → Actions:
@@ -340,6 +344,11 @@ time. Off switch: Settings → Aion 2 → Connection → Advanced.
 
 ### On Early Access day
 
+This was the plan for 30 September 2026; it worked. Automatic recordings from
+the global service showed the protocol is the same as Taiwan's -- every opcode
+the parsers use, at the same sizes -- and also showed the framing bug and the
+zone-change bug fixed in 3.0.0. See *Reading the game's stream (3.0.0)*.
+
 1. Start the meter and play. The first two minutes are recorded automatically.
 2. Settings → Aion 2 → Connection → Advanced: switch on **Opcode census**.
    Start a manual recording as well if a longer session is wanted.
@@ -397,6 +406,118 @@ window work with `run_on_main_thread` instead.
 
 The overlay is built `focusable(false)`: the show shortcut can create it while
 you are in the game, and a new window takes the keyboard by default.
+
+## Reading the game's stream (3.0.0)
+
+Global launched on 30 September 2026, and the first reports were that the
+meter sometimes did not appear in dungeons and sometimes froze. Five automatic
+recordings from the user's sessions, replayed offline, showed why. All of it
+was in the capture pipeline inherited from upstream, and none of it was
+specific to global.
+
+**Frames were cut a byte short.** A frame's length varint counts four more
+than the frame minus itself: `frame length = value + varint length - 4`.
+Upstream used `value - 3`, right only for one-byte varints, that is frames
+under 128 bytes. Every larger frame ended a byte early and the next one was
+read from its last byte. A zero there was skipped as padding; anything else
+started a bogus frame that swallowed real ones -- and inside a compressed
+bundle, the rest of the bundle was dropped. Upstream had noticed half of it and
+added `+1` for bundles only. On the recordings this lost 20-27% of damage
+packets in busy fights: a boss that lost 5,212,074 health was credited with
+74% of that. With the length right, the same recording credits 100.1-100.4%,
+the remainder being the killing blow's overkill.
+
+**The player's id was lost on entering a dungeon.** The game opens a new
+connection for every map and dungeon, and entity ids are per connection: the
+same character was `9231` in town and `802` in the dungeon. The packet that
+says so (`33 36`, 2,302 bytes) sits in a compressed bundle -- behind the
+off-by-one. So the meter kept the town id, none of your hits were yours, the
+overlay (which appears on your first hit since 2.2.0) never appeared, and five
+minutes later the fight was cleared as someone else's. Packets before a new
+connection's first heartbeat were also thrown away, because nothing parsed a
+connection until its heartbeat had been seen.
+
+**Resync crawled.** When framing failed, the processor skipped one byte and
+waited for the next TCP segment before trying again -- one byte per ~50 ms --
+while every packet behind it waited. That was the freeze. A frame larger than
+8 KB arriving in two segments was also treated as garbage instead of waited for.
+
+What replaced it, in `capture/processor.rs` and `capture/dispatcher.rs`:
+
+- One parser per connection with exact framing. Losing the position (a TCP gap,
+  a length that makes no sense, or a frame still incomplete two seconds after
+  it started while data keeps arriving) jumps straight to the next heartbeat,
+  `0E 00 36`, an 11-byte frame the server sends twenty times a second.
+- Every TCP direction is probed from its first byte. Two heartbeats within
+  three seconds make it the game's, and parsing starts from the top of what
+  was kept when those bytes frame cleanly up to the first heartbeat -- so the
+  zone's opening packets are read too. Flows without a heartbeat within 15 s,
+  or that start like TLS, are ignored and cost one lookup per packet.
+- Damage is parsed on every game connection. Upstream parsed it only on the
+  connection whose `src->dst` string sorted lowest among the recent ones, which
+  during a zone change could be the old one.
+- Hits are stamped with their capture time, not their parse time, so a backlog
+  or a replay keeps its real timing. Replay shifts a recording to the present.
+- The duplicate "nickname-only" parser that ran over every connection beside
+  the real one is gone, and so are its four tuning knobs in Settings.
+
+`cargo test --lib replay_recordings -- --ignored --nocapture`, with
+`AETHER_RECORDINGS` pointing at a recordings folder, replays them through this
+pipeline and prints per recording: identities seen, zone changes, frames,
+resyncs, dropped bytes, and damage dealt against health lost for every target
+that lost real health. `AETHER_SNAPSHOT_DIR` also writes the final snapshot, to
+check the overlay against real data.
+
+### Zone changes (3.0.0)
+
+A newly recognised game connection replacing the previous one is a zone
+change (`DataStorage::begin_zone`). First the meter closes the fight -- saved
+to History if it was yours, cleared if not -- while the old ids still resolve.
+Then everything keyed by id is forgotten: names, classes, mob codes, health,
+summon owners, and your own id. Your name stays. Until the new zone's
+player-info packet arrives, every hit counts as yours, the same rule as before
+you were ever identified, so the overlay appears rather than waiting.
+
+A reset within a zone (Reset, idle timeout) keeps who summoned what. It used
+to clear it, and an Elementalist's spirit summoned before the reset then
+showed as a separate nameless player.
+
+### Accuracy, checked against health
+
+Damage dealt to a mob should equal the health it lost. That is the test used on
+the recordings, and the fight summary now shows it: Captured is the damage the
+meter read against the health the boss lost. Green near 100% means nothing was
+missed; amber means hits went unseen, usually because the meter started part
+way through. `TargetInfo` carries `total_damage` (everyone, before any player
+is hidden) for this.
+
+Also fixed on the way:
+
+- An actor hitting itself is not damage. Elementalist's Spirit Communion
+  (`16770000`) and Spirit's Benediction (`16190000`) arrive that way; both are
+  also on the healing list now.
+- Boss only drops hits only on targets known not to be bosses. A target whose
+  spawn packet was missed used to be dropped as well -- the whole boss fight.
+- Ping on global: the server-time packet echoes the client's performance
+  counter (ms, plus 2^24 s) rather than wall-clock time, and is read that way
+  now. It never showed on global before.
+- The overlay no longer ignores snapshots whose target has no mob code; it
+  skips only players.
+- Training dummies for "only your hits" come from a list (49) instead of two
+  codes. Boss ids and English names were refreshed from Kuroukihime's October
+  2026 catalogue: 1,384 bosses, 9,035 names.
+
+### Cost
+
+Replayed in a release build, the pipeline reads 1-3.6 million packets a
+second; the game sends about forty. Other things that were paid per packet
+and are not any more: hex-dumping every damage packet into a debug string that
+was then discarded, and copying the 2,000-entry name map and 5,000-entry mob
+maps for every health packet. The snapshot (under a millisecond to build) is
+rebuilt only when the data or the relevant settings changed, and sent only when
+something a window shows changed. The log lost about 95% of its lines: every
+player in view, every summon, every stall, and the config being re-applied
+each time a window opened.
 
 ## Boss fights (2.3.0)
 

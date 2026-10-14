@@ -28,10 +28,12 @@ pub(crate) fn parse_main_combat_power(
         return false;
     }
 
-    context.logger.info(format!(
-        "[{}] main actor combat power combat_power={combat_power}",
-        context.port
-    ));
+    if context.logger.is_debug_enabled() {
+        context.logger.debug(format!(
+            "[{}] main actor combat power combat_power={combat_power}",
+            context.port
+        ));
+    }
     true
 }
 
@@ -65,7 +67,7 @@ fn parse_main_fixed(context: &ParserContext<'_>, payload: &[u8]) -> bool {
     if !is_available_server_id(server_id) {
         return false;
     }
-    crate::dps_meter::region::observe_server_id(server_id);
+    crate::dps_meter::region::observe_own_server_id(server_id);
 
     let Ok(name) = std::str::from_utf8(&payload[name_start..name_end]) else {
         return false;
@@ -207,7 +209,11 @@ pub(crate) fn parse_other(
             .data_storage
             .set_actor_combat_power(actor_id, combat_power);
     }
-    context.logger.info(format!(
+    if !context.logger.is_debug_enabled() {
+        return true;
+    }
+    // Every player in view, re-sent as they move: debug only.
+    context.logger.debug(format!(
         "[{}] actor actor={} name={} sid={} job={} class={} combat_power={}",
         context.port,
         actor_id,

@@ -96,7 +96,8 @@ fn build_combat_snapshot(
     let aggregated = aggregate_target_actor_stats(&filtered_skill_stats);
 
     // 7. Build info maps
-    let target_infos = build_target_infos(data_storage, &kept_targets, &summon_owner_map);
+    let target_infos =
+        build_target_infos(data_storage, &kept_targets, &target_damage, &summon_owner_map);
     let actor_infos = build_actor_infos(data_storage, &filtered_skill_stats, &summon_owner_map);
 
     // 8. Build per-target per-actor overview stats (with DPS, share, name, etc.)
@@ -302,6 +303,7 @@ fn aggregate_main_actor_dealt_player_overview(
 fn build_target_infos(
     data_storage: &DataStorage,
     kept_targets: &[u32],
+    target_damage: &HashMap<u32, u64>,
     summon_owner_map: &HashMap<u32, u32>,
 ) -> HashMap<u32, TargetInfo> {
     let mob_id_code = data_storage.mob_id_code_snapshot();
@@ -345,6 +347,8 @@ fn build_target_infos(
                     max_hp,
                     target_start_time: start_times.get(tid).cloned().unwrap_or_default(),
                     target_last_time: last_times.get(tid).cloned().unwrap_or_default(),
+                    total_damage: target_damage.get(tid).copied().unwrap_or_default(),
+                    is_player: mob_code.is_none() && data_storage.is_player(*tid),
                 },
             )
         })

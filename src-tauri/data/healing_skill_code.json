@@ -11,6 +11,8 @@
   "14790000": { "name": "Revitalization Contract", "class": "Ranger" },
   "15160000": { "name": "Steel Barrier", "class": "Sorcerer" },
   "15790000": { "name": "Revitalization Contract", "class": "Sorcerer" },
+  "16190000": { "name": "Enhance: Spirit's Benediction", "class": "Elementalist" },
+  "16770000": { "name": "Spirit Communion", "class": "Elementalist" },
   "16790000": { "name": "Revitalization Contract", "class": "Elementalist" },
   "17090000": { "name": "Light of Regeneration", "class": "Cleric" },
   "17100000": { "name": "Healing Light", "class": "Cleric" },

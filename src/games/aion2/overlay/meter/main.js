@@ -1282,6 +1282,19 @@ function maybeShowSummary(snap, target, defeated) {
   });
 }
 
+// How much of the boss's lost health the meter read as damage. Near 100%
+// means nothing was missed; well under it means hits went unseen -- usually
+// the meter started part way through the fight. Over 100% is the last hit's
+// overkill, or the boss healing, and reads as complete.
+function capturedShare(target) {
+  const maxHp = Number(target?.maxHp);
+  const currentHp = Math.max(0, Number(target?.currentHp) || 0);
+  const dealt = Number(target?.totalDamage);
+  const lost = maxHp - currentHp;
+  if (!(lost > 0) || !(dealt > 0)) return null;
+  return Math.min(1, dealt / lost);
+}
+
 // Your skills on this target, biggest first.
 function topSkills(snap, target, actorId, count) {
   const byActor =
@@ -1386,6 +1399,16 @@ async function showSummary(snap, target, defeated) {
   stat("Damage", fmtDamage(lead.totalDamage));
   if (skills.critRate != null) stat("Crit", `${(skills.critRate * 100).toFixed(0)}%`);
   if (sorted.length > 1) stat("Party", `${fmtCompact(partyDps)}/s`);
+  const captured = capturedShare(target);
+  if (captured != null) {
+    stat("Captured", fmtShare(captured));
+    const node = stats.lastElementChild;
+    node.className = "summary__captured" + (captured < 0.98 ? " is-partial" : "");
+    node.title =
+      captured < 0.98
+        ? "The meter read less damage than the boss lost: some hits were not seen, most likely because it started part way through the fight."
+        : "Every point of health the boss lost is accounted for by the damage the meter read.";
+  }
   $summary.append(stats);
 
   const skillNames = skills.top.map((skill) => skillName(names, skill.code));
@@ -1553,7 +1576,10 @@ function formatMemory(mb) {
     await listen("dps-snapshot", (event) => {
       const snap = event.payload;
       const targetInfo = getLastTargetInfo(snap);
-      if (targetInfo != null && targetInfo.targetMobCode == null) {
+      // A player is not a fight this meter shows (the PvP window does). A
+      // mob whose spawn was never seen is: skipping those used to freeze the
+      // overlay for a whole boss fight when that one packet was missed.
+      if (targetInfo?.isPlayer) {
         return;
       }
       lastSnapshot = snap;

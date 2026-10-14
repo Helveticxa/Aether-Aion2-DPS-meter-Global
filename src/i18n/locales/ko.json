@@ -57,7 +57,9 @@
       "nextSequence": "다음 시퀀스",
       "idle": "유휴 시간",
       "combat": "전투",
-      "empty": "캡처된 TCP 흐름이 없습니다."
+      "empty": "캡처된 TCP 흐름이 없습니다.",
+      "zoneChanges": "지역 이동 {{count}}회",
+      "streamHealth": "패킷 {{frames}}개 읽음 · 재동기화 {{resyncs}}회 · 손실 {{dropped}}"
     },
     "aion2": {
       "title": "Aion 2",
@@ -136,18 +138,10 @@
       "countBossOnly": "보스 전용",
       "showPossibleBoss": "Detect possible bosses",
       "showPossibleBossDesc": "Treats very high-HP monsters that are not in the known boss table as temporary bosses. Useful for new dungeons or missing name data.",
-      "myMuzhuangOnly": "My Muzhuang only",
-      "myMuzhuangOnlyDesc": "Only record damage from your own Muzhuang",
+      "myMuzhuangOnly": "Training dummies: only your hits",
+      "myMuzhuangOnlyDesc": "On a training scarecrow or punching bag, count only your own damage, so others practising nearby do not mix in.",
       "dpsSnapshotInterval": "Snapshot interval (ms)",
-      "dpsSnapshotIntervalDesc": "Controls how often DPS data refreshes. Shorter intervals feel more realtime with slightly more overhead.",
-      "maxPacketSizeThreshold": "Packet size threshold",
-      "maxPacketSizeThresholdDesc": "Ignores unusually large packets to reduce parser errors or noisy records.",
-      "stallResyncDelay": "Nickname resync delay",
-      "stallResyncDelayDesc": "Only affects the nickname detection stream. When a nickname frame looks incomplete, this controls how long to wait before resyncing by one byte.",
-      "fullProcessorStallResyncDelay": "Full stream resync delay",
-      "fullProcessorStallResyncDelayDesc": "Wait time after the full parser stalls. Set to 0 to resync by one byte immediately.",
-      "unknownPacketStallResyncDelay": "Unknown packet resync delay",
-      "unknownPacketStallResyncDelayDesc": "Wait time before skipping one byte for an incomplete packet with an unknown header. Range: 0–500ms. Set to 0 to resync immediately."
+      "dpsSnapshotIntervalDesc": "Controls how often DPS data refreshes. Shorter intervals feel more realtime with slightly more overhead."
     }
   },
   "releaseVersion": {

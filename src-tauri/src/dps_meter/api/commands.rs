@@ -127,6 +127,33 @@ pub fn get_diagnostics_report(meter: State<'_, DpsMeter>) -> Result<String, Stri
         }
     ));
 
+    // How cleanly each game connection is being read. Resyncs and dropped
+    // bytes should both be zero; anything else means capture is losing data.
+    let streams = meter.tcp_reassembly_status();
+    out.push_str("\n--- game connections ---\n");
+    out.push_str(&format!(
+        "character      {}\n",
+        meter.main_actor_name().unwrap_or_else(|| "not identified".to_string())
+    ));
+    out.push_str(&format!(
+        "current        {}\n",
+        streams.combat_connection.as_deref().unwrap_or("none")
+    ));
+    out.push_str(&format!("zone changes   {}\n", streams.zone_changes));
+    for flow in streams.flows.iter().filter(|flow| flow.is_game_flow) {
+        if let Some(stats) = flow.stream {
+            out.push_str(&format!(
+                "{}  frames {} | resyncs {} | dropped {} B | bad bundles {} | tcp gaps {}\n",
+                flow.connection,
+                stats.frames,
+                stats.resyncs,
+                stats.dropped_bytes,
+                stats.bad_bundles,
+                flow.gap_skips
+            ));
+        }
+    }
+
     out.push_str("\n--- opcode census ---\n");
     if !counts.enabled && counts.total_packets == 0 {
         out.push_str("disabled, nothing counted\n");

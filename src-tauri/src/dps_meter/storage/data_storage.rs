@@ -4,15 +4,16 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, RwLock};
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
 
-use crate::dps_meter::config::{SharedDpsMeterConfig, TRAINING_DUMMY_MOB_CODE};
+use crate::dps_meter::config::SharedDpsMeterConfig;
 use crate::dps_meter::models::combat::{
     BuffInterval, BuffSummary, PlayerHpInfo, PvpCombatStats, PvpCombatStatsRow, PvpKnownPlayer,
     PvpWatchInfo, PvpWatchInfoResponse, SkillStats,
 };
 use crate::dps_meter::models::packet::ParsedDamagePacket;
-use crate::dps_meter::storage::loaders::{load_boss_ids, load_healing_skill_codes, load_npc_names};
+use crate::dps_meter::storage::loaders::{
+    load_boss_ids, load_healing_skill_codes, load_npc_names, load_training_dummy_codes,
+};
 
 const ACTOR_METADATA_CAPACITY: usize = 2_000;
 const MOB_METADATA_CAPACITY: usize = 5_000;
@@ -204,17 +205,28 @@ impl Default for DataStorageInner {
 }
 
 pub type MainActorCallback = dyn Fn(u32, &str, Option<String>) + Send + Sync;
+pub type MainActorListener = dyn Fn(&MainActorDetectedPayload) + Send + Sync;
+pub type ZoneChangeCallback = dyn Fn() + Send + Sync;
 
 pub struct DataStorage {
-    app: AppHandle,
     inner: RwLock<DataStorageInner>,
     config: SharedDpsMeterConfig,
     healing_skill_codes: HashSet<u32>,
     boss_code_list: HashSet<u32>,
+    training_dummy_codes: HashSet<u32>,
     mob_code_name_map: HashMap<u32, String>,
+    /// Fires when a different player is identified; the meter starts over.
     pub main_actor_callback: Mutex<Option<Box<MainActorCallback>>>,
+    /// Told about every identification, to pass on to the windows.
+    pub main_actor_listener: Mutex<Option<Box<MainActorListener>>>,
+    /// Fires on a zone change, before ids are forgotten, so the meter can
+    /// close the old zone's fight while its names still resolve.
+    pub zone_change_callback: Mutex<Option<Box<ZoneChangeCallback>>>,
     /// Counts what the Boss only filter threw away, so the UI can say so.
     boss_only_filtered: AtomicU64,
+    /// Bumped by every change a snapshot would show, so the snapshot loop can
+    /// skip rebuilding one that would come out the same.
+    revision: AtomicU64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -226,60 +238,82 @@ pub struct MainActorDetectedPayload {
 }
 
 impl DataStorage {
-    pub fn new(app: AppHandle, config: SharedDpsMeterConfig) -> Self {
+    pub fn new(config: SharedDpsMeterConfig) -> Self {
         Self {
-            app,
             inner: RwLock::new(DataStorageInner::default()),
             config,
             healing_skill_codes: load_healing_skill_codes(),
             boss_code_list: load_boss_ids(),
+            training_dummy_codes: load_training_dummy_codes(),
             mob_code_name_map: load_npc_names(),
             main_actor_callback: Mutex::new(None),
+            main_actor_listener: Mutex::new(None),
+            zone_change_callback: Mutex::new(None),
             boss_only_filtered: AtomicU64::new(0),
+            revision: AtomicU64::new(0),
         }
     }
 
+    /// Changes whenever something a snapshot shows has changed.
+    pub fn revision(&self) -> u64 {
+        self.revision.load(Ordering::Relaxed)
+    }
+
+    fn touch(&self) {
+        self.revision.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Start over on the fight: what was dealt, when, and to whom. Who is who
+    /// -- names, classes, mob codes, summon owners -- stays, because it still
+    /// holds in this zone. Summons especially: a spirit summoned before the
+    /// reset keeps fighting after it, and without its owner its damage showed
+    /// as a separate nameless player.
     pub fn clear(&self) {
         self.boss_only_filtered.store(0, Ordering::Relaxed);
-        let mut inner = self.inner.write().unwrap();
-        let main_actor_id = inner.main_actor_id;
-        let main_actor_name = inner.main_actor_name.clone();
-        let main_actor_combat_power = inner.main_actor_combat_power;
-        let actor_id_name_map = inner.actor_id_name_map.clone();
-        let actor_id_server_map = inner.actor_id_server_map.clone();
-        let actor_id_class_map = inner.actor_id_class_map.clone();
-        let actor_id_combat_power_map = inner.actor_id_combat_power_map.clone();
-        let actor_id_skill_spec_map = inner.actor_id_skill_spec_map.clone();
+        {
+            let mut inner = self.inner.write().unwrap();
+            inner.dps_stats = BoundedMap::new(COMBAT_TARGET_CAPACITY);
+            inner.use_buffs_by_target = BoundedMap::new(BUFF_TARGET_CAPACITY);
+            inner.start_time = None;
+            inner.activity_at = None;
+            inner.start_time_by_target.clear();
+            inner.last_time_by_target.clear();
+            inner.last_target = None;
+            inner.last_target_by_main_actor = None;
+            inner.last_player_target_by_main_actor = None;
+        }
+        self.touch();
+    }
 
-        let mob_id_code_map = inner.mob_id_code_map.clone();
-        let mob_id_hp_map = inner.mob_id_hp_map.clone();
-        let player_hp_map = inner.player_hp_map.clone();
-        let pvp_attackers_by_target = inner.pvp_attackers_by_target.clone();
-        let pvp_last_attacker_by_target = inner.pvp_last_attacker_by_target.clone();
-        let pvp_combat_stats = inner.pvp_combat_stats.clone();
-        let pvp_dead_players = inner.pvp_dead_players.clone();
-        // let summon_owner_map = inner.summon_owner_map.clone();
-        let dot_skill_list = inner.dot_skill_list.clone();
+    /// The game opened a new zone. Entity ids are handed out per zone, so
+    /// everything known by id belongs to the old one -- the player's own id
+    /// among it, which the new zone's player-info packet supplies again. Your
+    /// name stays, and so do totals kept by name.
+    pub fn begin_zone(&self) {
+        // First, while the old ids still resolve: the meter closes the fight.
+        if let Some(callback) = self.zone_change_callback.lock().unwrap().as_ref() {
+            callback();
+        }
 
-        *inner = DataStorageInner::default();
-        inner.main_actor_id = main_actor_id;
-        inner.main_actor_name = main_actor_name;
-        inner.main_actor_combat_power = main_actor_combat_power;
-        inner.actor_id_name_map = actor_id_name_map;
-        inner.actor_id_server_map = actor_id_server_map;
-        inner.actor_id_class_map = actor_id_class_map;
-        inner.actor_id_combat_power_map = actor_id_combat_power_map;
-        inner.actor_id_skill_spec_map = actor_id_skill_spec_map;
-
-        inner.mob_id_code_map = mob_id_code_map;
-        inner.mob_id_hp_map = mob_id_hp_map;
-        inner.player_hp_map = player_hp_map;
-        inner.pvp_attackers_by_target = pvp_attackers_by_target;
-        inner.pvp_last_attacker_by_target = pvp_last_attacker_by_target;
-        inner.pvp_combat_stats = pvp_combat_stats;
-        inner.pvp_dead_players = pvp_dead_players;
-        // inner.summon_owner_map = summon_owner_map;
-        inner.dot_skill_list = dot_skill_list;
+        {
+            let mut inner = self.inner.write().unwrap();
+            inner.main_actor_id = None;
+            inner.last_target = None;
+            inner.last_target_by_main_actor = None;
+            inner.last_player_target_by_main_actor = None;
+            inner.actor_id_name_map = BoundedMap::new(ACTOR_METADATA_CAPACITY);
+            inner.actor_id_server_map = BoundedMap::new(ACTOR_METADATA_CAPACITY);
+            inner.actor_id_class_map = BoundedMap::new(ACTOR_METADATA_CAPACITY);
+            inner.actor_id_combat_power_map = BoundedMap::new(ACTOR_METADATA_CAPACITY);
+            inner.actor_id_skill_spec_map = BoundedMap::new(ACTOR_METADATA_CAPACITY);
+            inner.mob_id_code_map = BoundedMap::new(MOB_METADATA_CAPACITY);
+            inner.mob_id_hp_map = BoundedMap::new(MOB_METADATA_CAPACITY);
+            inner.player_hp_map = BoundedMap::new(ACTOR_METADATA_CAPACITY);
+            inner.summon_owner_map = BoundedMap::new(SUMMON_METADATA_CAPACITY);
+            inner.pvp_attackers_by_target.clear();
+            inner.pvp_last_attacker_by_target.clear();
+        }
+        self.touch();
     }
 
     /// Hits thrown away by the Boss only filter since the last reset.
@@ -287,19 +321,15 @@ impl DataStorage {
         self.boss_only_filtered.load(Ordering::Relaxed)
     }
 
-    pub fn append_damage(&self, packet: ParsedDamagePacket) {
-        self.append_damage_at(packet, current_timestamp_seconds());
-    }
-
+    /// A buff landed at `local_start_ms`: its capture time, in milliseconds.
     pub fn save_buff(
         &self,
         target_id: u32,
         actor_id: u32,
         skill_code: u32,
-        _server_start_ms: u64,
         duration_ms: u64,
+        local_start_ms: u64,
     ) -> BuffSummary {
-        let local_start_ms = current_timestamp_millis();
         let local_end_ms = local_start_ms.saturating_add(duration_ms);
 
         // Buff intervals feed the detail window's coverage timeline. The live
@@ -337,6 +367,7 @@ impl DataStorage {
             }
         }
 
+        self.touch();
         BuffSummary {
             target_id,
             actor_id,
@@ -356,7 +387,9 @@ impl DataStorage {
             return;
         }
 
-        if packet.actor_id == 0 {
+        // Zero is no one; an actor "hitting" itself is a cost or a self-heal
+        // (Elementalist's Spirit Communion arrives this way), never damage.
+        if packet.actor_id == 0 || packet.actor_id == packet.target_id {
             return;
         }
 
@@ -377,13 +410,22 @@ impl DataStorage {
         let is_target_player = inner.actor_id_name_map.contains_key(&packet.target_id)
             && !inner.mob_id_code_map.contains_key(&packet.target_id);
 
-        if config.boss_only && !is_target_boss && !(config.pvp_mode_on && is_target_player) {
+        // Boss only drops hits on what is known not to be a boss. A target
+        // whose spawn was never seen -- the meter started mid-fight, or the
+        // packet came before capture -- is counted rather than guessed away:
+        // that guess is how a whole boss fight used to vanish.
+        let known_not_boss = target_mob_code.is_some() || is_target_player;
+        if config.boss_only
+            && !is_target_boss
+            && known_not_boss
+            && !(config.pvp_mode_on && is_target_player)
+        {
             self.boss_only_filtered.fetch_add(1, Ordering::Relaxed);
             return;
         }
 
         if config.my_muzhuang_only
-            && target_mob_code.is_some_and(|mob_code| TRAINING_DUMMY_MOB_CODE.contains(&mob_code))
+            && target_mob_code.is_some_and(|mob_code| self.training_dummy_codes.contains(&mob_code))
             && inner.main_actor_id != Some(actor_id)
         {
             return;
@@ -507,6 +549,8 @@ impl DataStorage {
         if is_own_fight(&inner, actor_id, packet.target_id) {
             inner.activity_at = Some(timestamp);
         }
+        drop(inner);
+        self.touch();
     }
 
     /// Last time you were in the fight; see `DataStorageInner::activity_at`.
@@ -523,6 +567,8 @@ impl DataStorage {
             inner.actor_id_server_map.insert(actor_id, sid.to_string());
         }
         inner.summon_owner_map.map.remove(&actor_id);
+        drop(inner);
+        self.touch();
     }
 
     pub fn set_actor_class(&self, actor_id: u32, actor_class: &str) {
@@ -564,15 +610,35 @@ impl DataStorage {
         inner.mob_id_code_map.insert(target_id, mob_code);
     }
 
-    pub fn append_mob_hp(&self, target_id: u32, current_hp: u32) {
-        let mut inner = self.inner.write().unwrap();
-        let entry = inner
-            .mob_id_hp_map
-            .get_mut_or_insert_with(target_id, || (current_hp, current_hp));
-        entry.0 = current_hp;
-        if current_hp > entry.1 {
-            entry.1 = current_hp;
-        }
+    /// Record a mob's health. Returns whether this was its first reading.
+    pub fn append_mob_hp(&self, target_id: u32, current_hp: u32) -> bool {
+        let first = {
+            let mut inner = self.inner.write().unwrap();
+            let first = !inner.mob_id_hp_map.contains_key(&target_id);
+            let entry = inner
+                .mob_id_hp_map
+                .get_mut_or_insert_with(target_id, || (current_hp, current_hp));
+            entry.0 = current_hp;
+            if current_hp > entry.1 {
+                entry.1 = current_hp;
+            }
+            first
+        };
+        self.touch();
+        first
+    }
+
+    /// Whether `actor_id` is a named player rather than a mob. Asked for
+    /// every health packet, so it reads in place instead of copying the map
+    /// as it used to, dozens of times a second.
+    pub fn is_player(&self, actor_id: u32) -> bool {
+        let inner = self.inner.read().unwrap();
+        inner.actor_id_name_map.contains_key(&actor_id)
+            && !inner.mob_id_code_map.contains_key(&actor_id)
+    }
+
+    pub fn actor_name(&self, actor_id: u32) -> Option<String> {
+        self.inner.read().unwrap().actor_id_name_map.get(&actor_id).cloned()
     }
 
     pub fn append_player_hp(&self, actor_id: u32, current_hp: u32) {
@@ -672,14 +738,14 @@ impl DataStorage {
             }
         }
 
-        let _ = self.app.emit(
-            "dps-main-actor-detected",
-            MainActorDetectedPayload {
+        self.touch();
+        if let Some(listener) = self.main_actor_listener.lock().unwrap().as_ref() {
+            listener(&MainActorDetectedPayload {
                 actor_id,
                 actor_name: actor_name.to_string(),
                 sid,
-            },
-        );
+            });
+        }
     }
 
     pub fn get_dps_stats_snapshot(&self) -> HashMap<u32, HashMap<u32, HashMap<u32, SkillStats>>> {
@@ -968,15 +1034,6 @@ fn infer_actor_class(skill_code: u32) -> Option<String> {
     }
 }
 
-fn current_timestamp_seconds() -> f64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs_f64())
-        .unwrap_or_default()
-}
-
 /// Whether a counted hit belongs to your fight: you dealt it, you took it, or
 /// it landed on your current target (a healer's party keeps the boss busy).
 /// Before the game has told us who you are, every hit counts.
@@ -1045,19 +1102,19 @@ mod main_actor_tests {
 
     #[test]
     fn first_identification_counts_as_a_change() {
-        assert!(main_actor_changed(None, "Helveticaa"));
+        assert!(main_actor_changed(None, "Rin"));
     }
 
     #[test]
     fn re_identifying_the_same_player_does_not() {
         // The game re-sends the own-player packet throughout a session. Treating
         // each one as a change cleared the meter mid-fight.
-        assert!(!main_actor_changed(Some("Helveticaa"), "Helveticaa"));
+        assert!(!main_actor_changed(Some("Rin"), "Rin"));
     }
 
     #[test]
     fn switching_character_counts_as_a_change() {
-        assert!(main_actor_changed(Some("Helveticaa"), "HiorV11"));
+        assert!(main_actor_changed(Some("Rin"), "Mira"));
     }
 }
 
@@ -1140,5 +1197,128 @@ mod own_fight_tests {
     #[test]
     fn someone_else_fighting_nearby_does_not() {
         assert!(!is_own_fight(&inner(Some(ME), Some(BOSS)), STRANGER, OTHER_MOB));
+    }
+}
+
+#[cfg(test)]
+mod meter_rule_tests {
+    use super::*;
+    use crate::dps_meter::config::DpsMeterConfig;
+    use std::sync::Arc;
+
+    const ME: u32 = 802;
+    const BOSS: u32 = 27_684;
+    const BOSS_CODE: u32 = 2_300_206; // Guardian Captain Raur
+    const TRASH: u32 = 18_903;
+    const TRASH_CODE: u32 = 2_000_002;
+
+    fn storage(boss_only: bool) -> DataStorage {
+        let config = DpsMeterConfig {
+            boss_only,
+            ..DpsMeterConfig::default()
+        };
+        DataStorage::new(Arc::new(RwLock::new(config)))
+    }
+
+    fn hit(actor_id: u32, target_id: u32, damage: u64) -> ParsedDamagePacket {
+        ParsedDamagePacket {
+            target_id,
+            actor_id,
+            skill_code: 16_010_000,
+            ori_skill_code: 16_010_000,
+            damage,
+            is_dot: false,
+            is_crit: false,
+            multi_hit_damage: 0,
+            multi_hit_count: 0,
+            specials: Vec::new(),
+        }
+    }
+
+    fn dealt_to(storage: &DataStorage, target: u32) -> u64 {
+        storage
+            .get_dps_stats_snapshot()
+            .get(&target)
+            .map(|actors| {
+                actors
+                    .values()
+                    .flat_map(|skills| skills.values())
+                    .map(|skill| skill.total_damage)
+                    .sum()
+            })
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn boss_only_counts_a_boss_whose_spawn_was_missed() {
+        let storage = storage(true);
+        storage.append_mob(TRASH, TRASH_CODE);
+        storage.append_mob(BOSS, BOSS_CODE);
+
+        storage.append_damage_at(hit(ME, TRASH, 1_000), 10.0);
+        storage.append_damage_at(hit(ME, BOSS, 2_000), 10.0);
+        storage.append_damage_at(hit(ME, 55_555, 3_000), 10.0); // never saw it spawn
+
+        assert_eq!(dealt_to(&storage, TRASH), 0, "known trash is still filtered");
+        assert_eq!(dealt_to(&storage, BOSS), 2_000);
+        assert_eq!(dealt_to(&storage, 55_555), 3_000, "an unknown target is not guessed away");
+        assert_eq!(storage.boss_only_filtered(), 1);
+    }
+
+    #[test]
+    fn hitting_yourself_is_not_damage() {
+        // Elementalist's Spirit Communion arrives as a hit from you on you.
+        let storage = storage(false);
+        storage.append_damage_at(hit(ME, ME, 614), 10.0);
+        assert_eq!(dealt_to(&storage, ME), 0);
+        assert!(storage.start_time().is_none());
+    }
+
+    #[test]
+    fn hits_carry_the_time_they_were_captured() {
+        let storage = storage(false);
+        storage.append_damage_at(hit(ME, BOSS, 100), 1_000.0);
+        storage.append_damage_at(hit(ME, BOSS, 100), 1_030.0);
+        assert_eq!(storage.start_time(), Some(1_000.0));
+        assert_eq!(storage.activity_at(), Some(1_030.0));
+    }
+
+    #[test]
+    fn a_reset_keeps_who_summoned_what() {
+        let storage = storage(false);
+        storage.append_summon(ME, 31_000);
+        storage.clear();
+        assert!(storage.has_summon_owner(31_000), "a spirit still fighting keeps its owner");
+    }
+
+    #[test]
+    fn a_zone_change_closes_the_fight_and_forgets_ids() {
+        let storage = Arc::new(storage(false));
+        storage.append_actor(ME, "Rin", Some("1101"));
+        storage.set_main_actor(ME, "Rin");
+        storage.append_mob(BOSS, BOSS_CODE);
+        storage.append_damage_at(hit(ME, BOSS, 500), 10.0);
+
+        let closed_with = Arc::new(Mutex::new(None));
+        let seen = Arc::clone(&closed_with);
+        let inner = Arc::clone(&storage);
+        storage
+            .zone_change_callback
+            .lock()
+            .unwrap()
+            .replace(Box::new(move || {
+                // The meter closes the fight while the old zone still resolves.
+                *seen.lock().unwrap() = Some((inner.main_actor_id(), inner.get_mob_code(BOSS)));
+            }));
+
+        let revision = storage.revision();
+        storage.begin_zone();
+
+        assert_eq!(*closed_with.lock().unwrap(), Some((Some(ME), Some(BOSS_CODE))));
+        assert_eq!(storage.main_actor_id(), None);
+        assert_eq!(storage.main_actor_name().as_deref(), Some("Rin"));
+        assert_eq!(storage.get_mob_code(BOSS), None);
+        assert!(!storage.is_player(ME));
+        assert_ne!(storage.revision(), revision);
     }
 }

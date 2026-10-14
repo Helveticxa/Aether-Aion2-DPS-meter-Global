@@ -17,6 +17,21 @@ pub fn load_boss_ids() -> HashSet<u32> {
     .unwrap_or_default()
 }
 
+#[derive(Debug, Deserialize)]
+struct TrainingDummiesFile {
+    dummy_ids: Vec<u32>,
+}
+
+/// Training dummies: what "only my hits on training dummies" applies to.
+pub fn load_training_dummy_codes() -> HashSet<u32> {
+    serde_json::from_str::<TrainingDummiesFile>(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/data/training_dummies.json"
+    )))
+    .map(|file| file.dummy_ids.into_iter().collect())
+    .unwrap_or_default()
+}
+
 pub fn load_healing_skill_codes() -> HashSet<u32> {
     serde_json::from_str::<HashMap<String, Value>>(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -63,6 +78,9 @@ mod tests {
             names.values().all(|name| !has_han(name)),
             "a Chinese name crept back into npc_names_en.json"
         );
+
+        let dummies = load_training_dummy_codes();
+        assert!(dummies.contains(&2_400_032) && dummies.len() > 10, "dummy list lost entries");
 
         let bosses = load_boss_ids();
         let named = bosses.iter().filter(|code| names.contains_key(code)).count();

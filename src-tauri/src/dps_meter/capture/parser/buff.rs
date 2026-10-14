@@ -106,9 +106,12 @@ impl StreamProcessor {
             target_info.value as u32,
             actor_info.value as u32,
             skill_code,
-            server_start_ms,
             duration,
+            (self.packet_time * 1000.0) as u64,
         );
+        if !self.logger.is_debug_enabled() {
+            return true;
+        }
         let latency_ms = buff.last_start_ms as i64 - server_start_ms as i64;
         self.logger.debug(format!(
             "[{}] buff detected target={} actor={} skill={} duration_ms={} server_start_ms={} local_start_ms={} local_end_ms={} latency_ms={} coverage={:.3} active={} server_time={} opcode={:02X}38 packet_len={} packet_hex={}",

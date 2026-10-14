@@ -375,7 +375,7 @@ mod tests {
           "Profile 1": { "name": "Work", "user_name": "work@example.com",
                          "profile_highlight_color": -16736064 },
           "Default":   { "name": "Person 1", "is_using_default_name": true,
-                         "gaia_name": "Kapten", "user_name": "" },
+                         "gaia_name": "Aria", "user_name": "" },
           "Profile 2": { "name": "Gaming", "default_avatar_fill_color": -3355444 },
           "Profile 9": { "name": "Guest-ish", "is_ephemeral": true }
         }
@@ -393,7 +393,7 @@ mod tests {
     #[test]
     fn default_named_profile_shows_account_name() {
         let state = parse_local_state(LOCAL_STATE).unwrap();
-        assert_eq!(state.profiles[0].name, "Kapten");
+        assert_eq!(state.profiles[0].name, "Aria");
         // An empty user_name is no email at all.
         assert_eq!(state.profiles[0].email, None);
         assert_eq!(state.profiles[2].name, "Work");

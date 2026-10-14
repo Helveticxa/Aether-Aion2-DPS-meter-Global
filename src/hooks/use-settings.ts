@@ -31,10 +31,6 @@ interface ShortcutSettings {
 interface BackendSettings {
   dpsSnapshotIntervalMs: number;
   memorySnapshotIntervalMs: number;
-  maxPacketSizeThreshold: number;
-  stallResyncDelayMs: number;
-  fullProcessorStallResyncDelayMs: number;
-  unknownPacketStallResyncDelayMs: number;
   bossOnly: boolean;
   pvpModeOn: boolean;
   pvpOverlayPosition: PvpOverlayPosition;
@@ -111,10 +107,6 @@ const DEFAULTS: AppConfig = {
     backend: {
       dpsSnapshotIntervalMs: 200,
       memorySnapshotIntervalMs: 2000,
-      maxPacketSizeThreshold: 8192,
-      stallResyncDelayMs: 1000,
-      fullProcessorStallResyncDelayMs: 200,
-      unknownPacketStallResyncDelayMs: 50,
       bossOnly: false,
       pvpModeOn: false,
       pvpOverlayPosition: "bottom",

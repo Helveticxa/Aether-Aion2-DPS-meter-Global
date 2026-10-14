@@ -130,6 +130,14 @@ pub struct TargetInfo {
     pub max_hp: Option<u32>,
     pub target_start_time: HashMap<u32, f64>,
     pub target_last_time: HashMap<u32, f64>,
+    /// Everything dealt to this target by everyone, before any player is
+    /// hidden or cut from a list. Set against its health, it says how much of
+    /// the fight the meter actually saw.
+    #[serde(default)]
+    pub total_damage: u64,
+    /// A player rather than a mob: the PvE overlay does not switch to one.
+    #[serde(default)]
+    pub is_player: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

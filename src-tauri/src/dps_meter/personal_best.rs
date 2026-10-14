@@ -218,6 +218,8 @@ mod tests {
                 max_hp: None,
                 target_start_time: HashMap::from([(1, 100.0)]),
                 target_last_time: HashMap::from([(1, 100.0 + secs)]),
+                total_damage: (dps * secs) as u64,
+                is_player: false,
             }),
             combat_infos: CombatInfos {
                 actor_infos: HashMap::new(),
@@ -238,20 +240,20 @@ mod tests {
     #[test]
     fn keeps_the_best_per_character_and_boss() {
         let store = PersonalBestStore::new();
-        assert!(store.record(&[record("Kapten", 7, true, 8_000.0, 60.0)]));
-        assert!(!store.record(&[record("Kapten", 7, true, 7_000.0, 60.0)]), "a worse fight changes nothing");
-        assert!(store.record(&[record("Kapten", 7, true, 9_000.0, 60.0)]));
+        assert!(store.record(&[record("Aria", 7, true, 8_000.0, 60.0)]));
+        assert!(!store.record(&[record("Aria", 7, true, 7_000.0, 60.0)]), "a worse fight changes nothing");
+        assert!(store.record(&[record("Aria", 7, true, 9_000.0, 60.0)]));
         assert!(store.record(&[record("Rin", 7, true, 5_000.0, 60.0)]), "another character has their own");
 
-        assert_eq!(store.get("Kapten", 7).map(|b| b.dps), Some(9_000.0));
+        assert_eq!(store.get("Aria", 7).map(|b| b.dps), Some(9_000.0));
         assert_eq!(store.get("Rin", 7).map(|b| b.dps), Some(5_000.0));
     }
 
     #[test]
     fn ordinary_mobs_and_short_fights_do_not_count() {
         let store = PersonalBestStore::new();
-        assert!(!store.record(&[record("Kapten", 7, false, 8_000.0, 60.0)]));
-        assert!(!store.record(&[record("Kapten", 7, true, 90_000.0, 4.0)]));
-        assert!(store.get("Kapten", 7).is_none());
+        assert!(!store.record(&[record("Aria", 7, false, 8_000.0, 60.0)]));
+        assert!(!store.record(&[record("Aria", 7, true, 90_000.0, 4.0)]));
+        assert!(store.get("Aria", 7).is_none());
     }
 }

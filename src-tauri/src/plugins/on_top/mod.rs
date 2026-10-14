@@ -997,7 +997,7 @@ mod tests {
             version: None,
             profiles: vec![browsers::BrowserProfile {
                 dir: "Default".into(),
-                name: "Kapten".into(),
+                name: "Aria".into(),
                 email: None,
                 color: None,
                 avatar: None,

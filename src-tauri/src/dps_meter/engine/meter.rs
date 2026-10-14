@@ -109,7 +109,7 @@ pub struct DpsMeter {
 impl DpsMeter {
     pub fn new(app: AppHandle, logger: Arc<AppLogger>) -> Self {
         let config = Arc::new(RwLock::new(DpsMeterConfig::default()));
-        let data_storage = Arc::new(DataStorage::new(app.clone(), Arc::clone(&config)));
+        let data_storage = Arc::new(DataStorage::new(Arc::clone(&config)));
         let calculator = Arc::new(DpsCalculator::new(Arc::clone(&data_storage)));
         let ping_tracker = Arc::new(PingTracker::new());
         let packet_channel = Channel::new(PACKET_CHANNEL_CAPACITY);
@@ -137,6 +137,28 @@ impl DpsMeter {
             history.load_from_disk();
             personal_bests.init(dir.join("history"), &history.get_records());
         }
+
+        let app_for_listener = app.clone();
+        data_storage
+            .main_actor_listener
+            .lock()
+            .unwrap()
+            .replace(Box::new(move |payload| {
+                let _ = app_for_listener.emit("dps-main-actor-detected", payload.clone());
+            }));
+
+        // A zone change ends the fight in the old zone: saved if it was yours,
+        // and the meter starts clean for the next map or dungeon run.
+        let app_for_zone = app.clone();
+        data_storage
+            .zone_change_callback
+            .lock()
+            .unwrap()
+            .replace(Box::new(move || {
+                if let Some(meter) = app_for_zone.try_state::<DpsMeter>() {
+                    meter.end_fight_for_zone_change();
+                }
+            }));
 
         // Register main-actor callback: reset meter silently when player is identified.
         // Safe to register here — callback only fires after start_dps_meter(),
@@ -212,29 +234,31 @@ impl DpsMeter {
 
     pub fn apply_config(&self, config: DpsMeterConfig) -> DpsMeterConfig {
         let config = config.normalized();
-        *self.config.write().unwrap() = config.clone();
+        let changed = {
+            let mut current = self.config.write().unwrap();
+            let changed = *current != config;
+            *current = config.clone();
+            changed
+        };
         crate::dps_meter::region::set_configured(config.region);
-        self.logger.info(format!(
-            "region profile applied: {}",
-            config.region.label()
-        ));
         self.logger.set_debug_enabled(config.output_debug_log);
-        self.logger.info(format!(
-            "config applied: dps_interval={}ms memory_interval={}ms max_packet_size_threshold={} stall_resync_delay={}ms full_processor_stall_resync_delay={}ms unknown_packet_stall_resync_delay={}ms capture_backend_priority={:?} boss_only={} pvp_mode_on={} pvp_overlay_position={:?} show_possible_boss={} my_muzhuang_only={} output_debug_log={}",
-            config.dps_snapshot_interval_ms,
-            config.memory_snapshot_interval_ms,
-            config.max_packet_size_threshold,
-            config.stall_resync_delay_ms,
-            config.full_processor_stall_resync_delay_ms,
-            config.unknown_packet_stall_resync_delay_ms,
-            config.capture_backend_priority,
-            config.boss_only,
-            config.pvp_mode_on,
-            config.pvp_overlay_position,
-            config.show_possible_boss,
-            config.my_muzhuang_only,
-            config.output_debug_log
-        ));
+        // Every window re-applies the settings when it opens; only a change
+        // is worth a line.
+        if changed {
+            self.logger.info(format!(
+                "config applied: dps_interval={}ms memory_interval={}ms capture_backend_priority={:?} boss_only={} pvp_mode_on={} show_possible_boss={} my_muzhuang_only={} hide_when_idle={} idle_reset={}s output_debug_log={}",
+                config.dps_snapshot_interval_ms,
+                config.memory_snapshot_interval_ms,
+                config.capture_backend_priority,
+                config.boss_only,
+                config.pvp_mode_on,
+                config.show_possible_boss,
+                config.my_muzhuang_only,
+                config.hide_when_idle,
+                config.idle_reset_secs,
+                config.output_debug_log
+            ));
+        }
         config
     }
 
@@ -345,6 +369,25 @@ impl DpsMeter {
     fn end_idle_fight(&self, was_in_fight: bool) {
         if was_in_fight {
             self.logger.info("idle timeout: fight saved and meter reset");
+            self.reset_dps_meter(true);
+        } else {
+            self.clear_runtime_state_nopacket();
+            self.emit_empty_snap();
+        }
+    }
+
+    /// The player changed zone. Called from the capture thread, before the new
+    /// zone's first packet is parsed, while the old zone's ids still resolve.
+    pub fn end_fight_for_zone_change(&self) {
+        if self.data_storage.start_time().is_none() {
+            return;
+        }
+        let was_in_fight = self.data_storage.activity_at().is_some();
+        self.logger.info(format!(
+            "zone change: fight {}",
+            if was_in_fight { "saved and meter reset" } else { "cleared" }
+        ));
+        if was_in_fight {
             self.reset_dps_meter(true);
         } else {
             self.clear_runtime_state_nopacket();
@@ -530,6 +573,11 @@ impl DpsMeter {
 
         let handle = thread::spawn(move || {
             let mut idle_hidden: Option<bool> = None;
+            // The data revision and settings the last snapshot was built from.
+            // Building one copies every target, actor and skill on the meter;
+            // when neither has changed since, the result would be the same.
+            let mut built_from: Option<(u64, bool, usize)> = None;
+            let mut emitted: Option<SnapshotFingerprint> = None;
 
             while snapshot_running.load(Ordering::SeqCst) {
                 let cfg = config.read().unwrap();
@@ -566,24 +614,31 @@ impl DpsMeter {
                     crate::plugins::aion2_focus::set_dps_idle_hidden_for_app(&app, hidden);
                 }
 
-                if let Some(snapshot) = calculator.get_dps_snapshot(0, hide_unknown, max_count) {
-                    // Cache non-empty snapshots for detail window fallback
-                    if snapshot.total_damage > 0 {
-                        *last_snapshot.lock().unwrap() = Some(snapshot.clone());
-                    }
-                    let should_emit = {
-                        let mut last_damage = last_emitted_total_damage.lock().unwrap();
-                        let changed = last_damage
-                            .map(|previous| previous != snapshot.total_damage)
-                            .unwrap_or(snapshot.total_damage > 0);
-                        if changed {
-                            *last_damage = Some(snapshot.total_damage);
+                let revision = data_storage.revision();
+                let reset = last_emitted_total_damage.lock().unwrap().is_none();
+                if reset {
+                    // Reset since the last emit: the windows were sent an
+                    // empty meter, so the next real one must go out.
+                    emitted = None;
+                    *last_emitted_total_damage.lock().unwrap() = Some(0);
+                }
+                let source = (revision, hide_unknown, max_count);
+                if built_from != Some(source) {
+                    built_from = Some(source);
+                    if let Some(snapshot) = calculator.get_dps_snapshot(0, hide_unknown, max_count) {
+                        // Cache non-empty snapshots for detail window fallback
+                        if snapshot.total_damage > 0 {
+                            *last_snapshot.lock().unwrap() = Some(snapshot.clone());
                         }
-                        changed
-                    };
-
-                    if should_emit {
-                        let _ = app.emit("dps-snapshot", snapshot);
+                        // A revision can move without anything shown moving --
+                        // a stranger's buff, a name heard again -- and then
+                        // there is nothing to send.
+                        let fingerprint = SnapshotFingerprint::of(&snapshot);
+                        if snapshot.total_damage > 0 && emitted.as_ref() != Some(&fingerprint) {
+                            emitted = Some(fingerprint);
+                            *last_emitted_total_damage.lock().unwrap() = Some(snapshot.total_damage);
+                            let _ = app.emit("dps-snapshot", snapshot);
+                        }
                     }
                 }
 
@@ -790,7 +845,13 @@ impl DpsMeter {
 
         thread::spawn(move || {
             let source = PathBuf::from(&path);
-            let outcome = replay_recording(&source, |packet| {
+            // Packets keep their recorded spacing but move to the present, so
+            // fight timing -- and the DPS it gives -- comes out as it was
+            // played, however fast the file is read.
+            let mut shift: Option<f64> = None;
+            let outcome = replay_recording(&source, |mut packet| {
+                let offset = *shift.get_or_insert_with(|| now_seconds() - packet.captured_at);
+                packet.captured_at += offset;
                 while channel.size() > REPLAY_BACKPRESSURE_LIMIT {
                     if !replaying.load(Ordering::SeqCst) {
                         return false;
@@ -905,6 +966,46 @@ fn auto_record_tick(
         Err(error) => {
             state.done = true;
             logger.info(format!("auto recording could not start: {error}"));
+        }
+    }
+}
+
+/// What a window would see change between two snapshots.
+#[derive(Debug, Clone, PartialEq)]
+struct SnapshotFingerprint {
+    total_damage: u64,
+    main_actor_id: Option<u32>,
+    main_actor_name: Option<String>,
+    target: Option<(u32, Option<u32>, Option<u32>, bool)>,
+    players: Vec<(u32, u64, usize, bool)>,
+}
+
+impl SnapshotFingerprint {
+    fn of(snapshot: &CombatSnapshot) -> Self {
+        Self {
+            total_damage: snapshot.total_damage,
+            main_actor_id: snapshot.combat_infos.main_actor_id,
+            main_actor_name: snapshot.combat_infos.main_actor_name.clone(),
+            target: snapshot.last_target_info.as_ref().map(|target| {
+                (
+                    target.id,
+                    target.current_hp,
+                    target.target_mob_code,
+                    target.target_name.is_some(),
+                )
+            }),
+            players: snapshot
+                .last_target_all_players_overview_stats
+                .iter()
+                .map(|player| {
+                    (
+                        player.actor_id,
+                        player.total_damage,
+                        player.actor_name.len(),
+                        player.actor_class.is_empty(),
+                    )
+                })
+                .collect(),
         }
     }
 }
