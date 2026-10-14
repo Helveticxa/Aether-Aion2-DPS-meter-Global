@@ -507,6 +507,44 @@ Also fixed on the way:
   codes. Boss ids and English names were refreshed from Kuroukihime's October
   2026 catalogue: 1,384 bosses, 9,035 names.
 
+### Your row, and everyone else's (3.1.0)
+
+`4A 36` carries the player's own entity id, and only theirs: 1,086 of 1,086
+such packets across seven recordings, Taiwan and global. It arrives within
+seconds of a zone loading or the meter starting, where `33 36` -- id and name --
+comes only on a loading screen. `DataStorage::observe_own_entity` adopts it and
+names it from the name already known, so a meter started mid-zone knows your
+row at once. Without any name yet, the row reads *You*.
+
+Names of other players come only from `45 36`, sent as they come into view.
+Someone already in view when the meter started stays unnamed until the next
+zone; the overlays call them by class and number (`lib/player-label.js`).
+
+Summons name their owner after `07 02 06` -- or `07 02 01`, which an
+Elementalist spirit on global used. Both are read now (Kuroukihime reads both
+too). An owner of 0 is refused: it used to put summon damage on a player "0".
+
+## On stream (OBS) (3.1.0)
+
+Three things kept the overlay out of OBS's Window Capture, each checked against
+the running app rather than assumed:
+
+- OBS lists only visible windows, and the overlay hides whenever something
+  other than the game is in front -- OBS included. Streaming apps now count as
+  part of the game session (`aion2_focus::STREAMING_PROCESS_NAMES`), and
+  `show_dps_overlay_for_capture` brings the overlay up for a minute so it can
+  be picked.
+- The overlay is a transparent window, which tao creates with
+  `WS_EX_NOREDIRECTIONBITMAP`. BitBlt, which OBS's *Automatic* method picks for
+  a "Tauri Window", sees nothing there. Windows Graphics Capture ("Windows 10
+  (1903 and up)") composes it like DWM does. Settings says so.
+- Not a problem, though it looked like one: Aether runs elevated and OBS does
+  not. A non-elevated test process created a Windows Graphics Capture item for
+  Aether's window and received frames, and resolved its executable the way OBS
+  does (`OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)`). OBS does not need to
+  run as administrator. `skip_taskbar` does not hide it either: tao implements
+  it with `ITaskbarList::DeleteTab`, not `WS_EX_TOOLWINDOW`, which OBS would skip.
+
 ### Cost
 
 Replayed in a release build, the pipeline reads 1-3.6 million packets a

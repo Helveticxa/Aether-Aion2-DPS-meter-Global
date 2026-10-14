@@ -762,7 +762,12 @@ mod tests {
                 elapsed.as_secs_f64() * 1000.0,
                 packets as f64 / elapsed.as_secs_f64().max(1e-9)
             );
-            println!("zone changes {}, identities {:?}", h.state.zone_changes, ids.lock().unwrap());
+            println!(
+                "zone changes {}, identities {:?}, own id at the end {:?}",
+                h.state.zone_changes,
+                ids.lock().unwrap(),
+                h.state.data_storage.main_actor_id()
+            );
             for (key, flow) in &h.state.flows {
                 if let Some(processor) = flow.processor.as_ref() {
                     println!("  game flow {} {:?}", connection_key(key), processor.stats());

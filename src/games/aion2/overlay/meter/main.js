@@ -12,6 +12,7 @@ import { t, setLanguage, getLanguage } from "../../i18n.js";
 import serversData from "../../data/servers.json";
 import dungeonsData from "../../data/dungeons.json";
 import { loadSkillNames, skillName } from "../../lib/skill-names.js";
+import { playerLabel, rowLabel } from "../../lib/player-label.js";
 
 // Which dungeon a boss belongs to, for the fight summary.
 const _dungeonByMob = new Map();
@@ -83,6 +84,7 @@ const DEFAULT_OVERLAY_CONFIG = {
 };
 
 let mainActorName = null;
+let mainActorId = null;
 let overlayConfig = { ...DEFAULT_OVERLAY_CONFIG };
 let lastSnapshot = null;
 
@@ -424,7 +426,7 @@ function buildBattleReport(snap) {
   const target = targetInfo?.targetName ? `${targetInfo.targetName} · ` : "";
   let report = `${target}Duration ${fmtTime(dur)} · Total damage ${fmtDmg(allDmg)} · Party DPS ${Math.round(teamDps).toLocaleString("en-US")}\n`;
   for (const p of players) {
-    report += `${p.actorName || "ID:" + p.actorId} · ${fmtDmg(p.totalDamage)} · ${Math.round(p.dps).toLocaleString("en-US")}/s\n`;
+    report += `${rowLabel(p, snap)} · ${fmtDmg(p.totalDamage)} · ${Math.round(p.dps).toLocaleString("en-US")}/s\n`;
   }
   report += `\nRecorded with Aether — github.com/Helveticxa/Aether-Aion2-DPS-meter-Global`;
   return report;
@@ -942,7 +944,12 @@ function updatePlayerRow(entry, p, maxDamage) {
 
   setShown(c.nameEl, cfg.showPlayerName !== false);
   if (cfg.showPlayerName !== false) {
-    setText(c, "_nameRaw", c.nameEl, maskName(p.actorName || `ID:${p.actorId}`));
+    setText(
+      c,
+      "_nameRaw",
+      c.nameEl,
+      maskName(playerLabel(p.actorId, p.actorName, p.actorClass, mainActorId))
+    );
   }
 
   const showServer = cfg.showServer === true && p.actorServerId != null;
@@ -1006,19 +1013,28 @@ function releaseRow(entry) {
   rowPool.push(entry);
 }
 
+// You, by name -- or by id, when the meter knows which row is yours before it
+// has heard your name.
+function isYou(player, mainName, mainId) {
+  return (
+    (mainName != null && player.actorName === mainName) ||
+    (mainId != null && Number(player.actorId) === Number(mainId))
+  );
+}
+
 // Your own row is never the one dropped: an overlay that hides you when you
 // are eleventh is answering the wrong question.
-function limitPlayers(players, mainName) {
+function limitPlayers(players, mainName, mainId) {
   if (!players || players.length <= MAX_ROWS) {
     return players;
   }
 
   const shown = players.slice(0, MAX_ROWS);
-  if (!mainName || shown.some((player) => player.actorName === mainName)) {
+  if ((mainName == null && mainId == null) || shown.some((p) => isYou(p, mainName, mainId))) {
     return shown;
   }
 
-  const main = players.find((player) => player.actorName === mainName);
+  const main = players.find((p) => isYou(p, mainName, mainId));
   if (main) {
     shown[shown.length - 1] = main;
   }
@@ -1027,8 +1043,10 @@ function limitPlayers(players, mainName) {
 
 function updatePlayerList(snap) {
   const mainName = snap.combatInfos?.mainActorName ?? null;
-  const players = limitPlayers(snap.lastTargetAllPlayersOverviewStats, mainName) || [];
+  const mainId = snap.combatInfos?.mainActorId ?? null;
+  const players = limitPlayers(snap.lastTargetAllPlayersOverviewStats, mainName, mainId) || [];
   mainActorName = mainName;
+  mainActorId = mainId;
 
   document.body.classList.toggle("has-players", players.length > 0);
 
@@ -1059,7 +1077,7 @@ function updatePlayerList(snap) {
       }
       updatePlayerRow(entry, p, maxDamage);
 
-      entry.row.classList.toggle("is-main", mainActorName != null && p.actorName === mainActorName);
+      entry.row.classList.toggle("is-main", isYou(p, mainActorName, mainActorId));
       entry.row.dataset.actorId = p.actorId;
 
       // Rows live in one fixed order in the DOM and are moved with a
@@ -1091,8 +1109,9 @@ function updatePlayerList(snap) {
 function findYou(snap) {
   const players = snap?.lastTargetAllPlayersOverviewStats || [];
   const mainName = snap?.combatInfos?.mainActorName ?? null;
+  const mainId = snap?.combatInfos?.mainActorId ?? null;
   const sorted = [...players].sort((a, b) => b.totalDamage - a.totalDamage);
-  const index = mainName ? sorted.findIndex((p) => p.actorName === mainName) : -1;
+  const index = sorted.findIndex((p) => isYou(p, mainName, mainId));
   return { sorted, you: index >= 0 ? sorted[index] : null, rank: index + 1, mainName };
 }
 
@@ -1164,6 +1183,7 @@ function updatePace(snap) {
     target?.isBoss &&
     target.targetMobCode != null &&
     you &&
+    mainName &&
     getTeamBattleDuration(target) >= PACE_MIN_FIGHT_SECS
   ) {
     void ensurePersonalBest(mainName, target.targetMobCode);
@@ -1327,7 +1347,7 @@ async function showSummary(snap, target, defeated) {
   const partyDps = sorted.reduce((sum, p) => sum + (Number(p.dps) || 0), 0);
   const [names, best] = await Promise.all([
     loadSkillNames(getLanguage()),
-    you && target.targetMobCode != null
+    you && mainName && target.targetMobCode != null
       ? ensurePersonalBest(mainName, target.targetMobCode)
       : Promise.resolve(null),
   ]);
@@ -1372,11 +1392,11 @@ async function showSummary(snap, target, defeated) {
     el(
       "span",
       "summary__rank",
-      you ? `#${rank} of ${sorted.length}` : `${maskName(lead.actorName || "Top")} · top`
+      you ? `#${rank} of ${sorted.length}` : `${maskName(rowLabel(lead, snap))} · top`
     )
   );
   let pbText = "";
-  if (you && overlayConfig?.showPersonalBest !== false) {
+  if (you && mainName && overlayConfig?.showPersonalBest !== false) {
     if (best == null) {
       pbText = "First record";
     } else if (pace > 0) {
@@ -1433,7 +1453,7 @@ async function showSummary(snap, target, defeated) {
     const lines = [
       `${name}${where ? ` (${where})` : ""} · ${defeated ? "defeated" : "fight ended"} in ${fmtDuration(duration)}`,
       [
-        `${lead.actorName || "?"} ${fmtDps(lead.dps)}/s`,
+        `${rowLabel(lead, snap)} ${fmtDps(lead.dps)}/s`,
         you ? `#${rank} of ${sorted.length}` : null,
         fmtShare(lead.damageContribution ?? lead.damageShare),
         skills.critRate != null ? `crit ${(skills.critRate * 100).toFixed(0)}%` : null,
@@ -1454,7 +1474,7 @@ async function showSummary(snap, target, defeated) {
       lines.push(
         "Party: " +
           sorted
-            .map((p, index) => `${index + 1}. ${p.actorName || "ID:" + p.actorId} ${fmtDps(p.dps)}`)
+            .map((p, index) => `${index + 1}. ${rowLabel(p, snap)} ${fmtDps(p.dps)}`)
             .join(" · ")
       );
     }

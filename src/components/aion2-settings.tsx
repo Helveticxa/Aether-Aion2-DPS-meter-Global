@@ -407,6 +407,42 @@ export function Aion2Settings() {
             </SettingRow>
           </SettingsGroup>
 
+          <SettingsGroup title="On stream (OBS)">
+            <SettingRow
+              title="Add the meter to OBS"
+              description="In OBS: Sources → + → Window Capture, then pick [Aether.exe]: Aether | DPS Overlay. OBS only lists windows that are on screen, so bring the meter up first. It stays up while OBS is in front."
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void invoke("show_dps_overlay_for_capture", { secs: 60 }).catch(() => {})
+                }
+              >
+                Show for 60 s
+              </Button>
+            </SettingRow>
+
+            <SettingRow
+              title="Capture method"
+              description="Set it to Windows 10 (1903 and up). Automatic picks BitBlt for Aether, which cannot see its see-through window and shows nothing or a black box. Untick Capture Cursor."
+            >
+              <span className="text-muted-foreground rounded-md border px-2 py-1 text-xs whitespace-nowrap">
+                Windows 10 (1903 and up)
+              </span>
+            </SettingRow>
+
+            <SettingRow
+              title="On stream between fights"
+              description="The meter steps aside between fights, and leaves the stream with it. To keep it on stream all the time, turn off Hide between fights."
+            >
+              <Switch
+                checked={!backend.hideWhenIdle}
+                onCheckedChange={(v) => updateSettings("aion2.backend.hideWhenIdle", !v)}
+              />
+            </SettingRow>
+          </SettingsGroup>
+
           <SettingsGroup title="Look">
             <SettingRow title={t("settings.aion2.overlayFontFamily")} description="">
               <select

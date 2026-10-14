@@ -9,6 +9,18 @@ lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
      and some players still update from there: so no hard wraps and no bold in
      2.0.0 and later. From 2.0.0 on the dialog renders Markdown. -->
 
+## [3.1.0]
+
+On stream with OBS, a name on every row, and credit where it is due.
+
+- The meter can be added to OBS. In OBS add a Window Capture, pick [Aether.exe]: Aether | DPS Overlay, and set Capture Method to Windows 10 (1903 and up). Settings, Aion 2, Overlay has a new On stream (OBS) section with the steps and a Show for 60 s button, because OBS only lists windows that are on screen.
+- The meter stays up while OBS, Streamlabs, XSplit, Twitch Studio or PRISM is in front, as it does for the game. Before, switching to OBS hid it, so OBS never saw it and it left the stream.
+- On stream between fights: one switch keeps the meter on screen, and on stream, all the time.
+- Your own row is known within seconds of starting the meter, even in the middle of a map or dungeon. Before, a meter started mid-zone showed your row as a bare ID until the next loading screen.
+- Rows the game has not named yet read You, or the class and number (Chanter 1450) instead of ID:1450.
+- Summons that carry their owner in a second format, an Elementalist spirit among them, count for their owner instead of showing as a separate player. A summon with no owner no longer shows as player 0.
+- Credits names Aether's maintainer, Helveticxa, with a link to the project on GitHub.
+
 ## [3.0.0]
 
 Made for the live global servers: the meter now reads every packet the game sends, shows up in every dungeon, and proves it against the boss's health.

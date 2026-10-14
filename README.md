@@ -42,6 +42,8 @@ buff uptime, and damage type.
   game's exclusive fullscreen blocks every overlay
 - **Live chat** — YouTube and Twitch chat over the game, transparent and
   outlined, one pop-up per chat or merged into one
+- **On stream** — add the meter to OBS as a Window Capture; it stays up while
+  OBS is in front
 - **Boss fights** — your pace against your personal best while you fight, and a
   summary when the boss dies: DPS, place, crits, top skills, how much of the
   fight was captured, one-click copy
@@ -76,6 +78,22 @@ the game. Aether is built so there is nothing to find:
 
 None of this is a promise about terms of service. Whether a publisher allows a
 third-party tool is its call.
+
+## Streaming with OBS
+
+The meter can go on stream on its own, as a window OBS captures.
+
+1. Settings → Aion 2 → Overlay → **On stream (OBS)** → **Show for 60 s**. OBS
+   lists only windows that are on screen, and between fights the meter is not.
+2. In OBS: Sources → + → **Window Capture**, and pick
+   `[Aether.exe]: Aether | DPS Overlay`.
+3. Set **Capture Method** to **Windows 10 (1903 and up)**. *Automatic* picks
+   BitBlt for Aether, which cannot see its see-through window.
+
+The meter stays up while OBS (or Streamlabs, XSplit, Twitch Studio, PRISM) is in
+front. It still steps aside between fights, and off the stream with it; turn on
+*On stream between fights* to keep it there. OBS does not need to run as
+administrator.
 
 ## Install
 

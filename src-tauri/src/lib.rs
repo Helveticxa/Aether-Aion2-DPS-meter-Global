@@ -124,6 +124,7 @@ pub fn run() {
             dps_meter::api::commands::enter_app,
             dps_meter::api::commands::install_npcap,
             plugins::aion2_overlay::create_dps_overlay,
+            plugins::aion2_overlay::show_dps_overlay_for_capture,
             plugins::aion2_overlay::destroy_dps_overlay,
             plugins::aion2_overlay::create_pvp_overlay,
             plugins::aion2_overlay::create_dps_history,

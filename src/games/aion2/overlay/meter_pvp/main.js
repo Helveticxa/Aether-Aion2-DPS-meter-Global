@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import serversData from "../../data/servers.json";
+import { playerLabel } from "../../lib/player-label.js";
 
 const DEFAULT_OVERLAY_CONFIG = {
   background: [0, 0, 0, 102],
@@ -448,7 +449,7 @@ function createPlayerRow(player, maxDamage, fullBar = false) {
   nameWrap.className = "player-row__name-wrap";
   const name = document.createElement("span");
   name.className = "player-row__name";
-  name.textContent = maskName(player.actorName || `ID:${player.actorId}`);
+  name.textContent = maskName(playerLabel(player.actorId, player.actorName, player.actorClass, null));
   name.style.display = overlayConfig.showPlayerName === false ? "none" : "";
 
   const server = document.createElement("span");

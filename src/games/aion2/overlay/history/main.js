@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getNpcName } from "@/games/aion2/lib/npc-names";
 import { t, setLanguage } from "../../i18n.js";
+import { rowLabel } from "../../lib/player-label.js";
 
 // ── DOM ──
 const $list = document.getElementById("record-list");
@@ -269,7 +270,7 @@ function toggleExpand(id) {
   let html = `<div class="detail-player-list">`;
   for (const p of players) {
     const icon = getClassIcon(p.actorClass);
-    const name = p.actorName || `ID:${p.actorId}`;
+    const name = rowLabel(p, record);
     html += `
       <div class="detail-player-row" data-actor-id="${p.actorId}">
         ${icon ? `<img class="detail-player-row__icon" src="${icon}" alt="" onerror="this.style.display='none'"/>` : ""}

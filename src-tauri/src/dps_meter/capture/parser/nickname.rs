@@ -37,6 +37,25 @@ pub(crate) fn parse_main_combat_power(
     true
 }
 
+/// `4A 36 <actor_id> ...`: something about the player running Aether, and
+/// only ever them -- 1,086 of 1,086 such packets across seven recorded
+/// sessions, Taiwan and global, carried the player's own id and no other.
+/// It arrives within seconds of entering a zone or starting the meter, where
+/// the full player-info packet (`33 36`) is only sent on entering a zone. So a
+/// meter started in the middle of a zone knows your row at once instead of
+/// showing it nameless until the next loading screen.
+pub(crate) fn parse_own_entity(context: &ParserContext<'_>, payload: &[u8]) -> bool {
+    let actor_id_info = read_varint(payload, 2);
+    if !actor_id_info.is_valid() || actor_id_info.value <= 0 {
+        return false;
+    }
+    let actor_id = actor_id_info.value as u32;
+    if context.data_storage.observe_own_entity(actor_id) {
+        context.logger.info(format!("[{}] own entity actor={actor_id}", context.port));
+    }
+    true
+}
+
 // 33 36 <actor_id> <five metadata bytes> <name_len> <name> <sid>
 fn parse_main_fixed(context: &ParserContext<'_>, payload: &[u8]) -> bool {
     let actor_id_info = read_varint(payload, 2);

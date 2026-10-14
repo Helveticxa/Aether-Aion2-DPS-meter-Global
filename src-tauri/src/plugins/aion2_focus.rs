@@ -7,6 +7,27 @@ use tauri::{
 };
 
 const AION2_PROCESS_NAME: &str = "Aion2.exe";
+
+/// Streaming apps. While one is in front the meter stays up, as it does for
+/// the game: a streamer adding the overlay to OBS needs it on screen, because
+/// OBS lists only windows that are, and switching to OBS mid-stream should
+/// not take the meter off the broadcast.
+const STREAMING_PROCESS_NAMES: &[&str] = &[
+    "obs64.exe",
+    "obs32.exe",
+    "obs.exe",
+    "Streamlabs OBS.exe",
+    "Streamlabs Desktop.exe",
+    "XSplit.Core.exe",
+    "TwitchStudio.exe",
+    "PRISMLiveStudio.exe",
+];
+
+fn is_streaming_app(process_name: &str) -> bool {
+    STREAMING_PROCESS_NAMES
+        .iter()
+        .any(|name| name.eq_ignore_ascii_case(process_name))
+}
 const DPS_OVERLAY_LABEL: &str = "dps-overlay";
 const PVP_OVERLAY_LABEL: &str = "dps-overlay-pvp";
 const FOLLOW_FOCUS_WINDOW_LABELS: [&str; 2] = [DPS_OVERLAY_LABEL, PVP_OVERLAY_LABEL];
@@ -203,19 +224,20 @@ mod windows_impl {
     };
 
     use super::{
-        sync_windows, Aion2FocusChangedPayload, Aion2FocusState, AION2_PROCESS_NAME,
-        PVP_OVERLAY_LABEL,
+        is_streaming_app, sync_windows, Aion2FocusChangedPayload, Aion2FocusState,
+        AION2_PROCESS_NAME, PVP_OVERLAY_LABEL,
     };
 
     static FOREGROUND_SENDER: OnceLock<Mutex<Option<Sender<isize>>>> = OnceLock::new();
 
     /// Whether `hwnd_raw` belongs to the game session: the game itself, one of
-    /// our windows, or a browser window pinned over the game.
+    /// our windows, a browser window pinned over the game, or the streaming
+    /// app broadcasting it.
     fn is_game_session(hwnd_raw: isize) -> (bool, Option<String>) {
         let process_name = process_name_for_hwnd(hwnd_raw);
         let aion2_focused = process_name
             .as_deref()
-            .map(|name| name.eq_ignore_ascii_case(AION2_PROCESS_NAME))
+            .map(|name| name.eq_ignore_ascii_case(AION2_PROCESS_NAME) || is_streaming_app(name))
             .unwrap_or(false);
         // Any window of ours counts (settings, detail and log are opened from
         // the overlay mid-game), and so does a browser window pinned over the
@@ -425,6 +447,14 @@ mod tests {
         let s = state(false, false, false, false);
         assert_eq!(s.wanted_visibility(DPS_OVERLAY_LABEL, false), Some(true));
         assert_eq!(s.wanted_visibility(PVP_OVERLAY_LABEL, false), None);
+    }
+
+    #[test]
+    fn streaming_apps_count_as_the_game() {
+        assert!(is_streaming_app("obs64.exe"));
+        assert!(is_streaming_app("OBS64.EXE"));
+        assert!(is_streaming_app("Streamlabs Desktop.exe"));
+        assert!(!is_streaming_app("chrome.exe"));
     }
 
     #[test]

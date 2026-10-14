@@ -31,7 +31,8 @@ impl StreamProcessor {
         pos += 4;
 
         let owner_info = read_varint(packet, pos);
-        if !owner_info.is_valid() || owner_info.value == summon_info.value {
+        // Owner 0 is no one: taking it put a summon's damage on a player "0".
+        if !owner_info.is_valid() || owner_info.value <= 0 || owner_info.value == summon_info.value {
             return false;
         }
 
@@ -280,7 +281,11 @@ impl StreamProcessor {
             return None;
         }
 
-        let opcode_absolute_idx = find_bytes(packet, after_packet_start, &[0x07, 0x02, 0x06])?;
+        // The owner follows 07 02 06 -- or 07 02 01, which some summons carry
+        // instead (an Elementalist spirit on global, for one) and which used to
+        // leave the summon's damage as a nameless player of its own.
+        let opcode_absolute_idx = find_bytes(packet, after_packet_start, &[0x07, 0x02, 0x06])
+            .or_else(|| find_bytes(packet, after_packet_start, &[0x07, 0x02, 0x01]))?;
         // Kotlin slices after keyIdx + 8 and then uses the slice index + 11.
         // In the original packet this is equivalent to the opcode offset + 3.
         let owner_offset = opcode_absolute_idx + 3;

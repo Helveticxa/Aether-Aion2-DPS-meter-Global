@@ -655,6 +655,9 @@ impl DataStorage {
     }
 
     pub fn append_summon(&self, owner_id: u32, summon_id: u32) {
+        if owner_id == 0 || owner_id == summon_id {
+            return;
+        }
         let mut inner = self.inner.write().unwrap();
         if inner.actor_id_name_map.contains_key(&summon_id) {
             return;
@@ -746,6 +749,40 @@ impl DataStorage {
                 sid,
             });
         }
+    }
+
+    /// The game named an entity as the player running Aether (`4A 36`).
+    /// Adopts it as your id and gives it your name, when that is known from an
+    /// earlier player-info packet. Returns whether anything changed.
+    pub fn observe_own_entity(&self, actor_id: u32) -> bool {
+        let named = {
+            let mut inner = self.inner.write().unwrap();
+            if inner.main_actor_id == Some(actor_id) {
+                return false;
+            }
+            inner.main_actor_id = Some(actor_id);
+            // A summon of yours under that id would otherwise fold you into
+            // someone else.
+            inner.summon_owner_map.map.remove(&actor_id);
+            match inner.main_actor_name.clone() {
+                Some(name) => {
+                    inner.actor_id_name_map.insert(actor_id, name.clone());
+                    Some(name)
+                }
+                None => None,
+            }
+        };
+        self.touch();
+        if let Some(actor_name) = named {
+            if let Some(listener) = self.main_actor_listener.lock().unwrap().as_ref() {
+                listener(&MainActorDetectedPayload {
+                    actor_id,
+                    actor_name,
+                    sid: None,
+                });
+            }
+        }
+        true
     }
 
     pub fn get_dps_stats_snapshot(&self) -> HashMap<u32, HashMap<u32, HashMap<u32, SkillStats>>> {
@@ -1281,6 +1318,22 @@ mod meter_rule_tests {
         storage.append_damage_at(hit(ME, BOSS, 100), 1_030.0);
         assert_eq!(storage.start_time(), Some(1_000.0));
         assert_eq!(storage.activity_at(), Some(1_030.0));
+    }
+
+    #[test]
+    fn your_own_entity_is_known_before_the_player_info_arrives() {
+        let storage = storage(false);
+        // A meter started mid-zone: no player-info yet, so no id and no name.
+        assert!(storage.observe_own_entity(3032));
+        assert_eq!(storage.main_actor_id(), Some(3032));
+        assert!(!storage.observe_own_entity(3032), "seen again: nothing changes");
+
+        // After a zone change your name is already known, and your new id gets it.
+        storage.set_main_actor(3032, "Rin");
+        storage.begin_zone();
+        assert!(storage.observe_own_entity(802));
+        assert_eq!(storage.main_actor_id(), Some(802));
+        assert_eq!(storage.actor_name(802).as_deref(), Some("Rin"));
     }
 
     #[test]

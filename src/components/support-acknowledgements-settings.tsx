@@ -15,6 +15,19 @@ type CreditItem = {
   badge: string;
 };
 
+/** Who makes Aether: the global fork, and everything it has become since. */
+const MAINTAINER: CreditItem = {
+  name: "Helveticxa",
+  description:
+    "Builds and maintains Aether: the global-server support, the accuracy work, the meter between fights, boss summaries, Always on top, and live chat.",
+  href: "https://github.com/Helveticxa",
+  avatarSrc: "https://avatars.githubusercontent.com/u/279670027?s=80&v=4",
+  avatarFallback: "HX",
+  badge: "Maintainer",
+};
+
+const REPOSITORY_URL = "https://github.com/Helveticxa/Aether-Aion2-DPS-meter-Global";
+
 /**
  * Aether is a fork, and this page says so plainly.
  *
@@ -64,8 +77,9 @@ const ARTWORK_CREDITS: CreditItem[] = [
   {
     name: "Kuroukihime/AIon2-Dps-Meter",
     description:
-      "The English names of monsters, bosses, and the Fighter's skills, and the server codes. GPL-3.0, like Aether.",
+      "The English names of monsters and bosses, the boss and training-dummy lists, the Fighter's skills, and the server codes; its work on the global client's ping showed the way. GPL-3.0, like Aether.",
     href: "https://github.com/Kuroukihime/AIon2-Dps-Meter",
+    avatarSrc: "https://avatars.githubusercontent.com/u/71021105?s=80&v=4",
     avatarFallback: "KU",
     badge: "Game data",
   },
@@ -115,6 +129,19 @@ export function SupportAcknowledgementsSettings() {
         title="Credits"
         description="Aether stands on other people's work. This page records whose."
       />
+
+      <SettingsGroup title="Made by">
+        <CreditRow item={MAINTAINER} />
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-5">
+          <span className="text-muted-foreground text-xs leading-5">
+            Source, releases, and bug reports live on GitHub. A star helps other players find it.
+          </span>
+          <Button variant="outline" size="sm" onClick={() => openExternalLink(REPOSITORY_URL)}>
+            <ExternalLink data-icon="inline-start" />
+            Aether on GitHub
+          </Button>
+        </div>
+      </SettingsGroup>
 
       <SettingsGroup title="Built on">
         <CreditRow item={UPSTREAM} />

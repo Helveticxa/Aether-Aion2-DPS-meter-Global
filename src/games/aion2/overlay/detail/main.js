@@ -2,6 +2,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { t, setLanguage } from "../../i18n.js";
+import { playerLabel } from "../../lib/player-label.js";
 import skillsEn from "@/i18n/locales/aion2skills/en.json";
 import skillsKo from "@/i18n/locales/aion2skills/ko.json";
 import serversData from "@/games/aion2/data/servers.json";
@@ -248,7 +249,7 @@ function render() {
   }
 
   // Gather data
-  let playerNameText = `ID:${selectedActorId}`,
+  let playerNameText = `Player ${selectedActorId}`,
     playerClass = "",
     playerServer = "",
     playerPower = "",
@@ -269,7 +270,12 @@ function render() {
 
   // ── Actor info ──
   actorInfo = dataSource.combatInfos?.actorInfos?.[selectedActorId] || null;
-  playerNameText = actorInfo?.actorName || playerNameText;
+  playerNameText = playerLabel(
+    selectedActorId,
+    actorInfo?.actorName,
+    actorInfo?.actorClass,
+    dataSource.combatInfos?.mainActorId
+  );
   playerClass = actorInfo?.actorClass || "";
   playerServer = getServerName(actorInfo?.actorServerId);
   playerPower = fmtPower(actorInfo?.combatPower);

@@ -42,6 +42,7 @@ const KNOWN_PACKET_HEADERS: &[(u8, u8)] = &[
     (0x33, 0x36),
     (0x45, 0x36),
     (0x56, 0x36),
+    (0x4A, 0x36), // the player's own entity
     (0x41, 0x36),
     (0x04, 0x38),
     (0x05, 0x38),
@@ -382,6 +383,7 @@ impl StreamProcessor {
             (0x56, 0x36) => {
                 nickname::parse_main_combat_power(&self.parser_context(), payload, is_compressed_bundle)
             }
+            (0x4A, 0x36) => nickname::parse_own_entity(&self.parser_context(), payload),
             (0x41, 0x36) => self.parse_summon_packet(payload, is_compressed_bundle),
             (0x04, 0x38) => self.parse_damage_packet(payload, is_compressed_bundle),
             (0x05, 0x38) => self.parse_dot_packet(payload, is_compressed_bundle),
