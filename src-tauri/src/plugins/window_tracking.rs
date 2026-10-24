@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use serde::Deserialize;
 use tauri::{
     plugin::{Builder, TauriPlugin},
-    AppHandle, Manager, PhysicalPosition, Runtime, WebviewUrl, WebviewWindow,
+    AppHandle, Manager, Runtime, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder, WindowEvent,
 };
 
@@ -56,54 +56,24 @@ fn is_pair_tracked<R: Runtime>(app: &AppHandle<R>, key: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn position_child_next_to_parent<R: Runtime>(
-    parent_window: &WebviewWindow<R>,
-    child_window: &WebviewWindow<R>,
-    gap: f64,
-) -> Result<(), String> {
-    let parent_position = parent_window.outer_position().map_err(|e| e.to_string())?;
-    let parent_size = parent_window.outer_size().map_err(|e| e.to_string())?;
-
-    child_window
-        .set_position(PhysicalPosition::new(
-            parent_position.x + parent_size.width as i32 + gap as i32,
-            parent_position.y,
-        ))
-        .map_err(|e| e.to_string())
-}
-
-fn position_child_bottom_to_parent<R: Runtime>(
-    parent_window: &WebviewWindow<R>,
-    child_window: &WebviewWindow<R>,
-    gap: f64,
-) -> Result<(), String> {
-    let parent_position = parent_window.outer_position().map_err(|e| e.to_string())?;
-    let parent_size = parent_window.outer_size().map_err(|e| e.to_string())?;
-
-    let gap = gap as i32;
-
-    child_window
-        .set_position(PhysicalPosition::new(
-            parent_position.x,
-            parent_position.y + gap + parent_size.height as i32 as i32,
-        ))
-        .map_err(|e| e.to_string())
-}
-
+/// Beside the parent, kept on its monitor: see `placement`.
 fn position_child_by_position<R: Runtime>(
     parent_window: &WebviewWindow<R>,
     child_window: &WebviewWindow<R>,
     gap: f64,
     position: &TrackedWindowPosition,
 ) -> Result<(), String> {
-    match position {
-        TrackedWindowPosition::Right => {
-            position_child_next_to_parent(parent_window, child_window, gap)
-        }
-        TrackedWindowPosition::Bottom => {
-            position_child_bottom_to_parent(parent_window, child_window, gap)
-        }
-    }
+    let side = match position {
+        TrackedWindowPosition::Right => super::placement::Side::Right,
+        TrackedWindowPosition::Bottom => super::placement::Side::Below,
+    };
+    super::placement::place_panel(
+        child_window,
+        std::slice::from_ref(parent_window),
+        side,
+        gap as i32,
+        false,
+    )
 }
 
 fn schedule_position_sync<R: Runtime>(
@@ -228,7 +198,7 @@ pub fn ensure_tracked_window<R: Runtime>(
             let _ = existing_window.set_focus();
         }
 
-        position_child_by_position(&parent_window, &existing_window, gap, &position)?;
+        let _ = position_child_by_position(&parent_window, &existing_window, gap, &position);
 
         register_tracking_if_needed(
             &app,
@@ -269,13 +239,14 @@ pub fn ensure_tracked_window<R: Runtime>(
     .build()
     .map_err(|e| e.to_string())?;
 
+    // Placed before it shows, so it does not appear somewhere else first; a
+    // window it cannot be placed beside must not keep it from showing.
+    let _ = position_child_by_position(&parent_window, &child_window, gap, &position);
     child_window.show().map_err(|e| e.to_string())?;
     child_window.unminimize().map_err(|e| e.to_string())?;
     if focus {
         child_window.set_focus().map_err(|e| e.to_string())?;
     }
-
-    position_child_by_position(&parent_window, &child_window, gap, &position)?;
 
     register_tracking_if_needed(
         &app,

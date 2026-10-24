@@ -40,6 +40,41 @@ impl DpsCalculator {
     }
 }
 
+/// The snapshot as the windows receive it, ten times a second.
+///
+/// The meter, the detail window and the PvP window only ever look at the
+/// current target (yours, or the last one hit) and at you; everything else
+/// was serialised, sent and parsed for nothing. In a grinding session that
+/// is every mob since the last reset -- up to 512 targets of per-skill
+/// numbers per update, growing all session. History still saves the whole
+/// snapshot: it is built separately.
+pub fn for_windows(mut snapshot: CombatSnapshot) -> CombatSnapshot {
+    let focus: HashSet<u32> = [
+        snapshot.combat_infos.last_target,
+        snapshot.combat_infos.last_target_by_main_actor,
+        snapshot.last_target_info.as_ref().map(|target| target.id),
+        snapshot.combat_infos.main_actor_id,
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    snapshot
+        .by_target_player_skill_stats
+        .retain(|target, _| focus.contains(target));
+    snapshot
+        .by_target_player_stats
+        .retain(|target, _| focus.contains(target));
+    snapshot
+        .combat_infos
+        .target_infos
+        .retain(|target, _| focus.contains(target));
+    let actors = &snapshot.combat_infos.actor_infos;
+    snapshot
+        .use_buffs_by_target
+        .retain(|target, _| focus.contains(target) || actors.contains_key(target));
+    snapshot
+}
+
 // =============================================================================
 // Main snapshot builder
 // =============================================================================
@@ -740,4 +775,55 @@ fn current_timestamp_millis() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis() as u64)
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_windows_get_the_current_target_and_you_not_every_mob_since_reset() {
+        let skills = |damage| HashMap::from([(1u32, HashMap::from([(11_000_000u32, {
+            let mut stats = SkillStats::new();
+            stats.total_damage = damage;
+            stats
+        })]))]);
+        let mut snapshot = CombatSnapshot {
+            total_damage: 600,
+            by_target_player_skill_stats: (100..300).map(|target| (target, skills(3))).collect(),
+            by_target_player_stats: HashMap::new(),
+            use_buffs_by_target: HashMap::from([(1, Vec::new()), (150, Vec::new()), (299, Vec::new())]),
+            combat_infos: CombatInfos {
+                actor_infos: HashMap::from([(1, ActorInfo {
+                    id: 1,
+                    actor_name: Some("Rin".into()),
+                    actor_server_id: None,
+                    actor_class: None,
+                    combat_power: None,
+                    actor_skill_spec: HashMap::new(),
+                })]),
+                target_infos: HashMap::new(),
+                main_actor_id: Some(1),
+                main_actor_name: Some("Rin".into()),
+                last_target_by_main_actor: Some(299),
+                last_target: Some(298),
+                time_now: 0.0,
+            },
+            last_target_info: None,
+            last_target_all_players_overview_stats: Vec::new(),
+            main_actor_received_player_overview_stats: Vec::new(),
+            main_actor_dealt_player_overview_stats: Vec::new(),
+        };
+        snapshot.by_target_player_skill_stats.insert(1, skills(9));
+
+        let sent = for_windows(snapshot);
+        let mut kept: Vec<_> = sent.by_target_player_skill_stats.keys().copied().collect();
+        kept.sort_unstable();
+        assert_eq!(kept, vec![1, 298, 299]);
+        // Your own buffs stay, a mob nobody is looking at loses its.
+        assert!(sent.use_buffs_by_target.contains_key(&1));
+        assert!(sent.use_buffs_by_target.contains_key(&299));
+        assert!(!sent.use_buffs_by_target.contains_key(&150));
+        assert_eq!(sent.total_damage, 600);
+    }
 }

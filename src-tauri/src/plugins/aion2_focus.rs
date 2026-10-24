@@ -126,7 +126,11 @@ fn apply_visibility<R: Runtime>(window: &tauri::WebviewWindow<R>, show: bool) {
         return;
     }
     if show {
-        let _ = window.set_focusable(false);
+        // Never activatable -- unless OBS on this PC can only capture the
+        // DPS overlay that way (`capture_check`).
+        let focusable =
+            window.label() == DPS_OVERLAY_LABEL && super::capture_check::overlay_focusable();
+        let _ = window.set_focusable(focusable);
         let _ = window.show();
     } else {
         let _ = window.hide();
@@ -406,6 +410,17 @@ mod windows_impl {
                 }
                 state.game_focused.store(focused, Ordering::Relaxed);
                 sync_windows(&app_for_poller, &state, focused);
+
+                // On stream, make sure OBS can capture the overlay here.
+                let overlay_visible = app_for_poller
+                    .get_webview_window(super::DPS_OVERLAY_LABEL)
+                    .and_then(|window| window.is_visible().ok())
+                    .unwrap_or(false);
+                crate::plugins::capture_check::on_stream_tick(
+                    &app_for_poller,
+                    state.stream_mode(),
+                    overlay_visible,
+                );
             }
         });
     }

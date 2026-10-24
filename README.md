@@ -101,6 +101,13 @@ itself, not the Aether app.
 The show/hide shortcut still hides the meter. OBS does not need to run as
 administrator.
 
+While stream mode is on, Aether asks Windows whether OBS can capture the meter
+on this PC — the same question OBS asks — and if Windows 10 says no, adjusts
+the meter until it can (a taskbar button first). **Capture check** under
+On stream (OBS) shows the result. If it reads that Windows will not allow it,
+use a **Display Capture** of the game's screen with a **Crop/Pad** filter around
+the meter.
+
 ## Kina calculator
 
 The third icon in the sidebar. Add your characters with their item level,

@@ -70,11 +70,21 @@ where
     }
 
     fn insert(&mut self, key: K, value: V) -> Option<V> {
-        self.order.retain(|existing| existing != &key);
-        self.order.push_back(key.clone());
+        self.touch_order(&key);
         let previous = self.map.insert(key, value);
         self.evict_oldest();
         previous
+    }
+
+    /// Make `key` the most recent. Hits come in runs on the same target and
+    /// from the same actor, so it usually already is, and the scan of the
+    /// whole order -- up to thousands of entries, once per hit -- is skipped.
+    fn touch_order(&mut self, key: &K) {
+        if self.order.back() == Some(key) {
+            return;
+        }
+        self.order.retain(|existing| existing != key);
+        self.order.push_back(key.clone());
     }
 
     fn get(&self, key: &K) -> Option<&V> {
@@ -86,8 +96,7 @@ where
         F: FnOnce() -> V,
     {
         if self.map.contains_key(&key) {
-            self.order.retain(|existing| existing != &key);
-            self.order.push_back(key.clone());
+            self.touch_order(&key);
         } else {
             self.order.push_back(key.clone());
             self.map.insert(key.clone(), default());
@@ -162,6 +171,14 @@ struct DataStorageInner {
     pvp_last_attacker_by_target: HashMap<u32, PvpPlayerKey>,
     pvp_combat_stats: HashMap<PvpPlayerKey, PvpCombatStats>,
     pvp_dead_players: HashSet<PvpPlayerKey>,
+}
+
+/// The settings that decide whether a hit is counted.
+struct HitFilters {
+    boss_only: bool,
+    show_possible_boss: bool,
+    my_muzhuang_only: bool,
+    pvp_mode_on: bool,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -380,7 +397,16 @@ impl DataStorage {
     }
 
     pub fn append_damage_at(&self, packet: ParsedDamagePacket, timestamp: f64) {
-        let config = self.config.read().unwrap().clone();
+        // The four switches read here, not a copy of the whole config per hit.
+        let config = {
+            let config = self.config.read().unwrap();
+            HitFilters {
+                boss_only: config.boss_only,
+                show_possible_boss: config.show_possible_boss,
+                my_muzhuang_only: config.my_muzhuang_only,
+                pvp_mode_on: config.pvp_mode_on,
+            }
+        };
         let mut inner = self.inner.write().unwrap();
 
         if self.healing_skill_codes.contains(&packet.skill_code) {

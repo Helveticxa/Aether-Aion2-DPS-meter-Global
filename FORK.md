@@ -599,6 +599,113 @@ something a window shows changed. The log lost about 95% of its lines: every
 player in view, every summon, every stall, and the config being re-applied
 each time a window opened.
 
+## Windows 10 and 11 audit (3.3.0)
+
+Started from a report that clicking a player in History showed nothing on
+Windows 10, and widened to every path between a captured packet and a window.
+Each finding below was measured on real recordings or real windows first.
+
+### Recognising the game's connection
+
+A flow became the game's after two `0E 00 36` within three seconds. Those are
+only the heartbeat's length and opcode. A recording from the user's PC (Oct 23)
+held a local stream of PCM audio at 4 MB/s whose samples contained them up to
+sixteen times per connection: replayed, four connections were taken for the
+game -- four zone changes in two minutes, each closing the fight (History split
+it) and forgetting every id. The other eight bytes of the 11-byte frame are the
+server's clock, milliseconds since the epoch as u64 LE (Taiwan in September and
+global in October alike, 50 ms apart). `processor::is_heartbeat` checks that it
+falls between 2020 and 2100, independent of this PC's clock: on the seven
+recordings it keeps every heartbeat a segment holds whole and rejects every
+false one. The same check drives resync, device detection (Npcap) and the
+WinDivert log line.
+
+When a connection is confirmed as the game's, every other game connection is
+retired (`FlowRole::Ignored`, processor dropped). The game's connections never
+overlap in the recordings -- each zone's ends about two seconds before the next
+starts -- and anything still arriving on an old one refers to ids that no
+longer exist; two parsed side by side would have counted shared hits twice.
+
+### Gaps the capture left
+
+A segment the capture missed is never resent: the game received it. The
+reassembler held everything after such a gap until 2 MB had piled up, which at
+the game's 1-3 KB/s is the rest of the zone. It now skips the gap after two
+seconds of capture time (`tcp_reassembler::GAP_TIMEOUT_SECS`), long enough for
+TCP to resend what the network lost. The parser resyncs on the next heartbeat.
+
+### Capture backends
+
+- Npcap: a BPF filter for IPv4 TCP with payload (no UDP, no bare ACKs), a
+  16 MB driver buffer (`pcap_setbuff`), and no promiscuous mode, which some
+  Wi-Fi drivers refuse outright. All three are optional: an adapter that will
+  not take them is captured as before. The every-20-seconds scan that opened
+  every adapter for a second is skipped while the current one carries the game,
+  and a capture thread that died on a read error (an adapter reset after sleep)
+  is restarted instead of being taken for alive.
+- WinDivert forwarded only connections that had already shown a heartbeat, so
+  the packets a zone sends before its first one -- the player-info packets --
+  never reached the dispatcher. It forwards every TCP segment with payload now,
+  like Npcap, and the dispatcher's probing keeps a new connection from its
+  first byte. The driver filter drops bare ACKs.
+- Recordings skip connections the dispatcher has set aside.
+
+### Windows that open off screen
+
+The detail window (1080 x 960) opened 8 px right of the overlay, history 8 px
+below, the overlay's Settings 8 px right -- whatever the screen. With the
+overlay at the right edge, or on a 1366 x 768 laptop, or at 125% on 1080p, the
+window opened partly or wholly off screen: the reported Windows 10 symptom. And
+`create_dps_detail` placed the window before showing it, so a placement error
+returned before `show()` and left it invisible. `plugins::placement` now puts a
+panel on the side of its anchor that has room, on the anchor's monitor, shrunk
+to the work area; the detail window's anchor is the overlay and history taken
+together. Placement never prevents a window from showing, and a reopened panel
+is raised to the top of the topmost band without activation. The overlay's
+move handlers are registered once per overlay window; they were added again
+every time a panel opened.
+
+### History
+
+- `get_history` returned every record whole: 15.7 MB of JSON for 324 fights
+  (per-skill numbers 5.7 MB, buffs 8.0 MB), sent to the History window on every
+  open and after every fight, and serialised on the main thread, freezing every
+  window meanwhile. It returns `HistorySummary` (target, players, totals), a
+  fifteenth of that; `get_history_record` returns one whole record, and the
+  detail window fetches it by id. All history commands are async.
+- The file was rewritten in place, so a crash mid-write left a file that failed
+  its checksum, the next fight saved over it, and every earlier record was
+  gone. Writes go to a temporary file renamed over the old one
+  (`history::write_atomically`, also used for personal bests), and a file that
+  cannot be read is renamed `*.unreadable-<ms>` instead of being overwritten.
+- The detail window relabelled every fight from History "LIVE": `init()` set
+  the badge after drawing the selection.
+
+### What the windows are sent
+
+`calculator::for_windows` trims the snapshot the windows get ten times a second
+to the targets they can show -- your current target, the last one hit, and you
+-- plus everyone's buffs. On the recordings: 134 KB to 32 KB and 83 KB to 13 KB,
+and it no longer grows with every mob since the last reset. History is saved
+from the full snapshot. The detail window redraws at most four times a second,
+on a timer (requestAnimationFrame stops altogether while a window is covered),
+and keeps its scroll positions.
+
+### OBS on Windows 10
+
+The open report: on a streamer's Windows 10 22H2, OBS found the overlay but
+`CreateForWindow` failed with `0x80070057`. Measured on Windows 11 with a probe
+window styled like the overlay: WGC accepts it while it is shown and refuses it
+with exactly that code while it is hidden -- so the error means "not capturable
+now", and Windows 10's rules for that are stricter. `plugins::capture_check`
+asks WGC the same question from inside Aether whenever stream mode comes on
+with the overlay up. If the answer is no, it gives the overlay a taskbar button
+and asks again, then lets it be activated and asks again, and keeps the first
+change that works; if none does, it puts the overlay back and says so. When
+stream mode ends the overlay goes back to normal. The result is in Settings →
+Aion 2 → Overlay → On stream (OBS) → Capture check. Not yet confirmed on a
+Windows 10 machine.
+
 ## Kina calculator (3.2.0)
 
 A third page, `/aion2/kina`, with no backend: `lib/kina.ts` is pure

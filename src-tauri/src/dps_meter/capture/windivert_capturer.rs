@@ -18,8 +18,9 @@ use crate::dps_meter::capture::capturer::CapturedPacket;
 use crate::dps_meter::capture::channel::Channel;
 use crate::plugins::logger::AppLogger;
 
-const MAGIC_PATTERN: [u8; 3] = [0x0e, 0x00, 0x36];
-const FILTER: &str = "tcp and ip";
+/// IPv4 TCP segments that carry data; the bare ACKs, about half of all TCP,
+/// stay in the driver.
+const FILTER: &str = "tcp and ip and tcp.PayloadLength > 0";
 const IPV4_MIN_HEADER_LEN: usize = 20;
 const TCP_MIN_HEADER_LEN: usize = 20;
 const CANDIDATE_STALE_AFTER: Duration = Duration::from_secs(30);
@@ -159,9 +160,13 @@ impl WinDivertCapturer {
                     candidates.observe_magic(connection, now);
                 }
 
-                if candidates.contains(&connection) {
-                    let _ = channel.try_send(packet);
-                }
+                // Every connection goes on, as with Npcap: the dispatcher
+                // works out which one is the game's, and keeps a new one from
+                // its first byte. Passing on only connections that had
+                // already shown a heartbeat dropped what a zone sends before
+                // its first one -- the player-info packets that name you and
+                // your party in a dungeon.
+                let _ = channel.try_send(packet);
             }
 
             logger.info("WinDivert capture stopped");
@@ -359,10 +364,9 @@ fn normalized_connection(src_port: u16, dst_port: u16) -> (u16, u16) {
     }
 }
 
+/// A whole heartbeat, for the log line that names the game's connection.
 fn contains_magic(payload: &[u8]) -> bool {
-    payload
-        .windows(MAGIC_PATTERN.len())
-        .any(|window| window == MAGIC_PATTERN)
+    crate::dps_meter::capture::processor::count_heartbeats(payload) > 0
 }
 
 fn current_timestamp_seconds() -> f64 {

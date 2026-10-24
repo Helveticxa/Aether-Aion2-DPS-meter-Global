@@ -27,7 +27,7 @@ pub async fn create_dps_overlay<R: Runtime>(app: AppHandle<R>) -> Result<(), Str
     if let Some(window) = app.get_webview_window(DPS_OVERLAY_LABEL) {
         DPS_OVERLAY_ACTIVE.store(true, Ordering::Relaxed);
         app.state::<DpsMeter>().peek_overlay(START_PEEK_SECS);
-        let _ = window.set_focusable(false);
+        let _ = window.set_focusable(super::capture_check::overlay_focusable());
         window.show().map_err(|e| e.to_string())?;
         return Ok(());
     }
@@ -61,6 +61,7 @@ pub async fn create_dps_overlay<R: Runtime>(app: AppHandle<R>) -> Result<(), Str
     .build()
     .map_err(|e| e.to_string())?;
 
+    super::capture_check::overlay_created();
     DPS_OVERLAY_ACTIVE.store(true, Ordering::Relaxed);
     set_dps_overlay_locked_for_app(&app, OVERLAY_LOCKED.load(Ordering::Relaxed))?;
 
@@ -352,14 +353,31 @@ pub async fn create_dps_settings<R: Runtime>(app: AppHandle<R>) -> Result<(), St
 // =============================================================================
 
 const DETAIL_LABEL: &str = "dps-detail";
+const PANEL_GAP: i32 = 8;
 
+/// Set while the overlay carries the handler that keeps the detail window
+/// beside it. The handler belongs to the overlay window and goes with it; it
+/// used to be added again every time the detail window opened.
+static DETAIL_FOLLOWS_OVERLAY: AtomicBool = AtomicBool::new(false);
+/// The same for the history window.
+static HISTORY_FOLLOWS_OVERLAY: AtomicBool = AtomicBool::new(false);
+
+/// Open the detail window, or bring it back, for the selection already stored
+/// by `set_detail_selection`.
+///
+/// Placing it can no longer stop it from showing: it used to be placed before
+/// it was shown, and a placement error -- no overlay to place it beside --
+/// returned early and left an invisible window.
 #[tauri::command]
 pub async fn create_dps_detail<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(DETAIL_LABEL) {
+        place_detail(&app);
         window.show().map_err(|e| e.to_string())?;
-        position_detail_right_of_overlay(&app)?;
-        // Reload so init() picks up latest selection from get_detail_selection()
-        let _ = window.eval("location.reload()");
+        let _ = window.unminimize();
+        super::placement::raise_without_focus(&window);
+        // The page follows the event `set_detail_selection` has just sent. It
+        // used to be reloaded as well, which parsed both skill catalogues
+        // again on every click.
         return Ok(());
     }
 
@@ -382,21 +400,28 @@ pub async fn create_dps_detail<R: Runtime>(app: AppHandle<R>) -> Result<(), Stri
     .build()
     .map_err(|e| e.to_string())?;
 
-    position_detail_right_of_overlay(&app)?;
+    place_detail(&app);
     window.show().map_err(|e| e.to_string())?;
+    super::placement::raise_without_focus(&window);
 
-    // Track overlay movement only in follow mode
+    // Follow the overlay as it moves -- in follow mode only, and with one
+    // handler however often the window is opened.
     if get_detail_window_mode(&app) == "follow" {
-        let app_move = app.clone();
         if let Some(parent) = app.get_webview_window(DPS_OVERLAY_LABEL) {
-            parent.on_window_event(move |event| {
-                if matches!(
-                    event,
-                    tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_)
-                ) {
-                    let _ = position_detail_right_of_overlay(&app_move);
-                }
-            });
+            if !DETAIL_FOLLOWS_OVERLAY.swap(true, Ordering::SeqCst) {
+                let app_move = app.clone();
+                parent.on_window_event(move |event| match event {
+                    tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
+                        if get_detail_window_mode(&app_move) == "follow" {
+                            place_detail(&app_move);
+                        }
+                    }
+                    tauri::WindowEvent::Destroyed => {
+                        DETAIL_FOLLOWS_OVERLAY.store(false, Ordering::SeqCst);
+                    }
+                    _ => {}
+                });
+            }
         }
     }
 
@@ -415,28 +440,28 @@ fn get_detail_window_mode<R: Runtime>(app: &AppHandle<R>) -> String {
         .unwrap_or_else(|| "follow".to_string())
 }
 
-fn position_detail_right_of_overlay<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
-    if get_detail_window_mode(app) == "center" {
-        let child = app
-            .get_webview_window(DETAIL_LABEL)
-            .ok_or("detail not found")?;
-        return child.center().map_err(|e| e.to_string());
+/// Beside the overlay and the history window taken together -- the detail is
+/// opened from either -- on their monitor, or centred on it in center mode.
+/// Never fails: a detail window in a slightly odd place beats none at all.
+fn place_detail<R: Runtime>(app: &AppHandle<R>) {
+    let Some(detail) = app.get_webview_window(DETAIL_LABEL) else {
+        return;
+    };
+    let anchors: Vec<_> = [DPS_OVERLAY_LABEL, HISTORY_LABEL]
+        .into_iter()
+        .filter_map(|label| app.get_webview_window(label))
+        .filter(|window| window.is_visible().unwrap_or(false))
+        .collect();
+    let centred = get_detail_window_mode(app) == "center";
+    if let Err(error) = super::placement::place_panel(
+        &detail,
+        &anchors,
+        super::placement::Side::Right,
+        PANEL_GAP,
+        centred,
+    ) {
+        eprintln!("[dps-detail] placement failed: {error}");
     }
-
-    let parent = app
-        .get_webview_window(DPS_OVERLAY_LABEL)
-        .ok_or("overlay not found")?;
-    let child = app
-        .get_webview_window(DETAIL_LABEL)
-        .ok_or("detail not found")?;
-    let pos = parent.outer_position().map_err(|e| e.to_string())?;
-    let size = parent.outer_size().map_err(|e| e.to_string())?;
-    child
-        .set_position(tauri::PhysicalPosition::new(
-            pos.x + size.width as i32 + 8,
-            pos.y,
-        ))
-        .map_err(|e| e.to_string())
 }
 
 // =============================================================================
@@ -444,35 +469,31 @@ fn position_detail_right_of_overlay<R: Runtime>(app: &AppHandle<R>) -> Result<()
 // =============================================================================
 
 const HISTORY_LABEL: &str = "dps-history";
-const HISTORY_GAP: f64 = 8.0;
 
-fn position_bottom_of_parent<R: Runtime>(
-    app: &AppHandle<R>,
-    parent_label: &str,
-    child_label: &str,
-    gap: f64,
-) -> Result<(), String> {
-    let parent = app
-        .get_webview_window(parent_label)
-        .ok_or("parent not found")?;
-    let child = app
-        .get_webview_window(child_label)
-        .ok_or("child not found")?;
-    let pos = parent.outer_position().map_err(|e| e.to_string())?;
-    let size = parent.outer_size().map_err(|e| e.to_string())?;
-    child
-        .set_position(tauri::PhysicalPosition::new(
-            pos.x,
-            pos.y + size.height as i32 + gap as i32,
-        ))
-        .map_err(|e| e.to_string())
+/// Below the overlay where it fits, above it where it does not.
+fn place_history<R: Runtime>(app: &AppHandle<R>) {
+    let Some(history) = app.get_webview_window(HISTORY_LABEL) else {
+        return;
+    };
+    let anchors: Vec<_> = app.get_webview_window(DPS_OVERLAY_LABEL).into_iter().collect();
+    if let Err(error) = super::placement::place_panel(
+        &history,
+        &anchors,
+        super::placement::Side::Below,
+        PANEL_GAP,
+        false,
+    ) {
+        eprintln!("[dps-history] placement failed: {error}");
+    }
 }
 
 #[tauri::command]
 pub async fn create_dps_history<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(HISTORY_LABEL) {
+        place_history(&app);
         window.show().map_err(|e| e.to_string())?;
-        position_bottom_of_parent(&app, DPS_OVERLAY_LABEL, HISTORY_LABEL, HISTORY_GAP)?;
+        let _ = window.unminimize();
+        super::placement::raise_without_focus(&window);
         return Ok(());
     }
 
@@ -493,29 +514,29 @@ pub async fn create_dps_history<R: Runtime>(app: AppHandle<R>) -> Result<(), Str
     .build()
     .map_err(|e| e.to_string())?;
 
-    position_bottom_of_parent(&app, DPS_OVERLAY_LABEL, HISTORY_LABEL, HISTORY_GAP)?;
-
+    place_history(&app);
     window.show().map_err(|e| e.to_string())?;
+    super::placement::raise_without_focus(&window);
 
-    // Track parent movement — follow it
-    let app_move = app.clone();
-    let parent = app
-        .get_webview_window(DPS_OVERLAY_LABEL)
-        .ok_or("parent not found")?;
-    parent.on_window_event(move |event| {
-        if matches!(
-            event,
-            tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_)
-        ) {
-            let _ =
-                position_bottom_of_parent(&app_move, DPS_OVERLAY_LABEL, HISTORY_LABEL, HISTORY_GAP);
+    // Follow the overlay, and close with it. One handler per overlay window,
+    // however often history is opened.
+    if let Some(parent) = app.get_webview_window(DPS_OVERLAY_LABEL) {
+        if !HISTORY_FOLLOWS_OVERLAY.swap(true, Ordering::SeqCst) {
+            let app_move = app.clone();
+            parent.on_window_event(move |event| match event {
+                tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
+                    place_history(&app_move);
+                }
+                tauri::WindowEvent::Destroyed => {
+                    HISTORY_FOLLOWS_OVERLAY.store(false, Ordering::SeqCst);
+                    if let Some(w) = app_move.get_webview_window(HISTORY_LABEL) {
+                        let _ = w.destroy();
+                    }
+                }
+                _ => {}
+            });
         }
-        if matches!(event, tauri::WindowEvent::Destroyed) {
-            if let Some(w) = app_move.get_webview_window(HISTORY_LABEL) {
-                let _ = w.destroy();
-            }
-        }
-    });
+    }
 
     Ok(())
 }

@@ -449,8 +449,12 @@ impl DpsMeter {
         self.last_snapshot.lock().unwrap().clone()
     }
 
-    pub fn get_history(&self) -> Vec<crate::dps_meter::history::HistoryRecord> {
-        self.history.get_records()
+    pub fn get_history_summaries(&self) -> Vec<crate::dps_meter::history::HistorySummary> {
+        self.history.get_summaries()
+    }
+
+    pub fn get_history_record(&self, id: &str) -> Option<crate::dps_meter::history::HistoryRecord> {
+        self.history.get_record(id)
     }
 
     pub fn delete_all_history(&self) -> usize {
@@ -626,6 +630,7 @@ impl DpsMeter {
                 if built_from != Some(source) {
                     built_from = Some(source);
                     if let Some(snapshot) = calculator.get_dps_snapshot(0, hide_unknown, max_count) {
+                        let snapshot = crate::dps_meter::engine::calculator::for_windows(snapshot);
                         // Cache non-empty snapshots for detail window fallback
                         if snapshot.total_damage > 0 {
                             *last_snapshot.lock().unwrap() = Some(snapshot.clone());

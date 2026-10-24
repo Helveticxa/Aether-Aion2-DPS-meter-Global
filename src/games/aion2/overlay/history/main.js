@@ -299,11 +299,15 @@ $list.addEventListener("click", async (e) => {
       await invoke("delete_history_record", {
         id: e.target.closest("[data-delete]").dataset.delete,
       });
-    } catch (_) {}
+    } catch (err) {
+      setStatus(String(err?.message || err || t("dps-history.deleteFailed")), "error");
+    }
     return;
   }
 
-  // Player row click → open detail window
+  // Player row click → open detail window. Only the record's id travels: the
+  // list holds a summary of each fight, and the detail window fetches the
+  // whole record itself.
   const playerRow = e.target.closest(".detail-player-row");
   if (playerRow) {
     e.stopPropagation();
@@ -312,10 +316,13 @@ $list.addEventListener("click", async (e) => {
     if (!record || !actorId) return;
     try {
       await invoke("set_detail_selection", {
-        value: { actorId, mode: "history", record },
+        value: { actorId, mode: "history", recordId: record.id },
       });
       await invoke("create_dps_detail");
-    } catch (_) {}
+    } catch (err) {
+      console.error("[dps-history] open detail failed:", err);
+      setStatus(String(err?.message || err || t("dps-detail.noData")), "error");
+    }
     return;
   }
 

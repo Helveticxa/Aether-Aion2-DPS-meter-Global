@@ -17,7 +17,7 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     Arc, Mutex, RwLock,
 };
 use std::thread::{self, JoinHandle};
@@ -26,7 +26,7 @@ use std::time::{Duration, Instant};
 use crate::dps_meter::capture::capturer::CapturedPacket;
 use crate::dps_meter::capture::channel::Channel;
 use crate::dps_meter::capture::ping_tracker::PingTracker;
-use crate::dps_meter::capture::processor::{StreamProcessor, StreamStats, HEARTBEAT};
+use crate::dps_meter::capture::processor::{count_heartbeats, StreamProcessor, StreamStats};
 use crate::dps_meter::capture::recorder::PacketRecorder;
 use crate::dps_meter::capture::tcp_reassembler::{TcpFlowKey, TcpReassembler};
 use crate::dps_meter::config::SharedDpsMeterConfig;
@@ -50,6 +50,23 @@ const PROBE_BUFFER_LIMIT: usize = 256 * 1024;
 const LOGGED_PACKETS: usize = 4;
 /// Game traffic counts as current while a heartbeat arrived this recently.
 const GAME_TRAFFIC_RECENT: Duration = Duration::from_secs(10);
+
+/// When a game connection last carried a heartbeat, in milliseconds since the
+/// epoch. Read by the capture backends, which have no dispatcher to ask.
+static LAST_GAME_HEARTBEAT_MS: AtomicU64 = AtomicU64::new(0);
+
+fn now_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis() as u64)
+        .unwrap_or_default()
+}
+
+/// Whether the game's heartbeat has been read within `window`.
+pub fn game_traffic_within(window: Duration) -> bool {
+    let last = LAST_GAME_HEARTBEAT_MS.load(Ordering::Relaxed);
+    last != 0 && now_millis().saturating_sub(last) <= window.as_millis() as u64
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FlowRole {
@@ -104,6 +121,13 @@ struct DispatcherState {
 }
 
 impl DispatcherState {
+    /// Whether `packet` belongs to a connection already set aside.
+    fn is_ignored(&self, packet: &CapturedPacket) -> bool {
+        self.flows
+            .get(&flow_key(packet))
+            .is_some_and(|flow| flow.role == FlowRole::Ignored)
+    }
+
     fn clear(&mut self) {
         self.flows.clear();
         self.active = None;
@@ -200,11 +224,15 @@ impl CaptureDispatcher {
                     continue;
                 };
 
-                // Tapped here, before reassembly, so a recording holds exactly
-                // what capture produced -- replay then re-runs the real pipeline.
-                recorder.record(&packet);
-
                 let mut state = state.lock().unwrap();
+                // Tapped here, before reassembly, so a recording holds exactly
+                // what capture produced -- replay then re-runs the real
+                // pipeline. Connections already known not to be the game's
+                // are left out: replay would ignore them too, and one local
+                // stream filled a 512 MB recording in two minutes.
+                if !state.is_ignored(&packet) {
+                    recorder.record(&packet);
+                }
                 dispatch(&mut state, packet, &logger, &combat_port);
             }
         });
@@ -336,12 +364,7 @@ fn dispatch(
     combat_port: &RwLock<Option<String>>,
 ) {
     let now = Instant::now();
-    let key = TcpFlowKey {
-        src_ip: packet.src_ip,
-        src_port: packet.src_port,
-        dst_ip: packet.dst_ip,
-        dst_port: packet.dst_port,
-    };
+    let key = flow_key(&packet);
 
     if state.logged_packets < LOGGED_PACKETS {
         state.logged_packets += 1;
@@ -359,9 +382,11 @@ fn dispatch(
     }
 
     let gaps_before = flow.reassembler.gap_skips();
-    let aligned = flow
-        .reassembler
-        .feed(packet.sequence, std::mem::take(&mut packet.data));
+    let aligned = flow.reassembler.feed(
+        packet.sequence,
+        std::mem::take(&mut packet.data),
+        packet.captured_at,
+    );
     if flow.reassembler.gap_skips() != gaps_before {
         // Bytes were lost under the parser: its position means nothing now.
         if let Some(processor) = flow.processor.as_mut() {
@@ -389,6 +414,7 @@ fn dispatch(
                 // Carrying the heartbeat identifies this host as the game
                 // server, which is what region detection keys off.
                 crate::dps_meter::region::observe_server_ip(packet.src_ip);
+                LAST_GAME_HEARTBEAT_MS.store(now_millis(), Ordering::Relaxed);
             }
             if let Some(processor) = flow.processor.as_mut() {
                 processor.feed(&data, packet.captured_at);
@@ -466,6 +492,17 @@ fn confirm_game_flow(
         Arc::clone(&state.config),
         Arc::clone(&state.ping_tracker),
     );
+    // The game talks to one zone at a time. The connection this one replaces
+    // is finished, and whatever still arrives on it is about ids that mean
+    // nothing any more; two game connections parsed side by side would also
+    // count every hit both carry twice.
+    for (other_key, other) in state.flows.iter_mut() {
+        if *other_key != key && other.role == FlowRole::Game {
+            other.role = FlowRole::Ignored;
+            other.processor = None;
+            other.pending = Vec::new();
+        }
+    }
     let Some(flow) = state.flows.get_mut(&key) else {
         return;
     };
@@ -476,10 +513,13 @@ fn confirm_game_flow(
     flow.heartbeats.clear();
 }
 
-fn count_heartbeats(data: &[u8]) -> usize {
-    data.windows(HEARTBEAT.len())
-        .filter(|window| *window == HEARTBEAT)
-        .count()
+fn flow_key(packet: &CapturedPacket) -> TcpFlowKey {
+    TcpFlowKey {
+        src_ip: packet.src_ip,
+        src_port: packet.src_port,
+        dst_ip: packet.dst_ip,
+        dst_port: packet.dst_port,
+    }
 }
 
 fn looks_like_tls_payload(data: &[u8]) -> bool {
@@ -654,6 +694,43 @@ mod tests {
     }
 
     #[test]
+    fn a_stream_that_only_looks_like_the_game_is_never_taken_for_it() {
+        let mut h = Harness::new();
+        h.send(60311, 57425, heartbeat());
+        h.send(60311, 57425, heartbeat());
+        h.send(60311, 57425, own_player(9231, "Rin"));
+
+        // A local audio stream whose samples contain the heartbeat's first
+        // three bytes, over and over: four false zone changes in two minutes
+        // in a real recording.
+        let mut lookalike = vec![0x0E, 0x00, 0x36, 0x00, 0x08, 0x00, 0x32, 0x00, 0x02, 0x00, 0x2E];
+        lookalike.extend(std::iter::repeat(0x11).take(200));
+        for _ in 0..20 {
+            h.send(55308, 53170, lookalike.clone());
+        }
+
+        assert_eq!(h.state.zone_changes, 0);
+        assert_eq!(h.state.data_storage.main_actor_id(), Some(9231));
+    }
+
+    #[test]
+    fn a_replaced_game_connection_is_no_longer_read() {
+        let mut h = Harness::new();
+        h.send(60311, 57425, heartbeat());
+        h.send(60311, 57425, heartbeat());
+        h.send(60311, 57425, own_player(9231, "Rin"));
+
+        h.send(60311, 63929, heartbeat());
+        h.send(60311, 63929, heartbeat());
+        h.send(60311, 63929, own_player(802, "Rin"));
+
+        // A late packet on the town connection is about the town's ids.
+        h.send(60311, 57425, own_player(5555, "Rin"));
+        assert_eq!(h.state.data_storage.main_actor_id(), Some(802));
+        assert_eq!(h.state.zone_changes, 1);
+    }
+
+    #[test]
     fn traffic_without_a_heartbeat_is_never_parsed() {
         let mut h = Harness::new();
         for _ in 0..10 {
@@ -736,15 +813,19 @@ mod tests {
                 crate::dps_meter::engine::calculator::DpsCalculator::new(Arc::clone(&h.state.data_storage));
             let built = Instant::now();
             let mut size = 0usize;
+            let mut sent = 0usize;
             for _ in 0..20 {
                 if let Some(snapshot) = calculator.get_dps_snapshot(0, false, 10) {
                     size = serde_json::to_vec(&snapshot).map(|json| json.len()).unwrap_or(0);
+                    let for_windows = crate::dps_meter::engine::calculator::for_windows(snapshot);
+                    sent = serde_json::to_vec(&for_windows).map(|json| json.len()).unwrap_or(0);
                 }
             }
             println!(
-                "snapshot: {:.2} ms to build and serialise, {} KB",
+                "snapshot: {:.2} ms to build and serialise, {} KB, {} KB as sent to the windows",
                 built.elapsed().as_secs_f64() * 1000.0 / 20.0,
-                size / 1024
+                size / 1024,
+                sent / 1024
             );
             // The overlay can be checked against what a real session produces.
             if let (Ok(out), Some(snapshot)) = (

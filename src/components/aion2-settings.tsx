@@ -230,6 +230,50 @@ function useRunningStreamingApp(enabled: boolean): string | null {
   return app;
 }
 
+type ObsCaptureStatus =
+  | "unknown"
+  | "checking"
+  | "capturable"
+  | "needsTaskbar"
+  | "needsActivation"
+  | "unsupported"
+  | "notAvailable";
+
+/** What Aether found when it asked Windows whether OBS can capture the pop-up. */
+const OBS_CAPTURE_TEXT: Record<ObsCaptureStatus, string> = {
+  unknown: "Checked on this PC as soon as stream mode is on and the pop-up is open.",
+  checking: "Checking whether OBS can capture the pop-up on this PC…",
+  capturable: "Checked on this PC: OBS's Window Capture can capture the pop-up.",
+  needsTaskbar:
+    "Checked on this PC: this Windows would only let OBS capture the pop-up with a taskbar button, so it has one while you stream.",
+  needsActivation:
+    "Checked on this PC: this Windows would only let OBS capture the pop-up if it can be activated, so while you stream, clicking it takes the keyboard from the game for that moment.",
+  unsupported:
+    "Checked on this PC: Windows will not let OBS capture the pop-up on its own. Use a Display Capture of the game's screen with a Crop/Pad filter around the pop-up instead.",
+  notAvailable:
+    "This Windows is older than 10 version 1903 and has no Windows Graphics Capture. Use a Display Capture with a Crop/Pad filter around the pop-up.",
+};
+
+/** The pop-up capture check, kept current while Settings is open. */
+function useObsCaptureStatus(enabled: boolean): ObsCaptureStatus {
+  const [status, setStatus] = useState<ObsCaptureStatus>("unknown");
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    invoke<ObsCaptureStatus>("get_obs_capture_status")
+      .then((value) => alive && setStatus(value))
+      .catch(() => {});
+    const unlisten = listen<ObsCaptureStatus>("obs-capture-status", (event) => {
+      if (alive) setStatus(event.payload);
+    });
+    return () => {
+      alive = false;
+      void unlisten.then((stop) => stop()).catch(() => {});
+    };
+  }, [enabled]);
+  return status;
+}
+
 export function Aion2Settings() {
   const { config, updateSettings } = useSettings();
   const { t } = useAppTranslation();
@@ -241,6 +285,8 @@ export function Aion2Settings() {
   const streamingApp = useRunningStreamingApp(
     tab === "overlay" && overlay.streamAuto !== false && overlay.streamMode !== true
   );
+  const obsCapture = useObsCaptureStatus(tab === "overlay");
+  const [obsCheckError, setObsCheckError] = useState<string | null>(null);
 
   const tabs: { id: Aion2Tab; label: string }[] = [
     { id: "meter", label: "Meter" },
@@ -486,6 +532,22 @@ export function Aion2Settings() {
                 Automatic cannot see the see-through pop-up and shows black. Untick Capture Cursor.
               </span>
             </div>
+
+            <SettingRow title="Capture check" description={obsCheckError ?? OBS_CAPTURE_TEXT[obsCapture]}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={obsCapture === "checking"}
+                onClick={() => {
+                  setObsCheckError(null);
+                  invoke("recheck_obs_capture").catch((error) =>
+                    setObsCheckError(String(error))
+                  );
+                }}
+              >
+                Check again
+              </Button>
+            </SettingRow>
           </SettingsGroup>
 
           <SettingsGroup title="Look">

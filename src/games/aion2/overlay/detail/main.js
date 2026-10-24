@@ -45,6 +45,9 @@ let frozenRecord = null;
 let lastSnapshot = null;
 let isPlayerBuffPanelOpen = false;
 let isBossBuffPanelOpen = false;
+// History records already fetched, by id. The history list holds only a
+// summary of each fight; the whole record comes from the backend on demand.
+const recordCache = new Map();
 
 // ── Formatters ──
 function fmtDamage(n) {
@@ -261,9 +264,12 @@ function render() {
     actorInfo = null,
     playerStats = null;
 
-  // Unified data source: snapshot from live, or record from history
-  const dataSource = mode === "history" && frozenRecord ? frozenRecord : lastSnapshot;
+  // Unified data source: snapshot from live, or record from history. A
+  // history record that could not be read shows as no data, not as whatever
+  // the live meter happens to hold.
+  const dataSource = mode === "history" ? frozenRecord : lastSnapshot;
   if (!dataSource) {
+    setMode(mode);
     $content.innerHTML = `<div class="empty">${t("dps-detail.noData")}</div>`;
     return;
   }
@@ -466,7 +472,11 @@ function render() {
     fightStart,
   });
   html += `</div>`;
+  // Live, the table is redrawn several times a second: keep where it was
+  // scrolled to, or it jumps back to the top under the mouse.
+  const scrolled = saveScroll();
   $content.innerHTML = html;
+  restoreScroll(scrolled);
   $content.querySelectorAll(".buff-panel").forEach((panel) => {
     panel.addEventListener("toggle", (event) => {
       const panelId = event.currentTarget.dataset.buffPanel;
@@ -477,6 +487,77 @@ function render() {
       }
     });
   });
+}
+
+const SCROLLERS = [".skill-table-scroll", '[data-buff-panel="player"] .buff-panel__body', '[data-buff-panel="boss"] .buff-panel__body'];
+
+function saveScroll() {
+  return SCROLLERS.map((selector) => {
+    const el = $content.querySelector(selector);
+    return el ? { selector, top: el.scrollTop, left: el.scrollLeft } : null;
+  }).filter(Boolean);
+}
+
+function restoreScroll(saved) {
+  for (const { selector, top, left } of saved) {
+    const el = $content.querySelector(selector);
+    if (el) {
+      el.scrollTop = top;
+      el.scrollLeft = left;
+    }
+  }
+}
+
+// Live snapshots arrive ten times a second; the table is redrawn at most four
+// times a second, one redraw pending at a time. On a timer rather than a
+// frame: requestAnimationFrame stops altogether while a window is covered or
+// not painting, and the table would then stay stale instead of catching up.
+const LIVE_RENDER_MS = 250;
+let liveRenderPending = false;
+let lastLiveRender = 0;
+function scheduleLiveRender() {
+  if (liveRenderPending) return;
+  liveRenderPending = true;
+  const wait = Math.max(0, LIVE_RENDER_MS - (performance.now() - lastLiveRender));
+  setTimeout(() => {
+    liveRenderPending = false;
+    lastLiveRender = performance.now();
+    if (mode === "live" && selectedActorId) render();
+  }, wait);
+}
+
+async function fetchRecord(recordId) {
+  if (recordId == null) return null;
+  if (recordCache.has(recordId)) return recordCache.get(recordId);
+  const record = await invoke("get_history_record", { id: String(recordId) });
+  if (record) {
+    recordCache.set(recordId, record);
+    // A handful is plenty: one per fight looked at in this window.
+    if (recordCache.size > 20) recordCache.delete(recordCache.keys().next().value);
+  }
+  return record || null;
+}
+
+// Show what `selection` points at: a player, live or in a saved fight.
+let selectionSeq = 0;
+async function applySelection(selection) {
+  if (!selection || !selection.actorId) return;
+  const seq = ++selectionSeq;
+  let record = null;
+  if ((selection.mode || "live") === "history") {
+    try {
+      record = selection.record || (await fetchRecord(selection.recordId));
+    } catch (e) {
+      console.error("[dps-detail] get_history_record failed:", e);
+    }
+  }
+  // A newer click arrived while this record was being fetched.
+  if (seq !== selectionSeq) return;
+  selectedActorId = selection.actorId;
+  selectedTargetId = selection.targetId ?? null;
+  mode = selection.mode || "live";
+  frozenRecord = mode === "history" ? record : null;
+  render();
 }
 
 // ── Init ──
@@ -497,29 +578,18 @@ function render() {
     /* ignore */
   }
 
-  // Pull pending selection (written before window was created)
-  try {
-    const selection = await invoke("get_detail_selection");
-    console.log("[dps-detail] init selection:", JSON.stringify(selection));
-    if (selection && selection.actorId) {
-      selectedActorId = selection.actorId;
-      selectedTargetId = selection.targetId ?? null;
-      mode = selection.mode || "live";
-      console.log("[dps-detail] init mode:", mode, "actorId:", selectedActorId);
-      if (mode === "history") {
-        frozenRecord = selection.record || null;
-      }
-      render();
-    }
-  } catch (_) {
-    /* ignore */
-  }
-
-  // Init titlebar + empty text (set before render() replaces the .empty element)
+  // Titlebar and empty text first: they used to be set after the selection
+  // was drawn, which relabelled every fight opened from history "LIVE".
   const $emptyEl = document.querySelector(".empty");
   if ($emptyEl) $emptyEl.textContent = t("dps-detail.empty");
-  $modeBadge.textContent = t("dps-overlay.live");
-  $modeBadge.className = "titlebar__mode is-live";
+  setMode("live");
+
+  // Pull pending selection (written before window was created)
+  try {
+    await applySelection(await invoke("get_detail_selection"));
+  } catch (e) {
+    console.error("[dps-detail] get_detail_selection failed:", e);
+  }
 
   listen("language-changed", (event) => {
     setLanguage(event.payload.language);
@@ -529,26 +599,20 @@ function render() {
 
   listen("dps-snapshot", (event) => {
     lastSnapshot = event.payload;
-    if (mode === "live" && selectedActorId) render();
+    if (mode === "live" && selectedActorId) scheduleLiveRender();
   });
 
   listen("select-player-detail", async (event) => {
-    console.log("[dps-detail] event received:", JSON.stringify(event.payload));
     let payload = event.payload;
     if (!payload || !payload.actorId) {
       try {
         payload = await invoke("get_detail_selection");
-        console.log("[dps-detail] fallback get_detail_selection:", JSON.stringify(payload));
       } catch (_) {
         /* ignore */
       }
     }
-    if (!payload || !payload.actorId) return;
-    selectedActorId = payload.actorId;
-    selectedTargetId = payload.targetId ?? null;
-    mode = payload.mode || "live";
-    console.log("[dps-detail] event mode:", mode, "actorId:", selectedActorId);
-    if (mode === "history") frozenRecord = payload.record || null;
-    render();
+    await applySelection(payload);
   });
+
+  listen("history-updated", () => recordCache.clear());
 })();

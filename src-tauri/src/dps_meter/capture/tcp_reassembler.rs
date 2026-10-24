@@ -1,6 +1,13 @@
 use std::collections::HashMap;
 
 const MAX_HELD_BYTES: usize = 2 * 1024 * 1024;
+/// How long out-of-order data waits, in capture time, for the bytes before it.
+///
+/// TCP resends a segment the network lost within a second or so. A segment the
+/// capture dropped is never resent -- the game received it -- and waiting for
+/// the byte limit instead meant waiting for 2 MB on a connection that carries
+/// one to three KB a second: the meter froze for the rest of the zone.
+const GAP_TIMEOUT_SECS: f64 = 2.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TcpFlowKey {
@@ -23,10 +30,14 @@ pub struct TcpReassembler {
     held_bytes: usize,
     retransmits: u64,
     gap_skips: u64,
+    /// Capture time out-of-order data started waiting for a gap to fill.
+    held_since: Option<f64>,
 }
 
 impl TcpReassembler {
-    pub fn feed(&mut self, sequence: u32, data: Vec<u8>) -> Vec<Vec<u8>> {
+    /// Take a segment captured at `now` (seconds), and return the stream
+    /// bytes that are now in order.
+    pub fn feed(&mut self, sequence: u32, data: Vec<u8>, now: f64) -> Vec<Vec<u8>> {
         if data.is_empty() {
             return Vec::new();
         }
@@ -36,29 +47,37 @@ impl TcpReassembler {
             return vec![data];
         };
 
-        let Some(segment) = trim_consumed_prefix(sequence, data, next_sequence) else {
-            self.retransmits += 1;
-            return Vec::new();
-        };
-
-        if segment.sequence == next_sequence {
-            let mut emitted = vec![segment.data];
-            self.advance_and_drain(&mut emitted);
-            return emitted;
-        }
-
-        self.insert_pending(segment);
-        if self.held_bytes > MAX_HELD_BYTES {
-            self.gap_skips += 1;
-            if let Some(nearest_sequence) = self.nearest_pending_sequence(next_sequence) {
-                self.next_sequence = Some(nearest_sequence);
-                let mut emitted = Vec::new();
-                self.drain_contiguous(&mut emitted);
-                return emitted;
+        let mut emitted = Vec::new();
+        match trim_consumed_prefix(sequence, data, next_sequence) {
+            None => self.retransmits += 1,
+            Some(segment) if segment.sequence == next_sequence => {
+                emitted.push(segment.data);
+                self.advance_and_drain(&mut emitted);
             }
+            Some(segment) => self.insert_pending(segment),
         }
+        self.skip_gap_if_stalled(now, &mut emitted);
+        emitted
+    }
 
-        Vec::new()
+    /// Give up on a gap that has held data back too long, or too much of it,
+    /// and carry on from the first data after it.
+    fn skip_gap_if_stalled(&mut self, now: f64, emitted: &mut Vec<Vec<u8>>) {
+        if self.pending.is_empty() {
+            self.held_since = None;
+            return;
+        }
+        let since = *self.held_since.get_or_insert(now);
+        if self.held_bytes <= MAX_HELD_BYTES && now - since <= GAP_TIMEOUT_SECS {
+            return;
+        }
+        self.gap_skips += 1;
+        let next_sequence = self.next_sequence.unwrap_or_default();
+        if let Some(nearest_sequence) = self.nearest_pending_sequence(next_sequence) {
+            self.next_sequence = Some(nearest_sequence);
+            self.drain_contiguous(emitted);
+        }
+        self.held_since = (!self.pending.is_empty()).then_some(now);
     }
 
     pub fn retransmits(&self) -> u64 {
@@ -198,10 +217,10 @@ mod tests {
     #[test]
     fn holds_out_of_order_data_until_gap_arrives() {
         let mut reassembler = TcpReassembler::default();
-        assert_eq!(reassembler.feed(100, vec![1, 2]), vec![vec![1, 2]]);
-        assert!(reassembler.feed(104, vec![5, 6]).is_empty());
+        assert_eq!(reassembler.feed(100, vec![1, 2], 0.0), vec![vec![1, 2]]);
+        assert!(reassembler.feed(104, vec![5, 6], 0.0).is_empty());
         assert_eq!(
-            reassembler.feed(102, vec![3, 4]),
+            reassembler.feed(102, vec![3, 4], 0.0),
             vec![vec![3, 4], vec![5, 6]]
         );
     }
@@ -210,43 +229,71 @@ mod tests {
     fn drops_retransmits_and_trims_partial_overlap() {
         let mut reassembler = TcpReassembler::default();
         assert_eq!(
-            reassembler.feed(100, vec![1, 2, 3, 4]),
+            reassembler.feed(100, vec![1, 2, 3, 4], 0.0),
             vec![vec![1, 2, 3, 4]]
         );
-        assert!(reassembler.feed(100, vec![1, 2, 3, 4]).is_empty());
-        assert_eq!(reassembler.feed(102, vec![3, 4, 5, 6]), vec![vec![5, 6]]);
+        assert!(reassembler.feed(100, vec![1, 2, 3, 4], 0.0).is_empty());
+        assert_eq!(reassembler.feed(102, vec![3, 4, 5, 6], 0.0), vec![vec![5, 6]]);
     }
 
     #[test]
     fn handles_sequence_wrap() {
         let mut reassembler = TcpReassembler::default();
-        assert_eq!(reassembler.feed(u32::MAX - 1, vec![1, 2]), vec![vec![1, 2]]);
-        assert_eq!(reassembler.feed(0, vec![3, 4]), vec![vec![3, 4]]);
+        assert_eq!(reassembler.feed(u32::MAX - 1, vec![1, 2], 0.0), vec![vec![1, 2]]);
+        assert_eq!(reassembler.feed(0, vec![3, 4], 0.0), vec![vec![3, 4]]);
     }
 
     #[test]
     fn trims_overlap_from_a_previously_held_segment() {
         let mut reassembler = TcpReassembler::default();
-        assert_eq!(reassembler.feed(100, vec![1, 2]), vec![vec![1, 2]]);
-        assert!(reassembler.feed(104, vec![5, 6, 7, 8]).is_empty());
+        assert_eq!(reassembler.feed(100, vec![1, 2], 0.0), vec![vec![1, 2]]);
+        assert!(reassembler.feed(104, vec![5, 6, 7, 8], 0.0).is_empty());
         assert_eq!(
-            reassembler.feed(102, vec![3, 4, 5, 6]),
+            reassembler.feed(102, vec![3, 4, 5, 6], 0.0),
             vec![vec![3, 4, 5, 6], vec![7, 8]]
         );
     }
 
     #[test]
+    fn a_gap_the_capture_dropped_is_skipped_after_a_while() {
+        let mut reassembler = TcpReassembler::default();
+        assert_eq!(reassembler.feed(100, vec![1, 2], 10.0), vec![vec![1, 2]]);
+        // 102..104 never arrives: the game got it, the capture did not.
+        assert!(reassembler.feed(104, vec![5, 6], 10.1).is_empty());
+        assert!(reassembler.feed(106, vec![7, 8], 11.0).is_empty());
+        assert_eq!(
+            reassembler.feed(108, vec![9], 12.2),
+            vec![vec![5, 6], vec![7, 8], vec![9]]
+        );
+        assert_eq!(reassembler.gap_skips(), 1);
+        // And the stream carries on in order afterwards.
+        assert_eq!(reassembler.feed(109, vec![10], 12.3), vec![vec![10]]);
+    }
+
+    #[test]
+    fn a_resent_segment_inside_the_wait_fills_the_gap() {
+        let mut reassembler = TcpReassembler::default();
+        assert_eq!(reassembler.feed(100, vec![1, 2], 10.0), vec![vec![1, 2]]);
+        assert!(reassembler.feed(104, vec![5, 6], 10.1).is_empty());
+        assert_eq!(
+            reassembler.feed(102, vec![3, 4], 10.4),
+            vec![vec![3, 4], vec![5, 6]]
+        );
+        assert_eq!(reassembler.gap_skips(), 0);
+    }
+
+    #[test]
     fn removes_a_held_segment_fully_covered_by_later_data() {
         let mut reassembler = TcpReassembler::default();
-        assert_eq!(reassembler.feed(100, vec![1, 2]), vec![vec![1, 2]]);
-        assert!(reassembler.feed(106, vec![7, 8]).is_empty());
-        assert!(reassembler.feed(104, vec![5, 6]).is_empty());
+        assert_eq!(reassembler.feed(100, vec![1, 2], 0.0), vec![vec![1, 2]]);
+        assert!(reassembler.feed(106, vec![7, 8], 0.0).is_empty());
+        assert!(reassembler.feed(104, vec![5, 6], 0.0).is_empty());
         assert_eq!(
-            reassembler.feed(102, vec![3, 4, 5, 6, 7, 8]),
+            reassembler.feed(102, vec![3, 4, 5, 6, 7, 8], 0.0),
             vec![vec![3, 4, 5, 6, 7, 8]]
         );
         assert!(reassembler
-            .feed(108, vec![9])
+            .feed(108, vec![9], 0.0)
             .iter()
             .any(|part| part == &[9]));
     }

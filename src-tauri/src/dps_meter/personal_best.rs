@@ -125,10 +125,7 @@ impl PersonalBestStore {
         };
         let list = self.all();
         if let Ok(json) = serde_json::to_vec_pretty(&list) {
-            if let Some(dir) = path.parent() {
-                let _ = std::fs::create_dir_all(dir);
-            }
-            let _ = std::fs::write(&path, json);
+            let _ = crate::dps_meter::history::write_atomically(&path, &json);
         }
     }
 }

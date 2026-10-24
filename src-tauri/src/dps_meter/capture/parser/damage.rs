@@ -153,7 +153,7 @@ impl StreamProcessor {
             //   new: [0][legacy_damage][damage][hit_count][per-hit...]
             // When the first value is 0, damage/hit_count shift right by one varint.
             reader.offset = reader.offset.saturating_add(temp_v);
-            let tail_values = collect_varints(packet, reader.offset, 12);
+            let tail_start = reader.offset;
             let Some(unknown) = read_varint_u32(packet, reader.offset) else {
                 reader.offset = checkpoint;
                 break;
@@ -233,7 +233,7 @@ impl StreamProcessor {
                 unknown,
                 legacy_damage,
                 damage,
-                tail_values,
+                collect_varints(packet, tail_start, 12),
                 tail_hit_count,
                 multi_hit.count,
                 multi_hit.damage,

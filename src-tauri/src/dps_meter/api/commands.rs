@@ -4,7 +4,7 @@ use crate::dps_meter::capture::dispatcher::TcpReassemblyStatus;
 use crate::dps_meter::capture::windivert_capturer::WinDivertStatus;
 use crate::dps_meter::config::DpsMeterConfig;
 use crate::dps_meter::engine::meter::DpsMeter;
-use crate::dps_meter::history::HistoryRecord;
+use crate::dps_meter::history::{HistoryRecord, HistorySummary};
 use crate::dps_meter::models::combat::{CombatSnapshot, PvpCombatStatsRow, PvpWatchInfoResponse};
 use crate::dps_meter::models::diagnostics::DpsMeterState;
 use crate::dps_meter::preflight;
@@ -348,8 +348,12 @@ pub fn get_last_snapshot(meter: State<'_, DpsMeter>) -> Option<CombatSnapshot> {
     meter.get_last_snapshot()
 }
 
+// The history commands are async: a synchronous command runs on the main
+// thread, and reading or rewriting a few hundred records there froze every
+// window -- the overlay over the game included -- while it lasted.
+
 #[tauri::command]
-pub fn delete_all_history(app: AppHandle, meter: State<'_, DpsMeter>) -> Result<usize, String> {
+pub async fn delete_all_history(app: AppHandle, meter: State<'_, DpsMeter>) -> Result<usize, String> {
     let count = meter.delete_all_history();
     if count > 0 {
         let _ = app.emit("history-updated", ());
@@ -357,13 +361,23 @@ pub fn delete_all_history(app: AppHandle, meter: State<'_, DpsMeter>) -> Result<
     Ok(count)
 }
 
+/// The history list: every record without its per-skill numbers and buffs.
 #[tauri::command]
-pub fn get_history(meter: State<'_, DpsMeter>) -> Result<Vec<HistoryRecord>, String> {
-    Ok(meter.get_history())
+pub async fn get_history(meter: State<'_, DpsMeter>) -> Result<Vec<HistorySummary>, String> {
+    Ok(meter.get_history_summaries())
+}
+
+/// One whole record, for the detail window.
+#[tauri::command]
+pub async fn get_history_record(
+    meter: State<'_, DpsMeter>,
+    id: String,
+) -> Result<Option<HistoryRecord>, String> {
+    Ok(meter.get_history_record(&id))
 }
 
 #[tauri::command]
-pub fn delete_history_record(
+pub async fn delete_history_record(
     app: AppHandle,
     meter: State<'_, DpsMeter>,
     id: String,
@@ -376,7 +390,7 @@ pub fn delete_history_record(
 }
 
 #[tauri::command]
-pub fn delete_history_records(
+pub async fn delete_history_records(
     app: AppHandle,
     meter: State<'_, DpsMeter>,
     ids: Vec<String>,

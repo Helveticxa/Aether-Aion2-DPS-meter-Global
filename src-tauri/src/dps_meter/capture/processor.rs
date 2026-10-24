@@ -56,6 +56,43 @@ const KNOWN_PACKET_HEADERS: &[(u8, u8)] = &[
 /// The heartbeat frame's first three bytes: its length (an 11-byte frame) and
 /// opcode `00 36`.
 pub const HEARTBEAT: [u8; 3] = [0x0E, 0x00, 0x36];
+/// The whole heartbeat frame: those three bytes, then the server's clock as
+/// milliseconds since the epoch, a u64 LE. Taiwan in September and global in
+/// October both send exactly this, fifty milliseconds apart.
+pub const HEARTBEAT_LEN: usize = 11;
+/// The clock in a heartbeat falls between 2020 and 2100.
+///
+/// Three bytes alone were not enough. On a PC streaming 4 MB/s of something
+/// else over loopback they turned up sixteen times in one connection, which
+/// was taken for the game's: four false zone changes in two minutes, each one
+/// ending the fight and forgetting every name. The clock rules that out --
+/// seven random bytes land in this window about once in eight million tries --
+/// without depending on this PC's own clock being right.
+const HEARTBEAT_CLOCK_MS: std::ops::RangeInclusive<u64> = 1_577_836_800_000..=4_102_444_800_000;
+
+/// Whether a heartbeat frame starts at `at`, all eleven bytes of it present.
+pub fn is_heartbeat(buf: &[u8], at: usize) -> bool {
+    let Some(frame) = buf.get(at..at + HEARTBEAT_LEN) else {
+        return false;
+    };
+    if frame[..HEARTBEAT.len()] != HEARTBEAT {
+        return false;
+    }
+    let mut clock = [0u8; 8];
+    clock.copy_from_slice(&frame[HEARTBEAT.len()..]);
+    HEARTBEAT_CLOCK_MS.contains(&u64::from_le_bytes(clock))
+}
+
+/// Heartbeats wholly inside `buf`.
+pub fn count_heartbeats(buf: &[u8]) -> usize {
+    let mut count = 0;
+    let mut from = 0;
+    while let Some(at) = find_heartbeat(buf, from) {
+        count += 1;
+        from = at + HEARTBEAT_LEN;
+    }
+    count
+}
 
 /// Larger than any frame seen in real traffic by a wide margin, and small
 /// enough that a garbage length cannot make the parser wait for megabytes.
@@ -110,12 +147,20 @@ fn payload_offset(frame: &[u8], header: usize) -> Option<usize> {
     (offset + 2 <= frame.len()).then_some(offset)
 }
 
-/// The next heartbeat at or after `from`.
+/// The next whole heartbeat at or after `from`.
 pub(crate) fn find_heartbeat(buf: &[u8], from: usize) -> Option<usize> {
-    buf.get(from..)?
-        .windows(HEARTBEAT.len())
-        .position(|window| window == HEARTBEAT)
-        .map(|index| from + index)
+    let mut from = from;
+    loop {
+        let at = buf
+            .get(from..)?
+            .windows(HEARTBEAT.len())
+            .position(|window| window == HEARTBEAT)
+            .map(|index| from + index)?;
+        if is_heartbeat(buf, at) {
+            return Some(at);
+        }
+        from = at + 1;
+    }
 }
 
 /// Whether frames read from the start of `buf` land exactly on `target`.
@@ -258,9 +303,9 @@ impl StreamProcessor {
                         self.synced = true;
                     }
                     None => {
-                        // Keep the last two bytes: they may be the start of a
-                        // heartbeat whose third byte has not arrived.
-                        let keep_from = buffer.len().saturating_sub(HEARTBEAT.len() - 1).max(position);
+                        // Keep the last ten bytes: they may be the start of a
+                        // heartbeat whose clock has not all arrived.
+                        let keep_from = buffer.len().saturating_sub(HEARTBEAT_LEN - 1).max(position);
                         self.stats.dropped_bytes += (keep_from - position) as u64;
                         position = keep_from;
                         break;
@@ -454,6 +499,24 @@ mod tests {
                 other => panic!("body {body}: {other:?}"),
             }
         }
+    }
+
+    #[test]
+    fn a_heartbeat_carries_the_server_clock() {
+        assert!(is_heartbeat(&heartbeat(), 0));
+        // The same three bytes before anything else are not one: this body
+        // is PCM audio from a local stream, where they turned up sixteen
+        // times in one connection.
+        let mut fake = HEARTBEAT.to_vec();
+        fake.extend_from_slice(&[0x00, 0x08, 0x00, 0x32, 0x00, 0x02, 0x00, 0x2E]);
+        assert!(!is_heartbeat(&fake, 0));
+        // Nor is a heartbeat whose clock has not all arrived yet.
+        assert!(!is_heartbeat(&heartbeat()[..10], 0));
+
+        let mut stream = fake.clone();
+        stream.extend(heartbeat());
+        assert_eq!(find_heartbeat(&stream, 0), Some(fake.len()));
+        assert_eq!(count_heartbeats(&stream), 1);
     }
 
     #[test]

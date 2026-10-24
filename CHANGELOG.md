@@ -9,6 +9,23 @@ lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
      and some players still update from there: so no hard wraps and no bold in
      2.0.0 and later. From 2.0.0 on the dialog renders Markdown. -->
 
+## [3.3.0]
+
+Every hit counted once, every window on screen, on Windows 10 as on 11.
+
+- History, a fight, a player: the skill breakdown now opens on screen wherever the meter is. It always opened to the right of the meter, so with the meter near the right edge, or on a smaller or scaled screen, it opened off screen and looked as if nothing had happened. It now opens on whichever side has room, shrinks to fit the screen, and comes to the front. History opens above the meter when there is no room below it, and the overlay's Settings window fits the screen too.
+- A fight opened from History is labelled History, not Live.
+- Other programs' traffic can no longer pass for the game. The meter recognised the game's connection by three bytes that also turn up elsewhere: on one PC streaming audio locally that made four false map changes in two minutes, each one ending the fight, splitting it in History and forgetting every name. The game's heartbeat carries the server's clock, and the meter now checks it.
+- When the game moves you to a new map or dungeon, the old connection is no longer read alongside the new one, so a hit cannot be counted twice or credited to the wrong player.
+- A packet the capture missed no longer stops the meter. It waited for data that would never come, which could freeze it until the next loading screen; now it skips the gap after two seconds and carries on.
+- With WinDivert (no Npcap installed), the start of every map and dungeon is read too, the packets that name you and your party, so names show in dungeons as they do with Npcap.
+- Npcap asks the driver for only the traffic that could be the game's, with a larger buffer, no longer switches the network adapter to promiscuous mode (which some Wi-Fi adapters refuse), and capture restarts by itself when an adapter resets after sleep.
+- History opens fast however many fights it holds: the list loads a summary of each fight, a fifteenth of the size, and the detail window fetches the one you click. Opening or deleting history no longer freezes the meter for a moment.
+- History is saved safely: a crash or power cut while saving can no longer wipe it, and a history file that cannot be read is kept aside instead of being overwritten.
+- The meter sends its windows only the target they show, four to six times less data ten times a second, and the detail window redraws at most four times a second and keeps its scroll position during a fight.
+- Automatic recordings leave out connections that are not the game's. One was 512 MB of another program's audio.
+- On stream: when stream mode is on, Aether asks Windows whether OBS can capture the meter on this PC, the same question OBS asks. If Windows 10 says no, the meter gets a taskbar button, and if that is not enough it may also take the keyboard when clicked, until the answer is yes. Settings, Aion 2, Overlay, On stream (OBS), Capture check shows the result and can check again.
+
 ## [3.2.1]
 
 OBS always finds the meter.

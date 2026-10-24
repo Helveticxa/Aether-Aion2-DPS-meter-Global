@@ -13,6 +13,7 @@ use libloading::{Library, Symbol};
 use serde::Serialize;
 
 use crate::dps_meter::capture::channel::Channel;
+use crate::dps_meter::capture::processor::count_heartbeats;
 use crate::plugins::logger::AppLogger;
 
 #[derive(Debug, Clone, Serialize)]
@@ -68,8 +69,28 @@ struct PcapPkthdr {
     len: c_uint,
 }
 
+#[repr(C)]
+struct BpfProgram {
+    bf_len: c_uint,
+    bf_insns: *mut std::ffi::c_void,
+}
+
 const PCAP_IF_LOOPBACK: c_uint = 0x0000_0001;
-const MAGIC_PATTERN: [u8; 3] = [0x0E, 0x00, 0x36];
+const PCAP_NETMASK_UNKNOWN: c_uint = 0xFFFF_FFFF;
+/// IPv4 TCP segments that carry data. Everything else -- UDP (voice chat, and
+/// the QUIC video a browser pinned over the game is playing), and the bare
+/// ACKs that are half of all TCP -- is dropped in the driver instead of being
+/// copied up to Aether only to be thrown away.
+const CAPTURE_FILTER: &str =
+    "ip and tcp and (((ip[2:2] - ((ip[0]&0xf)<<2)) - ((tcp[12]&0xf0)>>2)) != 0)";
+/// The driver's buffer, in bytes. Npcap's default is 1 MB, which a burst of
+/// other traffic can fill before Aether reads it; a game packet lost there is
+/// never resent, because the game itself received it.
+const KERNEL_BUFFER_BYTES: c_int = 16 * 1024 * 1024;
+/// While the device being captured has carried the game this recently, the
+/// periodic search of every adapter is skipped: it opened each one for a
+/// second, every twenty seconds, all session long.
+const GAME_TRAFFIC_KEEPS_DEVICE: Duration = Duration::from_secs(30);
 
 #[derive(Clone)]
 struct DeviceInfo {
@@ -109,6 +130,13 @@ struct NpcapLib {
     open_live: unsafe extern "C" fn(*const c_char, c_int, c_int, c_int, *mut c_char) -> PcapT,
     close: unsafe extern "C" fn(PcapT),
     next_ex: unsafe extern "C" fn(PcapT, *mut *mut PcapPkthdr, *mut *const u8) -> c_int,
+    // Optional: capture works without them, only less efficiently.
+    compile: Option<
+        unsafe extern "C" fn(PcapT, *mut BpfProgram, *const c_char, c_int, c_uint) -> c_int,
+    >,
+    setfilter: Option<unsafe extern "C" fn(PcapT, *mut BpfProgram) -> c_int>,
+    freecode: Option<unsafe extern "C" fn(*mut BpfProgram)>,
+    setbuff: Option<unsafe extern "C" fn(PcapT, c_int) -> c_int>,
 }
 
 impl NpcapLib {
@@ -142,12 +170,35 @@ impl NpcapLib {
                 .get(b"pcap_next_ex")
                 .map_err(|error| format!("pcap_next_ex: {error}"))?;
 
+            let compile = lib
+                .get::<unsafe extern "C" fn(PcapT, *mut BpfProgram, *const c_char, c_int, c_uint) -> c_int>(
+                    b"pcap_compile",
+                )
+                .ok()
+                .map(|symbol| *symbol);
+            let setfilter = lib
+                .get::<unsafe extern "C" fn(PcapT, *mut BpfProgram) -> c_int>(b"pcap_setfilter")
+                .ok()
+                .map(|symbol| *symbol);
+            let freecode = lib
+                .get::<unsafe extern "C" fn(*mut BpfProgram)>(b"pcap_freecode")
+                .ok()
+                .map(|symbol| *symbol);
+            let setbuff = lib
+                .get::<unsafe extern "C" fn(PcapT, c_int) -> c_int>(b"pcap_setbuff")
+                .ok()
+                .map(|symbol| *symbol);
+
             Ok(Self {
                 findalldevs: *findalldevs,
                 freealldevs: *freealldevs,
                 open_live: *open_live,
                 close: *close,
                 next_ex: *next_ex,
+                compile,
+                setfilter,
+                freecode,
+                setbuff,
                 _lib: lib,
             })
         }
@@ -204,11 +255,14 @@ impl NpcapLib {
             .map_err(|error| format!("Invalid device name for pcap_open_live: {error}"))?;
         let mut errbuf = [0u8; 256];
 
+        // Not promiscuous: the game's traffic is this PC's own, and asking a
+        // Wi-Fi adapter for promiscuous mode makes some drivers refuse the
+        // open outright ("failed to set hardware filter").
         let handle = unsafe {
             (self.open_live)(
                 device_name.as_ptr(),
                 65_535,
-                1,
+                0,
                 timeout_ms,
                 errbuf.as_mut_ptr() as *mut c_char,
             )
@@ -221,7 +275,36 @@ impl NpcapLib {
             return Err(format!("pcap_open_live failed: {error}"));
         }
 
+        self.tune(handle);
         Ok(handle)
+    }
+
+    /// A larger driver buffer and a filter in the driver. Either can be
+    /// refused by an unusual adapter, and capture then simply runs without it.
+    fn tune(&self, handle: PcapT) -> bool {
+        if let Some(setbuff) = self.setbuff {
+            unsafe { setbuff(handle, KERNEL_BUFFER_BYTES) };
+        }
+        let (Some(compile), Some(setfilter)) = (self.compile, self.setfilter) else {
+            return false;
+        };
+        let Ok(expression) = CString::new(CAPTURE_FILTER) else {
+            return false;
+        };
+        let mut program = BpfProgram {
+            bf_len: 0,
+            bf_insns: ptr::null_mut(),
+        };
+        unsafe {
+            if compile(handle, &mut program, expression.as_ptr(), 1, PCAP_NETMASK_UNKNOWN) != 0 {
+                return false;
+            }
+            let applied = setfilter(handle, &mut program) == 0;
+            if let Some(freecode) = self.freecode {
+                freecode(&mut program);
+            }
+            applied
+        }
     }
 }
 
@@ -283,6 +366,16 @@ impl PcapCapturer {
             let mut last_detected_target = String::new();
 
             while running.load(Ordering::SeqCst) {
+                // The device in use is carrying the game: nothing to look for.
+                if capture_alive(&capture_threads)
+                    && crate::dps_meter::capture::dispatcher::game_traffic_within(
+                        GAME_TRAFFIC_KEEPS_DEVICE,
+                    )
+                {
+                    sleep_while_running(&running, detection_interval);
+                    continue;
+                }
+
                 // 1. find magic devices
                 let devices = match npcap.find_all_devices() {
                     Ok(devices) => devices,
@@ -349,9 +442,12 @@ impl PcapCapturer {
                     }
 
                     let previous_device = target_device.read().unwrap().clone();
+                    // Also when the capture thread has died: an adapter that
+                    // resets (Wi-Fi after sleep) ends it with a read error,
+                    // and it used to stay dead until the meter was restarted.
                     let should_restart = previous_device.as_deref()
                         != Some(target.device_name.as_str())
-                        || capture_threads.lock().unwrap().is_empty();
+                        || !capture_alive(&capture_threads);
 
                     *target_device.write().unwrap() = Some(target.device_name.clone());
                     *target_port.write().unwrap() = target.target_port.clone();
@@ -498,11 +594,10 @@ fn inspect_device_for_magic(
     while running.load(Ordering::SeqCst) && started_at.elapsed() < timeout {
         match next_captured_packet(npcap, handle) {
             CaptureRead::Packet(packet) => {
-                if packet
-                    .data
-                    .windows(MAGIC_PATTERN.len())
-                    .any(|window| window == MAGIC_PATTERN)
-                {
+                // A whole heartbeat, clock and all: its first three bytes on
+                // their own turn up in other traffic, and an adapter carrying
+                // only that would take the capture away from the game's.
+                if count_heartbeats(&packet.data) > 0 {
                     let (a, b) = if packet.src_port <= packet.dst_port {
                         (packet.src_port, packet.dst_port)
                     } else {
@@ -553,6 +648,14 @@ fn start_capture_thread(
     });
 
     capture_threads.lock().unwrap().push(handle);
+}
+
+fn capture_alive(capture_threads: &Arc<Mutex<Vec<JoinHandle<()>>>>) -> bool {
+    capture_threads
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|handle| !handle.is_finished())
 }
 
 fn stop_capture_threads(capture_threads: &Arc<Mutex<Vec<JoinHandle<()>>>>) {
