@@ -706,6 +706,47 @@ stream mode ends the overlay goes back to normal. The result is in Settings →
 Aion 2 → Overlay → On stream (OBS) → Capture check. Not yet confirmed on a
 Windows 10 machine.
 
+## OBS Browser Source (3.4.0)
+
+With 3.3.0's capture check the streamer's Windows 10 OBS could capture the
+overlay at last, and showed two things Aether cannot fix in a captured window:
+
+- **A yellow border around the overlay on screen.** Windows draws it around
+  every window captured with Windows Graphics Capture. Only
+  `GraphicsCaptureSession.IsBorderRequired` turns it off, and Windows 10 22H2
+  (19045) does not have it (reported failing there with `E_NOINTERFACE`).
+- **The capture showed the footer but not the title or the rows.** A probe
+  Tauri window styled like the overlay, with the real overlay page and real
+  fight data, captured with WGC on Windows 11 frame for frame matches the
+  screen (and PrintWindow agrees), so this is how Windows 10 composes the
+  WebView2 window for capture, not the page.
+
+`plugins::obs_source` serves the overlay itself to OBS's Browser Source at
+`http://127.0.0.1:45317/obs` (the next nine ports if that one is taken):
+
+- The page is the overlay's own `index.html`, scripts and styles, read with
+  `AssetResolver` (embedded in release; read from `dist/` in dev), plus a shim
+  injected ahead of its script that stands in for `__TAURI_INTERNALS__`:
+  `invoke` becomes `POST /obs/invoke/<command>` (read-only answers; anything
+  that would change the app answers null), `listen` subscribes to
+  `GET /obs/events`, a Server-Sent Events stream fed by `listen_any` on the
+  events the overlay uses. `html.is-obs` hides the controls, and the card takes
+  the on-screen overlay's width (`get_obs_layout`).
+- Light: off by default (`aion2.overlay.obsBrowserSource`, synced by
+  `set_obs_source_enabled`); events are formatted only while a source is
+  connected; snapshots reach OBS at most four times a second, the newest each
+  time (measured: 100 emitted in 5 s, 19 delivered); the page skips the DPS
+  count-up and the window-height polling in OBS.
+- Kill switch: switching it off drops the listener and ends every open event
+  stream at once (measured: the stream closed, the port refused connections);
+  it lives in Aether's process and `stop()` also runs on `RunEvent::Exit`.
+- Safe: bound to 127.0.0.1 only, so no firewall prompt and nothing on the
+  network; requests whose Host is not 127.0.0.1 or localhost get 403 (DNS
+  rebinding); only `/obs`, `/obs/events`, `/obs/invoke/*`, `/assets/*` and
+  `/aion2/*` are served, and the resolver's index.html fallback is a 404.
+- While a Browser Source is connected, `capture_check` leaves the overlay as it
+  is (status `browserSource`): no taskbar button, never activatable.
+
 ## Kina calculator (3.2.0)
 
 A third page, `/aion2/kina`, with no backend: `lib/kina.ts` is pure

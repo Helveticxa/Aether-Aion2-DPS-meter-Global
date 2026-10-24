@@ -787,3 +787,20 @@ body.has-summary .player-list {
   gap: 6px;
   margin-top: 8px;
 }
+
+/* ---- OBS Browser Source (src-tauri/src/plugins/obs_source.rs) ----
+   The same card the overlay shows, for the stream: as wide as the overlay is
+   on screen, with no controls, since nobody hovers over a stream. */
+
+.is-obs .card {
+  max-width: var(--obs-width, none);
+}
+
+.is-obs .head__actions,
+.is-obs .foot__tools {
+  display: none !important;
+}
+
+.is-obs body {
+  pointer-events: none;
+}

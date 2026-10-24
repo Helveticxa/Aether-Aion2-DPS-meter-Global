@@ -77,6 +77,7 @@ pub fn run() {
         .plugin(plugins::window_tracking::init())
         .plugin(plugins::on_top::init())
         .plugin(plugins::game_display::init())
+        .plugin(plugins::obs_source::init())
         .invoke_handler(tauri::generate_handler![
             update_tray_menu,
             show_system_notification,
@@ -148,6 +149,8 @@ pub fn run() {
             plugins::aion2_focus::get_running_streaming_app,
             plugins::capture_check::get_obs_capture_status,
             plugins::capture_check::recheck_obs_capture,
+            plugins::obs_source::get_obs_source_status,
+            plugins::obs_source::set_obs_source_enabled,
             plugins::shortcut::sync_shortcuts,
             plugins::shortcut::get_shortcut_failures,
             plugins::on_top::on_top_detect,
@@ -198,6 +201,9 @@ pub fn run() {
         // must not stay on top, see-through, or unclickable once we are gone.
         if let RunEvent::Exit = event {
             plugins::on_top::restore_all();
+            // The OBS Browser Source server ends with the process anyway;
+            // closing it first lets an open source see the end cleanly.
+            plugins::obs_source::stop();
             // The meter stops on ExitRequested; this covers any other way out.
             #[cfg(windows)]
             dps_meter::capture::windivert_capturer::unload_driver();

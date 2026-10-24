@@ -237,7 +237,8 @@ type ObsCaptureStatus =
   | "needsTaskbar"
   | "needsActivation"
   | "unsupported"
-  | "notAvailable";
+  | "notAvailable"
+  | "browserSource";
 
 /** What Aether found when it asked Windows whether OBS can capture the pop-up. */
 const OBS_CAPTURE_TEXT: Record<ObsCaptureStatus, string> = {
@@ -252,7 +253,43 @@ const OBS_CAPTURE_TEXT: Record<ObsCaptureStatus, string> = {
     "Checked on this PC: Windows will not let OBS capture the pop-up on its own. Use a Display Capture of the game's screen with a Crop/Pad filter around the pop-up instead.",
   notAvailable:
     "This Windows is older than 10 version 1903 and has no Windows Graphics Capture. Use a Display Capture with a Crop/Pad filter around the pop-up.",
+  browserSource:
+    "OBS is showing the meter through the Browser Source, so Window Capture is not needed and the pop-up is left as it is.",
 };
+
+interface ObsSourceStatus {
+  url: string | null;
+  connected: boolean;
+}
+
+/** The Browser Source server: its URL while running, and whether OBS reads it. */
+function useObsSourceStatus(enabled: boolean, watching: boolean) {
+  const [status, setStatus] = useState<ObsSourceStatus>({ url: null, connected: false });
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!watching) return;
+    let alive = true;
+    // Switched from here, so the URL shows at once rather than after the
+    // settings sync gets to it. Both calls do the same thing.
+    invoke<ObsSourceStatus>("set_obs_source_enabled", { enabled })
+      .then((value) => {
+        if (!alive) return;
+        setStatus(value);
+        setError(null);
+      })
+      .catch((e) => alive && setError(String(e)));
+    const timer = window.setInterval(() => {
+      invoke<ObsSourceStatus>("get_obs_source_status")
+        .then((value) => alive && setStatus(value))
+        .catch(() => {});
+    }, 2000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [enabled, watching]);
+  return { status, error };
+}
 
 /** The pop-up capture check, kept current while Settings is open. */
 function useObsCaptureStatus(enabled: boolean): ObsCaptureStatus {
@@ -286,6 +323,8 @@ export function Aion2Settings() {
     tab === "overlay" && overlay.streamAuto !== false && overlay.streamMode !== true
   );
   const obsCapture = useObsCaptureStatus(tab === "overlay");
+  const obsSource = useObsSourceStatus(overlay.obsBrowserSource === true, tab === "overlay");
+  const [obsUrlCopied, setObsUrlCopied] = useState(false);
   const [obsCheckError, setObsCheckError] = useState<string | null>(null);
 
   const tabs: { id: Aion2Tab; label: string }[] = [
@@ -489,6 +528,70 @@ export function Aion2Settings() {
 
           <SettingsGroup title="On stream (OBS)">
             <SettingRow
+              title="OBS Browser Source"
+              description={
+                obsSource.error ??
+                (overlay.obsBrowserSource === true
+                  ? obsSource.status.connected
+                    ? "On: OBS is showing the meter. Turn this off to close the page at once; it also closes whenever Aether exits."
+                    : "On: waiting for OBS to open the address below. Turn this off to close it; it also closes whenever Aether exits."
+                  : "Recommended on Windows 10. OBS draws the meter itself, exactly as it looks here and see-through, without Window Capture: no yellow border from Windows and nothing cut off. On, it runs a small page on this PC only (127.0.0.1, not reachable from the network). Off by default, and it never runs while Aether is closed.")
+              }
+            >
+              <Switch
+                checked={overlay.obsBrowserSource === true}
+                onCheckedChange={(v) => updateSettings("aion2.overlay.obsBrowserSource", v)}
+              />
+            </SettingRow>
+
+            {overlay.obsBrowserSource === true && obsSource.status.url ? (
+              <div className="text-muted-foreground flex flex-col gap-1.5 px-5 pb-5 text-xs leading-5">
+                <div className="flex items-center gap-2">
+                  <code className="text-foreground bg-background/60 rounded border px-2 py-1 font-mono text-xs select-all">
+                    {obsSource.status.url}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      void navigator.clipboard
+                        .writeText(obsSource.status.url ?? "")
+                        .then(() => {
+                          setObsUrlCopied(true);
+                          window.setTimeout(() => setObsUrlCopied(false), 1500);
+                        })
+                        .catch(() => {});
+                    }}
+                  >
+                    {obsUrlCopied ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+                <span className="text-foreground font-medium">In OBS</span>
+                <span>
+                  1. Sources → + → <b className="text-foreground">Browser</b>, and paste the address
+                  above as the URL.
+                </span>
+                <span>
+                  2. Width <b className="text-foreground">500</b>, Height <b className="text-foreground">600</b>. The
+                  meter keeps the width it has on screen and sits at the top; the rest stays
+                  see-through.
+                </span>
+                <span>
+                  3. To keep OBS light: tick <b className="text-foreground">Use custom frame rate</b> at
+                  30, and <b className="text-foreground">Shutdown source when not visible</b>. The meter
+                  sends at most four updates a second.
+                </span>
+                <span>
+                  4. Delete the Window Capture of the meter, if you had one: that capture is what
+                  makes Windows draw a yellow border around the meter.
+                </span>
+                <span>
+                  If OBS was opened before Aether, right-click the source → Refresh.
+                </span>
+              </div>
+            ) : null}
+
+            <SettingRow
               title="Stream mode"
               description="Keeps the DPS pop-up on screen all the time, so OBS captures the meter itself rather than the Aether window. Between fights it shows Waiting for a fight. The show/hide shortcut still hides it."
             >
@@ -519,7 +622,7 @@ export function Aion2Settings() {
             </SettingRow>
 
             <div className="text-muted-foreground flex flex-col gap-1.5 px-5 pb-5 text-xs leading-5">
-              <span className="text-foreground font-medium">In OBS</span>
+              <span className="text-foreground font-medium">Or with Window Capture (Windows 11)</span>
               <span>
                 1. Sources → + → <b className="text-foreground">Window Capture</b>
               </span>

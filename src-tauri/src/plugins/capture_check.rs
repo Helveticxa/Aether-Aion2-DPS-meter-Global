@@ -41,6 +41,9 @@ pub enum CaptureCheck {
     Unsupported,
     /// This Windows has no WGC at all (before 1903).
     NotAvailable,
+    /// OBS is reading the meter through the Browser Source (`obs_source`):
+    /// nothing needs capturing, and the overlay is left as it is.
+    BrowserSource,
 }
 
 impl CaptureCheck {
@@ -56,6 +59,7 @@ impl CaptureCheck {
             4 => Self::NeedsActivation,
             5 => Self::Unsupported,
             6 => Self::NotAvailable,
+            7 => Self::BrowserSource,
             _ => Self::Unknown,
         }
     }
@@ -108,6 +112,22 @@ pub fn on_stream_tick<R: Runtime>(app: &AppHandle<R>, streaming: bool, overlay_v
                 }
             }
             set_status(app, CaptureCheck::Unknown);
+        } else if status() == CaptureCheck::BrowserSource && !super::obs_source::connected() {
+            set_status(app, CaptureCheck::Unknown);
+        }
+        return;
+    }
+    // A Browser Source makes Window Capture unnecessary: no taskbar button,
+    // no activation. Checked again should the source go away.
+    if super::obs_source::connected() {
+        if LEVEL.load(Ordering::SeqCst) != 0 {
+            if let Some(window) = app.get_webview_window(DPS_OVERLAY_LABEL) {
+                apply_level(&window, 0);
+            }
+        }
+        CHECKED.store(false, Ordering::SeqCst);
+        if status() != CaptureCheck::BrowserSource && !RUNNING.load(Ordering::SeqCst) {
+            set_status(app, CaptureCheck::BrowserSource);
         }
         return;
     }
@@ -232,6 +252,7 @@ mod tests {
             CaptureCheck::NeedsActivation,
             CaptureCheck::Unsupported,
             CaptureCheck::NotAvailable,
+            CaptureCheck::BrowserSource,
         ] {
             assert_eq!(CaptureCheck::from_code(status.code()), status);
         }

@@ -85,8 +85,33 @@ third-party tool is its call.
 
 ## Streaming with OBS
 
-The meter can go on stream on its own, as a window OBS captures: the meter
-itself, not the Aether app.
+### Browser Source (recommended, and the one for Windows 10)
+
+OBS draws the meter itself — the same card as on screen, see-through — so
+nothing is captured: no yellow border from Windows 10, nothing cut off.
+
+1. Settings → Aion 2 → Overlay → **On stream (OBS)** → turn on
+   **OBS Browser Source**, and copy the address it shows
+   (`http://127.0.0.1:45317/obs`).
+2. In OBS: Sources → + → **Browser**, paste it as the URL, Width 500,
+   Height 600. The card keeps the width the meter has on screen and sits at
+   the top; the rest is transparent.
+3. To keep OBS light, tick **Use custom frame rate** at 30 and
+   **Shutdown source when not visible**. Aether sends at most four updates a
+   second.
+4. Delete any Window Capture of the meter: on Windows 10 that capture is what
+   makes Windows draw a yellow border around it.
+
+The page is served on this PC only (127.0.0.1, not reachable from the network),
+is off by default, closes the moment it is switched off, and never runs while
+Aether is closed. If OBS was started before Aether, right-click the source →
+Refresh.
+
+### Window Capture (Windows 11)
+
+The meter can also go on stream as a window OBS captures: the meter itself,
+not the Aether app. On Windows 10, Windows draws a yellow border around a
+window captured this way and offers no way to turn it off.
 
 1. Start the meter. While OBS (or Streamlabs, XSplit, Twitch Studio, PRISM) is
    running, it stays on screen, between fights too: OBS lists only windows that

@@ -58,6 +58,9 @@ const $summary = document.getElementById("summary");
 const $compactBtn = document.getElementById("compact-btn");
 
 const DEFAULT_TITLE = "Aether";
+// The page is running as an OBS Browser Source (src-tauri/src/plugins/obs_source.rs):
+// OBS sizes it, and its numbers land without counting up.
+const IS_OBS_SOURCE = document.documentElement.classList.contains("is-obs");
 
 // =============================================================================
 // Overlay config (applied via CSS variables)
@@ -296,7 +299,7 @@ const AUTO_RESIZE_FALLBACK_POLL_MS = 5000;
 let autoHeightReconcileScheduled = false;
 
 async function reconcileAutoHeight() {
-  if (overlayConfig?.autoResizeHeight === false) return;
+  if (overlayConfig?.autoResizeHeight === false || IS_OBS_SOURCE) return;
 
   // The card carries CSS zoom, and its rectangle is reported in the page's
   // own pixels -- already scaled -- which is what the window has to match.
@@ -341,6 +344,7 @@ function scheduleAutoHeightReconcile() {
 }
 
 function startAutoHeightFallbackPolling() {
+  if (IS_OBS_SOURCE) return;
   const poll = async () => {
     await reconcileAutoHeight();
     window.setTimeout(poll, AUTO_RESIZE_FALLBACK_POLL_MS);
@@ -635,8 +639,15 @@ function setDpsTarget(cell, value) {
 
   // A first value, a reset to zero, or a hidden window lands immediately --
   // counting up from nothing at the start of every fight would look like lag,
-  // and a hidden window has no frames to count with.
-  if (cell._dpsShown == null || target === 0 || document.visibilityState === "hidden") {
+  // and a hidden window has no frames to count with. So does every value in
+  // OBS's Browser Source: a frame loop there is drawn into the stream, and the
+  // numbers already arrive four times a second.
+  if (
+    cell._dpsShown == null ||
+    target === 0 ||
+    document.visibilityState === "hidden" ||
+    IS_OBS_SOURCE
+  ) {
     cell._dpsShown = target;
     tweeningCells.delete(cell);
     const text = fmtDps(target);

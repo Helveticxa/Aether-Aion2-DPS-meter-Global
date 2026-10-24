@@ -73,6 +73,8 @@ interface OverlaySettings {
   streamMode: boolean;
   /** Stream mode turns itself on while OBS or another streaming app runs. */
   streamAuto: boolean;
+  /** Serve the meter to OBS as a Browser Source on 127.0.0.1. Off by default. */
+  obsBrowserSource: boolean;
 }
 
 interface Aion2Settings {
@@ -144,6 +146,7 @@ const DEFAULTS: AppConfig = {
       showPersonalBest: true,
       streamMode: false,
       streamAuto: true,
+      obsBrowserSource: false,
     },
     autoHideEnabled: true,
     autoCloseMain: true,
@@ -357,6 +360,9 @@ export function useSettings() {
       await invoke("set_dps_stream_mode", {
         enabled: cfg.aion2.overlay.streamMode === true,
         auto: cfg.aion2.overlay.streamAuto !== false,
+      });
+      await invoke("set_obs_source_enabled", {
+        enabled: cfg.aion2.overlay.obsBrowserSource === true,
       });
     } catch (e) {
       console.error("[useSettings] syncOverlay failed:", e);

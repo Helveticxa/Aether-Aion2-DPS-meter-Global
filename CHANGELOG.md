@@ -9,6 +9,16 @@ lives in the [NOIA2 repository](https://github.com/ZDYoung0519/NOIA2).
      and some players still update from there: so no hard wraps and no bold in
      2.0.0 and later. From 2.0.0 on the dialog renders Markdown. -->
 
+## [3.4.0]
+
+The meter on stream exactly as on screen, without the yellow border.
+
+- New: OBS Browser Source. Settings, Aion 2, Overlay, On stream (OBS), OBS Browser Source gives an address to paste into a Browser source in OBS. OBS then draws the meter itself, the same card as on screen, see-through, with names and every row. Nothing is captured, so Windows 10 no longer draws a yellow border around the meter and nothing is cut off. Recommended on Windows 10.
+- The yellow border is Windows 10's own sign that a window is being captured with Window Capture's "Windows 10 (1903 and up)" method, and Windows 10 offers no way to turn it off. To be rid of it, delete the Window Capture of the meter and use the Browser Source.
+- The Browser Source is off by default and runs only while it is switched on. It is a small page on this PC only (127.0.0.1), not reachable from the network, and it closes the moment it is switched off and whenever Aether exits.
+- Kept light: OBS gets at most four updates a second, numbers land without counting up, and nothing is prepared for OBS unless a Browser Source is open. Settings suggests OBS's own savings too: 30 fps and Shutdown source when not visible.
+- While OBS shows the meter through the Browser Source, the Window Capture check leaves the overlay alone: no taskbar button, never takes the keyboard.
+
 ## [3.3.0]
 
 Every hit counted once, every window on screen, on Windows 10 as on 11.
